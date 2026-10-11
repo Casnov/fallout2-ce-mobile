@@ -223,7 +223,7 @@ public class ImportActivity extends Activity {
                     });
                 openSource = source;
                 if (MODE_SAVES_IMPORT.equals(mode)) {
-                    GameSaves.Found saves = GameSaves.find(source, getExternalFilesDir(null), currentComposition(), SaveComposition::compare);
+                    GameSaves.Found saves = GameSaves.find(source, getExternalFilesDir(null), currentComposition(), currentCharset(), SaveComposition::compare);
                     GameImport.Source chosen = source;
                     if (saves == null) {
                         closeQuietly(source);
@@ -497,6 +497,15 @@ public class ImportActivity extends Activity {
     private String currentComposition() {
         try {
             return new String(GameSaves.readAll(new File(getFilesDir(), GameSaves.COMPOSITION)), java.nio.charset.StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    // Its texts' code page (written by the game, src/loadsave.cc).
+    private String currentCharset() {
+        try {
+            return new String(GameSaves.readAll(new File(getFilesDir(), GameSaves.CHARSET)), java.nio.charset.StandardCharsets.UTF_8).trim();
         } catch (IOException e) {
             return "";
         }

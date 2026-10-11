@@ -15,6 +15,12 @@ void interfaceFontsExit();
 void interfaceFontDrawTextScaled2D(const Buffer2D& dest, int x, int y, const char* string, ColorWithFlags color, float scale);
 int interfaceFontGetStringWidthScaled(const char* string, ColorWithFlags color, float scale);
 
+// CE: How many interface fonts there can be (`font0.aaf`...).
+int interfaceFontCount();
+// CE: The picture of [ch] in interface font [font]: its size and pixels (a
+// byte each, row by row); false - no such font or an empty picture.
+bool interfaceFontGetGlyph(int font, unsigned char ch, int* width, int* height, const unsigned char** pixels);
+
 } // namespace fallout
 
 #endif /* FONT_MANAGER_H */

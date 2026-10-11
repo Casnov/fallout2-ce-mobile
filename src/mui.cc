@@ -8,10 +8,12 @@
 
 #include "dev_autotest.h"
 #include "game.h"
+#include "game_charset.h"
 #include "hud_layout.h"
 #include "input.h"
 #include "kb.h"
 #include "message.h"
+#include "platform_compat.h"
 #include "settings.h"
 #include "svga.h"
 #include "touch.h"
@@ -260,21 +262,24 @@ void muiToScreen(float x, float y, int* screenX, int* screenY)
 
 const char* muiText(int id, const char* fallback)
 {
-    static MessageList messageList;
+    static MessageList* messageList = nullptr;
     static bool loaded = false;
-    static bool attempted = false;
+    // The language loaded: texts asked for before the game's fonts are
+    // known may be in another (game_charset.h). The texts of the one before
+    // are kept, given out already.
+    static std::string language;
 
-    if (!attempted) {
-        attempted = true;
-        if (messageListInit(&messageList)) {
-            loaded = messageListLoad(&messageList, "game\\ce.msg");
-        }
+    const char* uiLanguage = gameCharsetUiLanguage();
+    if (messageList == nullptr || compat_stricmp(language.c_str(), uiLanguage) != 0) {
+        messageList = new MessageList();
+        language = uiLanguage;
+        loaded = messageListInit(messageList) && messageListLoadInLanguage(messageList, "game\\ce.msg", uiLanguage);
     }
 
     if (loaded) {
         MessageListItem item;
         item.num = id;
-        if (messageListGetItem(&messageList, &item)) {
+        if (messageListGetItem(messageList, &item)) {
             return item.text;
         }
     }

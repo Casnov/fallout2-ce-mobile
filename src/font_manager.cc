@@ -120,6 +120,28 @@ void interfaceFontsExit()
     }
 }
 
+int interfaceFontCount()
+{
+    return INTERFACE_FONT_MAX;
+}
+
+bool interfaceFontGetGlyph(int font, unsigned char ch, int* width, int* height, const unsigned char** pixels)
+{
+    if (font < 0 || font >= INTERFACE_FONT_MAX || gInterfaceFontDescriptors[font].data == nullptr) {
+        return false;
+    }
+
+    const InterfaceFontGlyph& glyph = gInterfaceFontDescriptors[font].glyphs[ch];
+    if (glyph.width <= 0 || glyph.height <= 0) {
+        return false;
+    }
+
+    *width = glyph.width;
+    *height = glyph.height;
+    *pixels = gInterfaceFontDescriptors[font].data + glyph.offset;
+    return true;
+}
+
 void interfaceFontDrawTextScaled2D(const Buffer2D& dest, int x, int y, const char* string, ColorWithFlags color, float scale)
 {
     if (!gInterfaceFontsInitialized || dest.data == nullptr || string == nullptr || *string == '\0') {

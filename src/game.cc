@@ -26,6 +26,7 @@
 #include "endgame.h"
 #include "font_manager.h"
 #include "game.h"
+#include "game_charset.h"
 #include "game_commands.h"
 #include "game_dialog.h"
 #include "game_memory.h"
@@ -229,6 +230,9 @@ int gameInitWithOptions(const char* windowTitle, bool isMapper, int font, int fl
     interfaceFontsInit();
     fontManagerAdd(&gModernFontManager);
     fontSetCurrent(font);
+
+    // CE: Which characters the texts mean, by the fonts just loaded.
+    gameCharsetInit();
 
     screenshotHandlerConfigure(KEY_F12, gameTakeScreenshot);
 

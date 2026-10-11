@@ -151,7 +151,7 @@ public class GameSavesTest {
         installSave(0, "theirs", 1600000000000000L, "");
         installSave(10, "their quick", 1600000000000001L, "");
 
-        GameSaves.Found found = GameSaves.find(unzip(zip.toByteArray()), game, "master.dat=1:G", COMPARER);
+        GameSaves.Found found = GameSaves.find(unzip(zip.toByteArray()), game, "master.dat=1:G", "", COMPARER);
         assertTrue(found.withInfo);
         assertEquals(2, found.saves.size());
         // Newest first: the quick one; "*" was the exporting game's.
@@ -175,7 +175,7 @@ public class GameSavesTest {
         assertEquals(4, known.size());
 
         // Again: both are there already.
-        found = GameSaves.find(unzip(zip.toByteArray()), game, "master.dat=1:G", COMPARER);
+        found = GameSaves.find(unzip(zip.toByteArray()), game, "master.dat=1:G", "", COMPARER);
         plan = GameSaves.plan(found, game, false);
         assertEquals(2, plan.skipped);
         assertTrue(plan.saves.isEmpty());
@@ -204,7 +204,7 @@ public class GameSavesTest {
         source.files.put("Fallout 2/data/SAVEGAME/SLOT02/SAVE.DAT", saveDat("A", "early", 1, 3, 2025, 900));
         source.files.put("Fallout 2/backup/data/SAVEGAME/SLOT01/SAVE.DAT", saveDat("A", "old", 1, 1, 2020, 1));
 
-        GameSaves.Found found = GameSaves.find(source, game, "now", COMPARER);
+        GameSaves.Found found = GameSaves.find(source, game, "now", "", COMPARER);
         assertEquals("Fallout 2/data/SAVEGAME/", found.root);
         assertFalse(found.withInfo);
         // The same archives as the installed game: made with it.
@@ -224,12 +224,12 @@ public class GameSavesTest {
     public void bareSlotsAreUnknown() throws IOException {
         GameFilesTest.MemorySource source = new GameFilesTest.MemorySource();
         source.files.put("SLOT05/SAVE.DAT", saveDat("B", "bare", 1, 1, 2024, 1));
-        GameSaves.Found found = GameSaves.find(source, game, "now", COMPARER);
+        GameSaves.Found found = GameSaves.find(source, game, "now", "", COMPARER);
         assertEquals("", found.root);
         assertEquals(GameSaves.UNKNOWN, found.saves.get(0).level);
         assertFalse(found.saves.get(0).quick);
 
-        assertNull(GameSaves.find(new GameFilesTest.MemorySource().put("readme.txt", "x"), game, "now", COMPARER));
+        assertNull(GameSaves.find(new GameFilesTest.MemorySource().put("readme.txt", "x"), game, "now", "", COMPARER));
     }
 
     @Test
@@ -242,7 +242,7 @@ public class GameSavesTest {
         }
         GameFilesTest.MemorySource source = new GameFilesTest.MemorySource();
         source.files.put("SLOT05/SAVE.DAT", saveDat("B", "bare", 1, 1, 2024, 1));
-        GameSaves.Found found = GameSaves.find(source, game, "now", COMPARER);
+        GameSaves.Found found = GameSaves.find(source, game, "now", "", COMPARER);
         try {
             GameSaves.plan(found, game, false);
             fail();
@@ -274,10 +274,33 @@ public class GameSavesTest {
         source.files.put("a/SLOT01/SAVE.DAT", saveDat("A", "a", 1, 1, 2024, 1));
         source.files.put("b/SLOT01/SAVE.DAT", saveDat("B", "b", 1, 1, 2024, 1));
         try {
-            GameSaves.find(source, game, "now", COMPARER);
+            GameSaves.find(source, game, "now", "", COMPARER);
             fail();
         } catch (GameImport.SeveralGamesException e) {
             assertEquals(new ArrayList<>(Arrays.asList("a/", "b/")), e.roots);
         }
+    }
+
+    @Test
+    public void savesNamesInTheCodePageTheGameFound() throws IOException {
+        // A translation in the English folder: the game found Cyrillic fonts.
+        byte[] name = "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u044b\u0439".getBytes("windows-1251");
+        byte[] data = saveDat("x", "ru", 1, 1, 2024, 1);
+        System.arraycopy(name, 0, data, 29, name.length);
+        Arrays.fill(data, 29 + name.length, 29 + 32, (byte) 0);
+        GameFilesTest.MemorySource source = new GameFilesTest.MemorySource();
+        source.files.put("SLOT01/SAVE.DAT", data);
+
+        GameSaves.Found found = GameSaves.find(source, game, "now", "windows-1251", COMPARER);
+        assertEquals("\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u044b\u0439", found.saves.get(0).header.name);
+    }
+
+    @Test
+    public void codePageByTheLanguageBeforeTheGameRan() {
+        assertEquals("windows-1251", GameSaves.gameCharset("windows-1251", "english").name());
+        assertEquals("windows-1251", GameSaves.gameCharset("", "Russian").name());
+        assertEquals("windows-1250", GameSaves.gameCharset("", "polish").name());
+        assertEquals("windows-1252", GameSaves.gameCharset("", "german").name());
+        assertEquals("windows-1252", GameSaves.gameCharset(null, "klingon").name());
     }
 }

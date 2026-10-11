@@ -40,6 +40,7 @@ final class GameSaves {
     // In the app's private folder (the engine's, src/loadsave.cc).
     static final String RECORDS = "saves.txt";
     static final String COMPOSITION = "game-composition.txt";
+    static final String CHARSET = "game-charset.txt";
 
     static final int TOTAL_SLOTS = 1000;
     static final int SLOTS_PER_PAGE = 10;
@@ -221,10 +222,42 @@ final class GameSaves {
         return new String(data, offset, end - offset, charset).trim();
     }
 
-    // The game's texts: Russian ones in cp1251, the rest cp1252.
-    static Charset gameCharset(String language) {
+    // The code page of the game's texts: the one the game found (CHARSET,
+    // src/game_charset.h); before it ever ran, its language's.
+    static Charset gameCharset(String found, String language) {
+        String name = found;
+        if (name == null || name.isEmpty()) {
+            switch (language.toLowerCase(Locale.ROOT)) {
+            case "polish":
+            case "czech":
+            case "slovak":
+            case "hungarian":
+                name = "windows-1250";
+                break;
+            case "russian":
+            case "ukrainian":
+            case "belarusian":
+            case "bulgarian":
+                name = "windows-1251";
+                break;
+            case "greek":
+                name = "windows-1253";
+                break;
+            case "turkish":
+                name = "windows-1254";
+                break;
+            case "lithuanian":
+            case "latvian":
+            case "estonian":
+                name = "windows-1257";
+                break;
+            default:
+                name = "windows-1252";
+                break;
+            }
+        }
         try {
-            return Charset.forName(language.equalsIgnoreCase("russian") ? "windows-1251" : "windows-1252");
+            return Charset.forName(name);
         } catch (RuntimeException e) {
             return StandardCharsets.ISO_8859_1;
         }
@@ -357,8 +390,9 @@ final class GameSaves {
 
     // The saves of [source], newest first; null - none there. [game] - the
     // installed game (its saves for duplicates, its files for "the same
-    // game"), [composition] - what it is made of now (COMPOSITION).
-    static Found find(GameImport.Source source, File game, String composition, Comparer comparer) throws IOException {
+    // game"), [composition] - what it is made of now (COMPOSITION),
+    // [charset] - its texts' code page (CHARSET), "" - not known.
+    static Found find(GameImport.Source source, File game, String composition, String charset, Comparer comparer) throws IOException {
         List<GameImport.Entry> entries = source.list();
 
         // SLOT folders with a SAVE.DAT, grouped by the folder they're in.
@@ -478,7 +512,7 @@ final class GameSaves {
             String value = configValue(new String(readAll(installedConfig), StandardCharsets.ISO_8859_1), "system", "language");
             language = value != null ? value : language;
         }
-        Charset charset = gameCharset(language);
+        Charset textCharset = gameCharset(charset, language);
 
         Map<Integer, Record> infoRecords = new HashMap<>();
         if (info != null) {
@@ -501,7 +535,7 @@ final class GameSaves {
 
         for (FoundSave save : found.saves) {
             byte[] data = contents.get(save.saveDat);
-            save.header = parseHeader(data, data.length, charset);
+            save.header = parseHeader(data, data.length, textCharset);
             save.id = saveId(data, data.length, data.length);
             save.duplicate = installedIds.contains(save.id);
 

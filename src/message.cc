@@ -214,6 +214,12 @@ bool messageListFree(MessageList* messageList)
 // 0x484AA4 message_load
 bool messageListLoad(MessageList* messageList, const char* path)
 {
+    return messageListLoadInLanguage(messageList, path, settings.system.language.c_str());
+}
+
+// CE: `messageListLoad` from [language]'s folder.
+bool messageListLoadInLanguage(MessageList* messageList, const char* path, const char* language)
+{
     char localized_path[COMPAT_MAX_PATH];
     File* file_ptr;
     char num[MESSAGE_LIST_ITEM_FIELD_MAX_SIZE];
@@ -233,13 +239,13 @@ bool messageListLoad(MessageList* messageList, const char* path)
         return false;
     }
 
-    snprintf(localized_path, sizeof(localized_path), "%s\\%s\\%s", "text", settings.system.language.c_str(), path);
+    snprintf(localized_path, sizeof(localized_path), "%s\\%s\\%s", "text", language, path);
 
     file_ptr = fileOpen(localized_path, "rt");
 
     // SFALL: Fallback to english if requested localization does not exist.
     if (file_ptr == nullptr) {
-        if (compat_stricmp(settings.system.language.c_str(), ENGLISH) != 0) {
+        if (compat_stricmp(language, ENGLISH) != 0) {
             snprintf(localized_path, sizeof(localized_path), "%s\\%s\\%s", "text", ENGLISH, path);
             file_ptr = fileOpen(localized_path, "rt");
         }

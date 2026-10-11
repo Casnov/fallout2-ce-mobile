@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "game.h"
+#include "game_charset.h"
 #include "game_dialog.h"
 #include "input.h"
 #include "inventory.h"
@@ -483,7 +484,7 @@ void muiBarterInit()
 
     gBarterScreen = new BarterScreen();
     if (messageListInit(&(gBarterScreen->messageList))) {
-        gBarterScreen->messageListLoaded = messageListLoad(&(gBarterScreen->messageList), "game\\ce.msg");
+        gBarterScreen->messageListLoaded = messageListLoadInLanguage(&(gBarterScreen->messageList), "game\\ce.msg", gameCharsetUiLanguage());
     }
     muiPush(gBarterScreen);
 }

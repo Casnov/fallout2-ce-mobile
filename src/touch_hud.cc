@@ -17,6 +17,7 @@
 #include "dbox.h"
 #include "display_monitor.h"
 #include "game.h"
+#include "game_charset.h"
 #include "game_commands.h"
 #include "game_mouse.h"
 #include "game_sound.h"
@@ -1433,7 +1434,7 @@ void touchHudInit()
     }
 
     if (messageListInit(&gMessageList)) {
-        gMessageListLoaded = messageListLoad(&gMessageList, "game\\ce.msg");
+        gMessageListLoaded = messageListLoadInLanguage(&gMessageList, "game\\ce.msg", gameCharsetUiLanguage());
     }
 
     loadPartyOrders();

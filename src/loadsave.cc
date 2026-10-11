@@ -32,6 +32,7 @@
 #include "draw.h"
 #include "file_utils.h"
 #include "game.h"
+#include "game_charset.h"
 #include "game_mouse.h"
 #include "game_movie.h"
 #include "game_sound.h"
@@ -571,6 +572,8 @@ void _InitLoadSave()
     // What the game is made of now, for the app's import of saves (its
     // compatibility marks).
     saveStorage::writeFile(portDataPath("game-composition.txt"), saveCompatibilityCurrent() + "\n");
+    // The code page of its texts, for the app's reading of saves' names.
+    saveStorage::writeFile(portDataPath("game-charset.txt"), std::string(gameCharsetName()) + "\n");
     if (!gSaveCatalog.refresh()) {
         debugPrint("\nLOADSAVE: ** Interrupted save writes not recovered! **\n");
     }

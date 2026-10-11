@@ -559,8 +559,13 @@ every screen on the new scalable UI, visual style/textures later via theme).
   drawing). Sizes in dp: output px per dp = `hudGetScreenDensity()` *
   `hud_scale`; safe area from HUD metrics (cutout insets).
 - Text: PT Mono (OFL, `files/ce.dat/fonts/`), stb_truetype glyph atlases per
-  pixel size (`third_party/stb`); game texts are decoded from cp1251
-  (russian/ukrainian) or cp1252 (`muiDecodeGameText`).
+  pixel size (`third_party/stb`); game texts are decoded by the code page
+  of `game_charset.h`: the alphabet from the game's fonts (a Cyrillic or
+  Greek font draws the Latin look-alikes as Latin letters), the variant
+  from `[system] language`; the fonts win when they disagree (old Russian
+  translations in `text/english`). `game\ce.msg` then comes in the device's
+  language of that alphabet. The app reads saves' names by the code page
+  the game wrote (`game-charset.txt`).
 - Game art: `muiArtTexture` converts FRM frames with the current palette,
   nearest filtering (crisp pixels), rebuilt when the palette changes.
 - Immediate mode screens (`MuiScreen::build` every frame) in a stack; the
