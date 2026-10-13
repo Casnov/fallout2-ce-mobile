@@ -127,6 +127,9 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_CHOOSE_OPTION,
     // Waits (up to `a` frames) until a talk shows options, then as NONE.
     DEV_AUTOTEST_ACTION_WAIT_TALKING,
+    // Waits (up to `a` frames) until no map is loading (a map's enter
+    // script may play a movie inside the load), then as NONE.
+    DEV_AUTOTEST_ACTION_WAIT_MAP_LOADED,
     // The talk's barter, barter's offer and back to talk: the mobile UI
     // screens' way, or the game's keys (B, M, T) with its windows.
     DEV_AUTOTEST_ACTION_DIALOG_BARTER,
@@ -2005,7 +2008,11 @@ static const DevAutotestStep kDevAutotestPartySteps[] = {
 };
 
 static const DevAutotestStep kDevAutotestTestSaveSteps[] = {
-    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "s00_village" },
+    // Starting in the village plays the vault suit movie inside the map's
+    // load: skipped, then the load is waited for (party members can't join
+    // and a save made then is half loaded).
+    { DEV_AUTOTEST_ACTION_KEY, SDL_SCANCODE_ESCAPE, 0, 0, 10, "s00_skip_movie" },
+    { DEV_AUTOTEST_ACTION_WAIT_MAP_LOADED, 1800, 0, 0, 60, "s00_village" },
     { DEV_AUTOTEST_ACTION_SET_NAME, 0, 0, 0, 1, "s01_name", "\xD2\xE5\xF1\xF2" },
     { DEV_AUTOTEST_ACTION_GIVE_ITEM, 8, 1, 0, 1, "s02_give_8" },
     { DEV_AUTOTEST_ACTION_GIVE_ITEM, 9, 1, 0, 1, "s02_give_9" },
@@ -2630,6 +2637,19 @@ void devAutotestTick()
         waited = 0;
     }
 
+    if (step->action == DEV_AUTOTEST_ACTION_WAIT_MAP_LOADED && !gDevAutotestStepStarted) {
+        static int waited = 0;
+        if (mapIsLoading() && waited < static_cast<int>(step->a)) {
+            waited++;
+            return;
+        }
+        devAutotestLog("  map %s after %d frames\n", mapIsLoading() ? "still loading" : "loaded", waited);
+        if (mapIsLoading()) {
+            devAutotestLog("FAIL: the map didn't finish loading\n");
+        }
+        waited = 0;
+    }
+
     if (!gDevAutotestStepStarted) {
         gDevAutotestStepStarted = true;
         gDevAutotestDelay = step->delay;
@@ -2985,8 +3005,11 @@ void devAutotestTick()
         case DEV_AUTOTEST_ACTION_CHECK_MENU_PICTURES: {
             int width;
             int height;
+            // The named picture is the high resolution patch's (f2_res.dat):
+            // a game without it (plain Fallout 2) has only the numeric one.
             SDL_Texture* named = muiPictureTexture(InterfaceFrmId("HR_MAINMENU.FRM"), &width, &height);
-            bool ok = named != nullptr && width > 0 && height > 0;
+            bool hasNamed = named != nullptr;
+            bool ok = !hasNamed || (width > 0 && height > 0);
             int namedWidth = width;
             int namedHeight = height;
             SDL_Texture* legacy = muiPictureTexture(FrmId(InterfaceFrameId::MainMenuBackgroundImage), &width, &height);
@@ -2995,9 +3018,14 @@ void devAutotestTick()
                 SDL_Texture* missing = muiPictureTexture(InterfaceFrmId("__CE_MISSING_PICTURE__.FRM"), &width, &height);
                 ok = ok && missing == nullptr && width == 0 && height == 0;
             }
-            SDL_Texture* cached = muiPictureTexture(InterfaceFrmId("HR_MAINMENU.FRM"), &width, &height);
-            ok = ok && cached == named && width == namedWidth && height == namedHeight;
-            devAutotestLog("  menu pictures: named %dx%d, numeric, missing path, cached identity: %s\n", namedWidth, namedHeight, ok ? "PASS" : "FAIL");
+            if (hasNamed) {
+                SDL_Texture* cached = muiPictureTexture(InterfaceFrmId("HR_MAINMENU.FRM"), &width, &height);
+                ok = ok && cached == named && width == namedWidth && height == namedHeight;
+            }
+            devAutotestLog("  menu pictures: named %s, numeric, missing path%s: %s\n",
+                hasNamed ? (std::to_string(namedWidth) + "x" + std::to_string(namedHeight)).c_str() : "none (no f2_res.dat)",
+                hasNamed ? ", cached identity" : "",
+                ok ? "PASS" : "FAIL");
             if (!ok) {
                 exit(EXIT_FAILURE);
             }
