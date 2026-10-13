@@ -253,6 +253,9 @@ enum DevAutotestAction {
     // Ends the dude's turn and waits (up to `a` frames) for his turn in the
     // next combat round, then as NONE.
     DEV_AUTOTEST_ACTION_END_TURN_WAIT,
+    // FAIL unless the critical hit table has [c] in kill type `a / 100`, hit
+    // location `a / 10 % 10`, effect `a % 10` (0-based), data member [b].
+    DEV_AUTOTEST_ACTION_CHECK_CRITICAL,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2013,6 +2016,32 @@ static const DevAutotestStep kDevAutotestTalkHealSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_PARTY_HEALED, 0, 0, 0, 1, "h09_healed" },
 };
 
+// The critical hit table has sfall's fixes (combat.cc criticalsInit, sfall's
+// OverrideCriticalTable=2): right arm messages of men, women, geckos, aliens
+// and giant ants, the super mutants' fix on the right arm and the left leg's
+// knockdown message kept (sfall 2023-2024).
+#define CHECK_CRITICAL(killType, location, effect, member, value, name)                                                                   \
+    {                                                                                                                                     \
+        DEV_AUTOTEST_ACTION_CHECK_CRITICAL, static_cast<float>((killType) * 100 + (location) * 10 + (effect)), (member), (value), 1, name \
+    }
+
+static const DevAutotestStep kDevAutotestCritTableSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 10, "c00_start" },
+    CHECK_CRITICAL(KILL_TYPE_MAN, HIT_LOCATION_RIGHT_ARM, 2, CRIT_DATA_MEMBER_MESSAGE_ID, 5010, "c01_man_arm"),
+    CHECK_CRITICAL(KILL_TYPE_MAN, HIT_LOCATION_RIGHT_ARM, 2, CRIT_DATA_MEMBER_MASSIVE_CRITICAL_MESSAGE_ID, 5014, "c02_man_arm_massive"),
+    CHECK_CRITICAL(KILL_TYPE_WOMAN, HIT_LOCATION_RIGHT_ARM, 2, CRIT_DATA_MEMBER_MESSAGE_ID, 5110, "c03_woman_arm"),
+    CHECK_CRITICAL(KILL_TYPE_WOMAN, HIT_LOCATION_RIGHT_ARM, 3, CRIT_DATA_MEMBER_MASSIVE_CRITICAL_MESSAGE_ID, 5114, "c04_woman_arm_massive"),
+    CHECK_CRITICAL(KILL_TYPE_SUPER_MUTANT, HIT_LOCATION_RIGHT_ARM, 1, CRIT_DATA_MEMBER_MASSIVE_CRITICAL_MESSAGE_ID, 5306, "c05_mutant_arm"),
+    CHECK_CRITICAL(KILL_TYPE_SUPER_MUTANT, HIT_LOCATION_LEFT_LEG, 1, CRIT_DATA_MEMBER_MASSIVE_CRITICAL_MESSAGE_ID, 5312, "c06_mutant_leg"),
+    CHECK_CRITICAL(KILL_TYPE_GECKO, HIT_LOCATION_RIGHT_ARM, 2, CRIT_DATA_MEMBER_MASSIVE_CRITICAL_MESSAGE_ID, 5014, "c07_gecko_arm"),
+    CHECK_CRITICAL(KILL_TYPE_ALIEN, HIT_LOCATION_RIGHT_ARM, 2, CRIT_DATA_MEMBER_MASSIVE_CRITICAL_MESSAGE_ID, 5014, "c08_alien_arm"),
+    CHECK_CRITICAL(KILL_TYPE_GIANT_ANT, HIT_LOCATION_RIGHT_ARM, 2, CRIT_DATA_MEMBER_MASSIVE_CRITICAL_MESSAGE_ID, 5014, "c09_ant_arm"),
+    // The 2020 fixes are there too.
+    CHECK_CRITICAL(KILL_TYPE_MAN, HIT_LOCATION_UNCALLED, 2, CRIT_DATA_MEMBER_MESSAGE_ID, 5019, "c10_man_uncalled"),
+};
+
+#undef CHECK_CRITICAL
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2380,6 +2409,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "crittable") == 0) {
+        gDevAutotestSteps = kDevAutotestCritTableSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestCritTableSteps) / sizeof(kDevAutotestCritTableSteps[0]);
     } else if (strcmp(name, "talkheal") == 0) {
         gDevAutotestSteps = kDevAutotestTalkHealSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestTalkHealSteps) / sizeof(kDevAutotestTalkHealSteps[0]);
@@ -3629,6 +3661,21 @@ void devAutotestTick()
                 devAutotestLog("  the dude hit by pid %d, %d hexes away\n", critter->pid, objectGetDistanceBetween(gDude, critter));
             } else {
                 devAutotestLog("FAIL: no critter in sight or not in combat\n");
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_CRITICAL: {
+            int code = static_cast<int>(step->a);
+            KillType killType = static_cast<KillType>(code / 100);
+            HitLocation hitLocation = static_cast<HitLocation>(code / 10 % 10);
+            CriticalEffect effect = static_cast<CriticalEffect>(code % 10);
+            CriticalHitDataMember member = static_cast<CriticalHitDataMember>(static_cast<int>(step->b));
+            int value = criticalsGetValue(killType, hitLocation, effect, member);
+            bool ok = value == static_cast<int>(step->c);
+            devAutotestLog("  critical kill type %d, location %d, effect %d, member %d: %d (expected %d): %s\n",
+                killType, hitLocation, effect, member, value, static_cast<int>(step->c), ok ? "PASS" : "FAIL");
+            if (!ok) {
                 exit(EXIT_FAILURE);
             }
             break;
