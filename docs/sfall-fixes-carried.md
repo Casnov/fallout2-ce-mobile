@@ -18,6 +18,9 @@ as a pull request:
   conflict and the row below is marked merged. If CE changed it, the
   autotest still checks the behavior.
 
+Which sfall fixes CE has and which it doesn't:
+[sfall-fixes-audit.md](sfall-fixes-audit.md).
+
 | sfall fix | Port commit | Pull request | Autotest | State |
 |---|---|---|---|---|
 | Fix to allow fleeing NPC to use drugs; Fix for AI not checking minimum HP properly for using stimpaks; Fix for NPC stuck in fleeing mode when the hit chance of a target was too low; Restore combat flags after fleeing when NPC cannot move closer to target (`Modules/AI.cpp`, `Game/combatAI.cpp`) | fd32f057 | [fallout2-ce#839](https://github.com/fallout2-ce/fallout2-ce/pull/839) | `fleeheal` | open |
