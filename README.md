@@ -32,13 +32,17 @@ The full list of changes is the git history over upstream.
 2. Copy your Fallout 2 folder from a computer to the phone: as is, or as one archive (cable, cloud drive, messenger). Mods installed there (for example [RPU](https://github.com/BGforgeNet/Fallout2_Restoration_Project)) and saves come along.
 3. Start the app and choose that folder or archive.
 
-Tested on a Redmi 15C (Android 16). Android 7.0 or newer, arm64.
+Tested on a Redmi 15C (Android 16); players also run it on tablets (Alldocube). Android 7.0 or newer, arm64.
+
+Plain Fallout 2 from GOG, Steam or Epic works too, with or without mods. The game's language is taken from its own files, older translations included; if your copy doesn't work, please open an [issue](https://github.com/imbaner/fallout2-ce-mobile/issues).
 
 **Recommended setup: Fallout 2 + [Restoration Project (RPU)](https://github.com/BGforgeNet/Fallout2_Restoration_Project) 2.4.34.** The port is played and tested with it. RPU relies on sfall, which this engine reimplements: Fallout 2: Community Engine, the continuation of the original Fallout 2 Community Edition. Install RPU into the game folder on a computer, then copy the folder to the phone.
 
 ## Known limitations
 
 - Landscape only; portrait is planned.
+- Android only: no iOS or browser version yet.
+- Laid out for phones: on tablets, 4:3 screens especially, the same layout is scaled up.
 - Made for phones and tested on Android; the desktop builds keep CE's original windows (`[touch] mobile_ui=0`) and are not the focus of this fork.
 - Mods with their own script windows are not covered by the touch UI (none of the popular ones use them).
 

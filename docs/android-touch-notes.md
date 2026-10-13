@@ -4,7 +4,7 @@
 после изменения HR-фона в работе Claude Opus 5.5. Причина — именованный
 FRM передавался в загрузчик только для числовых FID; исправлены загрузка
 через `FrmImage` и ключ кэша. Автотест меню/выбора персонажа и обе сборки
-прошли, APK установлен. [Причина, реализация и проверки](main-menu-startup-fix-2026-09-29.md).
+прошли, APK установлен.
 
 
 Notes for the touch-first control scheme (stage 2 and later). Stage 1 added
@@ -13,20 +13,15 @@ pipeline.
 
 The game menu and the save/load screen were written by Codex / GPT-6 Sol,
 the save catalog by Codex / GPT-6 Astra, reviewed and reworked by Claude
-Code / Claude Opus 5.5 on 2026-09-29; the
-[save/load handoff](save-load-handoff-2026-09-28.md) has the history.
-The [2026-09-28 opening-movie handoff](movie-playback-handoff-2026-09-28.md)
-records the later movie-input fix made by Codex / GPT-6 Sol (`gpt-6-sol`),
-including the cause, code path, and before/after regression checks.
+Code / Claude Opus 5.5 on 2026-09-29. The 2026-09-28 movie-input fix was
+made by Codex / GPT-6 Sol (`gpt-6-sol`).
 
 The subsequent save-history implementation was completed by **Codex / GPT-6
 Astra (`gpt-6-astra`)**, continuing the earlier Opus/Sol work (attribution
 clarified by the user on 2026-09-29). It separates physical placement from
 chronological list ranks and session quickload, uses configurable quick/manual
 ranges, and adds permanent copies of quick saves and complete-save transaction
-recovery. See the "Follow-up: save history, configurable retention and session
-quickload" section in the same handoff for why, implementation, test evidence,
-and deployment. The existing phone reservation remains 11–20; all 364 original
+recovery. The existing phone reservation remains 11–20; all 364 original
 save files were verified unchanged. Gameplay touch tests ran on macOS, and the
 storage tests additionally ran on the physical Android phone.
 
@@ -96,10 +91,12 @@ goes through mouse emulation in touchscreen (absolute) mode.
   physical size, not with zoom): a ground tap within 24 dp of the tile dude
   walks to (or the move selected in combat) counts as that tile - the second
   tap on the same tile runs (`_dude_move`) / confirms. With HUD item
-  highlight on, items have priority over the ground: a tap on or within
-  24 dp of an item's sprite box uses that item directly (`actionPickUp`, no
-  pixel hit needed - thin spears), also for long press. Without highlight
-  items are picked by pixels as in the game, so dude can walk next to them.
+  highlight on, outlined items have priority over the ground: a tap on or
+  within 24 dp of an item's sprite box uses that item directly
+  (`actionPickUp`, no pixel hit needed - thin spears), also for long press;
+  only items that show their outline (`objectHasVisibleOutline`), so an item
+  out of sight isn't picked. Without highlight items are picked by pixels as
+  in the game, so dude can walk next to them.
   Taps on objects are never changed. Autotest: `--dev-autotest-scenario=magnet`.
 - Combat confirmation sticks to the selection (2026-10-09,
   `touchControlsStickToSelection`): a critter's sprite covers tiles behind
@@ -299,9 +296,8 @@ the UI size setting, `hud_density` overrides screen density (0 - Android
   uploads to the GPU. Mac, per frame, before -> after: pinch 766 -> 118 kpx
   uploaded; stepping under a roof and out 110 -> 4 kpx; drawn pixels at
   zoom 1 about a fifth. Frames compared with drawing everything: the same
-  except animations' timing. What's left for 60 fps (floor and objects on
-  the GPU, faster CPU loops, GPU fades): `android-roadmap.md`, "Map
-  rendering towards 60 fps".
+  except animations' timing. What's left for 60 fps: floor and objects on
+  the GPU, faster CPU loops, GPU fades.
 - Stuck fingers (2026-09-29, rare on the phone: touch dead except long
   presses, or taps and walks forced to the left edge's middle - where
   Android's back gesture starts). Fingers go either to the mobile UI or to
@@ -615,7 +611,8 @@ every screen on the new scalable UI, visual style/textures later via theme).
   category, trader money. Party members as tabs (with CE
   `[qol] party_loot_and_barter=1`; party members on the map, like the mod's
   `party_member_list_critters`; also when bartering with a party member,
-  unlike the mod - the others stay reachable): tap selects, dropping a player item on a tab gives it. Still to do on loot ("take all") and inventory ("drop all").
+  unlike the mod - the others stay reachable): tap selects, dropping a player item on a tab gives it. Loot has "Give all"
+  / "Take all", the inventory "Drop all" (below).
   Which party members (2026-10-07, the original game + sfall + RPU +
   Inventory Filter as the reference): only those whose items the original
   game lets the player at (bartering and stealing not forbidden, as the
@@ -850,8 +847,7 @@ every screen on the new scalable UI, visual style/textures later via theme).
     `newgameelder` tap the real legacy buttons, verify a decoded movie frame,
     and capture it. They failed before this change and passed afterward;
     the existing `movie` scenario also passed its new-touch skip check. This
-    follow-up was completed by Codex on GPT-6 Sol (`gpt-6-sol`); see the
-    [movie handoff](movie-playback-handoff-2026-09-28.md) for the full account.
+    follow-up was completed by Codex on GPT-6 Sol (`gpt-6-sol`).
 - Called shot (`mui_called_shot.cc`, `muiSelectCalledShot` from
   `calledShotSelectHitLocation`): a panel in the room the HUD leaves (HUD
   element rects), the target's name, its called shot picture between the
@@ -1076,7 +1072,7 @@ every screen on the new scalable UI, visual style/textures later via theme).
   Nothing to port. A mod made later that creates a script window would show
   it as the game's window; since the touch-only build (no mouse emulation,
   2026-09-30) its buttons can't be pressed on Android - such a mod needs a
-  mobile renderer for script windows (see legacy-audit-2026-09-30.md).
+  mobile renderer for script windows.
 - Touch architecture steps 3-4 (2026-09-29): fingers reach the map with no
   mouse in between (touch-native input), the mouse emulation is only for the
   game's windows (`mobile_ui=0`), scripts reading the mouse get the last map
@@ -1170,66 +1166,23 @@ CE's.
   (`tileBeginDeferredRefresh`: touching rects merged, past 48 a new one
   joins the nearest).
 
-## Known issues to address when the cursor goes away
+## Cursor-era issues (resolved)
 
-1. Cursor and destination marker are not truly attached to the map. The
-   cursor is a screen point which we re-position after each camera change;
-   anything that moves the camera without going through the two finger
-   gesture (keyboard scroll, edge scroll, game re-centering on dude, zoom via
-   Ctrl+wheel) leaves the cursor at the same screen point, so the hex outline
-   jumps to another tile. With touch-first controls the selected tile / target
-   should be stored in map coordinates (tile index) and the hex outline should
-   be positioned from that, not from the mouse.
-2. Mouse cursor sprite is drawn directly into the screen buffer
-   (`mouseShowCursor`), any position change must be wrapped in
-   `mouseHideCursor`/`mouseShowCursor`, otherwise stale cursor pixels stay on
-   screen.
-3. Action menu (long press) runs a modal loop inside `_gmouse_handle_event`
-   which reads mouse deltas and restores cursor position afterwards (screen
-   coordinates). A touch-native radial menu should replace it.
-4. Floating text above critters (`text_object.cc`) is rendered into the map
-   and zooms with it: unreadable at 0.5x, huge at 4x. Should become an
-   overlay like the cursor arrow.
-5. Combat hints drawn into game mouse objects (to-hit %, AP cost in move
-   mode) follow the object: the % is on the overlay (fixed size), AP cost is on
-   the hex outline (zooms).
-6. Scroll limits (map edges, `tileSetCenter` scroll limiting 480x400 px from
-   dude) block panning; zoom anchor can drift at map edges because the view
-   cannot move there. Sub-tile edge alignment is disabled with world view.
-7. `tile_is_visible`, idle animations and positional sound use the visible
-   part of the map (`worldViewGetVisibleRect`), which changes with zoom.
-8. Movie playback loop must be throttled — busy loop on Android starved touch
-   delivery and triggered "app not responding".
+Noted 2026-09-25 for when the cursor goes away; all done since: targets and
+the selected tile are kept in map coordinates (`player_commands.cc`,
+`map_hints.cc`), there's no cursor sprite under the mobile UI, the action
+menu is the radial menu, floating texts and combat hints are fixed-size
+overlays (`mui_floating_text.cc`, `map_hints.cc`), scroll limits follow the
+visible rect of the world view, movies are throttled (the mobile movie
+screen).
 
-## Attack modes and reload (open question for the touch HUD)
+## Attack modes and reload (resolved)
 
-How it works now:
-
-- The weapon (item) button on the interface bar is the only core UI button
-  with a right click action: it sends `N` (`interfaceCycleItemAction`), which
-  cycles the active hand through primary -> primary aimed -> secondary (e.g.
-  burst) -> secondary aimed -> reload (only when the magazine is not full) ->
-  primary; states the weapon or critter can't do are skipped. Tapping the
-  button then attacks in that mode, or reloads in reload state (AP cost in
-  combat). Reload can also be done by dragging ammo onto the weapon in
-  inventory. There is no dedicated reload key in vanilla Fallout 2.
-- Scripted windows of mods can also register right click on their buttons
-  (`window.cc`, managed buttons).
-- Right click on the map is a different thing: it cycles cursor mode
-  (move -> arrow -> crosshair in combat). Touch controls don't need it (tap on
-  an enemy attacks), so it's gone.
-- With touch controls right click = long press on a button that has a right
-  click action (`windowButtonAtPointHasRightClick`). So attack mode / reload
-  is: long press the weapon button until the wanted mode shows, then tap it.
-  Works, but is not discoverable and takes several long presses.
-
-Question for the HUD stage: give attack mode and reload their own controls,
-e.g. a small mode switcher next to the weapon button (tap cycles modes, or a
-row/popup with single / aimed / burst) and a separate reload button that
-appears when the magazine isn't full, instead of hiding them in the long
-press cycle. Other keyboard-only actions that need buttons too: quick
-save/load, highlight items (Shift), end turn / end combat (exist on the bar
-only in combat), swap hands (exists), sneak (skilldex).
+The original hides them in the weapon button's right click (`N` cycles
+primary -> aimed -> secondary -> aimed -> reload). The touch HUD shows them
+as an attack-mode strip next to the weapon button (`touch_hud.cc`: the
+weapon's modes, reload as an icon, fixed width, scrolls sideways), plus
+end turn / end combat, swap hands, sneak and quick save/load buttons.
 
 ## Testing
 
@@ -1238,6 +1191,13 @@ only in combat), swap hands (exists), sneak (skilldex).
   zoom/pan/pinch/walk/radial/inventory/combat sequence (`src/dev_autotest.cc`) and saves
   frames + log. Use `mouse_lock=1` so the cursor is engine-owned like on
   Android.
-- Xiaomi phones block `adb install` and `adb shell input` without a SIM card
-  ("Install via USB" / "USB debugging (security settings)"), so touch testing
-  on the device is manual.
+- Scenarios: `--dev-autotest-scenario=<name>` (`devAutotestSetScenario`
+  in `src/dev_autotest.cc` lists them); `out/dev/runtest.sh` (ignored local
+  rig) runs one on a copy of the game, frames + log.txt; a FAIL or NOT FOUND
+  line is a failure. Screens at other sizes: the game's `[screen]
+  resolution_x` with 480 lines and `[touch] hud_density` (output pixels per
+  dp), as Android picks them (`svga.cc`, `hud_layout.cc`).
+- The owner's Xiaomi: `adb install` works (allowed in the developer
+  options; a new package asks on the phone once), `adb shell input` needs a
+  SIM card ("USB debugging (security settings)"), so touch testing on the
+  device is manual.

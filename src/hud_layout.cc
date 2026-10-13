@@ -18,7 +18,7 @@ namespace fallout {
 // 48 dp touch target, a bit smaller to leave more of the map visible.
 constexpr float kButton = 44.0f;
 
-// Landscape layout, see docs/android-roadmap.md (block 1).
+// Landscape layout, see docs/android-touch-notes.md (Touch HUD).
 //
 // Top left: menu, quick save/load. Top right: inventory, character, Pip-Boy,
 // map. Top center: indicators. Left edge: skills, highlight, sneak. Bottom

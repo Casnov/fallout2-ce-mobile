@@ -61,9 +61,7 @@ The title menu's Load action opens the new picker even though the title menu
 itself is still a legacy window. The picker uses native touch widgets and
 GPU textures, including for legacy indexed save thumbnails. Its 2026-09-28
 follow-up was completed by Codex / GPT-6 Sol after the user's Claude Code /
-Claude Opus 5.5 work; see the
-[save/load handoff](save-load-handoff-2026-09-28.md) for the exact changes,
-verification, and remaining device check.
+Claude Opus 5.5 work.
 
 The subsequent **GPT-6 Astra (`gpt-6-astra`)** follow-up (attribution clarified
 by the user on 2026-09-29) adds a shared `SaveCatalog` above the existing CE
@@ -71,7 +69,6 @@ save/load routines. Native touch widgets and quick commands use the same
 placement/order/session policy; `save_storage` implements complete-directory
 transactions. The selected UI row and legacy engine cursor no longer determine
 quick retention. This preserves the native touch/GPU UI and CE save format.
-See the save-history section of the handoff for implementation and tests.
 
 ## Why the map must leave the mouse path (2026-09-29)
 
@@ -134,7 +131,7 @@ mouse too. Step 4 removes the cause:
     cursor; scripts' pointer is always the last map touch (the screen's
     center before one); the game's windows' code stays for the desktop build
     and is never reached;
-  - legacy stage 0 (2026-09-30, docs/legacy-audit-2026-09-30.md): on
+  - legacy stage 0 (2026-09-30): on
     touch-only `muiIsEnabled()` and `touchHudIsEnabled()` are `constexpr
     true` (touch HUD forced on too), `touchControlsIsEnabled()` is the world
     view's life (isoInit..isoExit); Android links with `--gc-sections` and
