@@ -203,6 +203,9 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_KILL_CRITTER,
     // Puts item with pid `a` into the corpse's inventory.
     DEV_AUTOTEST_ACTION_GIVE_CORPSE_ITEM,
+    // To the nearest critter: `a` - pid, `b` - quantity, `c` - ammo: rounds
+    // in the clip not full.
+    DEV_AUTOTEST_ACTION_GIVE_CRITTER_ITEM,
     DEV_AUTOTEST_ACTION_CENTER_CORPSE,
     DEV_AUTOTEST_ACTION_TOUCH_TAP_CORPSE,
     // Floating text over dude (like float_msg).
@@ -691,6 +694,35 @@ static const DevAutotestStep kDevAutotestBarterSteps[] = {
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "b11c_look", "radial.3" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "b12_offer", "barter.offer.button" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "b13_back_to_talk", "dialog.tab.talk" },
+};
+
+// Ammo shown in rounds: a stack of three clips, the first not full, and one
+// clip not full; under the finger, the quantity picker (rounds by clips,
+// weight, price in a deal), the barter tables.
+static const DevAutotestStep kDevAutotestAmmoSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "a00_map" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 29, 3, 10, 1, "a01_give_jhp" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 30, 1, 7, 1, "a02_give_ap" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Inventory), 0, 0, 30, "a03_inventory" },
+    { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "a03b_log" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 18, 40, "a04_drop_jhp", "inventory.pid.29", "inventory.info" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "a05_plus", "quantity.plus" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "a06_plus", "quantity.plus" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "a07_cancel", "quantity.cancel" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "a08_back", "inventory.back" },
+    { DEV_AUTOTEST_ACTION_GIVE_CRITTER_ITEM, 30, 2, 5, 1, "a08b_trader_ammo" },
+    { DEV_AUTOTEST_ACTION_CENTER_CRITTER, 0, 0, 0, 10, "a09_center_critter" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 0, 0, 300, "a10_talk" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "a11_barter", "dialog.tab.barter" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 18, 40, "a12_offer_jhp", "barter.player.pid.29", "barter.offer" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "a13_plus", "quantity.plus" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "a14_done", "quantity.done" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 18, 40, "a15_offer_ap", "barter.player.pid.30", "barter.offer" },
+    { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "a16_log" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 18, 40, "a17_request", "barter.barterer.pid.30", "barter.request" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "a17b_plus", "quantity.plus" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "a18_done", "quantity.done" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "a19_back_to_talk", "dialog.tab.talk" },
 };
 
 // A conversation through several branches with barter in the middle; the
@@ -2291,6 +2323,9 @@ void devAutotestSetScenario(const char* name)
         gDevAutotestSteps = kDevAutotestLootSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestLootSteps) / sizeof(kDevAutotestLootSteps[0]);
         gDevAutotestTraceItems = true;
+    } else if (strcmp(name, "ammo") == 0) {
+        gDevAutotestSteps = kDevAutotestAmmoSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestAmmoSteps) / sizeof(kDevAutotestAmmoSteps[0]);
     } else if (strcmp(name, "inventory") == 0) {
         gDevAutotestSteps = kDevAutotestInventorySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestInventorySteps) / sizeof(kDevAutotestInventorySteps[0]);
@@ -3294,10 +3329,13 @@ void devAutotestTick()
             break;
         }
         case DEV_AUTOTEST_ACTION_GIVE_ITEM: {
-            // `b` - quantity.
+            // `b` - quantity, `c` - ammo: rounds in the clip not full.
             Object* item;
             if (objectCreateWithProtoId(&item, ProtoId(static_cast<int>(step->a))) == 0) {
                 int quantity = step->b > 0 ? static_cast<int>(step->b) : 1;
+                if (step->c > 0 && itemGetType(item) == ITEM_TYPE_AMMO) {
+                    ammoSetQuantity(item, static_cast<int>(step->c));
+                }
                 // As `add_obj_to_inven`: off the map once carried (or it is
                 // freed with the map and the inventory both).
                 if (itemAdd(gDude, item, quantity) == 0) {
@@ -3479,6 +3517,21 @@ void devAutotestTick()
             if (gDevAutotestCorpse != nullptr && objectCreateWithProtoId(&item, ProtoId(static_cast<int>(step->a))) == 0) {
                 itemAdd(gDevAutotestCorpse, item, 1);
                 devAutotestLog("  gave corpse item pid %d\n", static_cast<int>(step->a));
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_GIVE_CRITTER_ITEM: {
+            Object* critter = devAutotestFindNearestCritter();
+            Object* item;
+            if (critter != nullptr && objectCreateWithProtoId(&item, ProtoId(static_cast<int>(step->a))) == 0) {
+                int quantity = step->b > 0 ? static_cast<int>(step->b) : 1;
+                if (step->c > 0 && itemGetType(item) == ITEM_TYPE_AMMO) {
+                    ammoSetQuantity(item, static_cast<int>(step->c));
+                }
+                if (itemAdd(critter, item, quantity) == 0) {
+                    _obj_disconnect(item, nullptr);
+                }
+                devAutotestLog("  gave critter pid %d item pid %d x%d\n", critter->pid, static_cast<int>(step->a), quantity);
             }
             break;
         }
@@ -3750,7 +3803,11 @@ void devAutotestTick()
                 float width = static_cast<float>(screenGetWidth());
                 float height = static_cast<float>(screenGetHeight());
                 devAutotestLog("  mui drag %s -> %s\n", step->widget, step->target);
-                devAutotestStartTouch(x * width, y * height, targetX * width, targetY * height, 0, 25);
+                // `c` - capture at this frame of the drag too ("<name>_drag").
+                static std::string captureName;
+                captureName = std::string(step->name) + "_drag";
+                int captureFrame = step->c > 0 ? static_cast<int>(step->c) : -1;
+                devAutotestStartTouch(x * width, y * height, targetX * width, targetY * height, 0, 25, captureFrame, captureName.c_str());
             } else {
                 devAutotestLog("  mui drag %s -> %s: NOT FOUND\n", step->widget != nullptr ? step->widget : "?", step->target != nullptr ? step->target : "?");
             }

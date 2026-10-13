@@ -66,6 +66,17 @@ int itemGetSize(Object* obj);
 int itemGetWeight(Object* item);
 int itemGetCost(Object* obj);
 int objectGetCost(Object* obj);
+// CE: How many [quantity] of a stack whose object is [item] (an inventory
+// entry, or its part taken first) are for the player: ammo in rounds - its
+// object is the one clip that may not be full, the others are - the rest as
+// is.
+int itemStackAmount(Object* item, int quantity);
+// CE: The cost of [quantity] of a stack whose object is [item], as
+// `objectGetCost` counts it.
+int itemStackCost(Object* item, int quantity);
+// CE: The weight of [quantity] of a stack whose object is [item], as
+// `objectGetInventoryWeight` counts it (ammo: each clip weighs as a full one).
+int itemStackWeight(Object* item, int quantity);
 int objectGetInventoryWeight(Object* obj);
 bool dudeIsWeaponDisabled(Object* weapon);
 FrmId itemGetInventoryFrmId(Object* obj);

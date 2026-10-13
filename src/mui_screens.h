@@ -171,8 +171,17 @@ std::vector<MuiListItem> muiInventoryItems(Object* owner, const MuiItemFilterSta
 // Total weight of the listed items.
 int muiItemsWeight(const std::vector<MuiListItem>& items);
 
-// Item cell: inventory art (crisp pixels), quantity.
+// Item cell without the count: frame and inventory art (crisp pixels).
+void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pressed);
+
+// Item cell: `muiDrawItemImage` and how many of it [quantity] of its stack
+// are (`itemStackAmount`: ammo in rounds, always, as the game shows).
 void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed);
+
+// The dragged item under the finger: its cell ([quantity] of its stack) and,
+// above, its name with how many the least part that moves is (one, ammo's
+// first clip in rounds), its weight and [price] (< 0: not shown).
+void muiDrawDraggedItem(MuiContext& ui, Object* item, int quantity, int price);
 
 // Party member tabs (barter, loot): one out of reach
 // (`inventoryPartyMemberIsReachable`) is dimmed, a tap or a drop on it says

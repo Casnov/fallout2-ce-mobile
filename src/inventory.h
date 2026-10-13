@@ -159,9 +159,10 @@ enum class BarterRequest {
 bool barterGetView(BarterView* view);
 void barterQueueAction(const BarterAction& action);
 void barterRequest(BarterRequest request);
-// What [item] is worth in this deal: player's items at their cost, trader's
-// ones with the trader's markup (the same formula as the table totals).
-int barterGetItemPrice(Object* item, bool playerSide);
+// What [quantity] of the stack whose object is [item] is worth in this deal:
+// player's items at their cost, trader's ones with the trader's markup (the
+// same formula as the table totals).
+int barterGetItemPrice(Object* item, int quantity, bool playerSide);
 
 // CE: Inventory screen of the mobile UI (mui_inventory.cc). The inventory
 // (`inventoryOpen`) runs without the game's window then: its loop performs

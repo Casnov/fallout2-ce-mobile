@@ -930,25 +930,8 @@ int objectGetCost(Object* obj)
     Inventory* inventory = &(obj->data.inventory);
     for (int index = 0; index < inventory->length; index++) {
         InventoryItem* inventoryItem = &(inventory->items[index]);
-        if (itemGetType(inventoryItem->item) == ITEM_TYPE_AMMO) {
-            Proto* proto;
-            protoGetProto(inventoryItem->item, &proto);
-
-            // Ammo stack in inventory is a bit special. It is counted in clips,
-            // `inventoryItem->quantity` is the number of clips. The ammo object
-            // itself tracks remaining number of ammo in only one instance of
-            // the clip implying all other clips in the stack are full.
-            //
-            // In order to correctly calculate cost of the ammo stack, add cost
-            // of all full clips...
-            cost += proto->item.cost * (inventoryItem->quantity - 1);
-
-            // ...and add cost of the current clip, which is proportional to
-            // it's capacity.
-            cost += itemGetCost(inventoryItem->item);
-        } else {
-            cost += itemGetCost(inventoryItem->item) * inventoryItem->quantity;
-        }
+        // CE: The count of parts of stacks too (`itemStackCost`).
+        cost += itemStackCost(inventoryItem->item, inventoryItem->quantity);
     }
 
     if (FrmId(obj).objectType() == OBJ_TYPE_CRITTER) {
@@ -971,6 +954,52 @@ int objectGetCost(Object* obj)
     return cost;
 }
 
+int itemStackAmount(Object* item, int quantity)
+{
+    if (item == nullptr || quantity < 1) {
+        return 0;
+    }
+
+    if (itemGetType(item) == ITEM_TYPE_AMMO) {
+        return ammoGetCapacity(item) * (quantity - 1) + ammoGetQuantity(item);
+    }
+
+    return quantity;
+}
+
+int itemStackCost(Object* item, int quantity)
+{
+    if (item == nullptr || quantity < 1) {
+        return 0;
+    }
+
+    if (itemGetType(item) == ITEM_TYPE_AMMO) {
+        Proto* proto;
+        protoGetProto(item, &proto);
+
+        // Ammo stack in inventory is a bit special. It is counted in clips,
+        // [quantity] is the number of clips. The ammo object itself tracks
+        // remaining number of ammo in only one instance of the clip implying
+        // all other clips in the stack are full.
+        //
+        // In order to correctly calculate cost of the ammo stack, add cost
+        // of all full clips and cost of the current clip, which is
+        // proportional to it's capacity.
+        return proto->item.cost * (quantity - 1) + itemGetCost(item);
+    }
+
+    return itemGetCost(item) * quantity;
+}
+
+int itemStackWeight(Object* item, int quantity)
+{
+    if (item == nullptr || quantity < 1) {
+        return 0;
+    }
+
+    return itemGetWeight(item) * quantity;
+}
+
 // Calculates total weight of the items in inventory.
 //
 // 0x477E98
@@ -985,8 +1014,8 @@ int objectGetInventoryWeight(Object* obj)
     Inventory* inventory = &(obj->data.inventory);
     for (int index = 0; index < inventory->length; index++) {
         InventoryItem* inventoryItem = &(inventory->items[index]);
-        Object* item = inventoryItem->item;
-        weight += itemGetWeight(item) * inventoryItem->quantity;
+        // CE: The count of parts of stacks too (`itemStackWeight`).
+        weight += itemStackWeight(inventoryItem->item, inventoryItem->quantity);
     }
 
     if (FrmId(obj).objectType() == OBJ_TYPE_CRITTER) {

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -406,7 +407,7 @@ static int _drop_into_container(Object* container, Object* item, int sourceIndex
 static void inventoryUnloadWeaponToOwner(Object* owner, Object* weapon);
 static InventoryAmmoMoveResult _drop_ammo_into_weapon(Object* weapon, Object* ammo, Object** ammoItemSlot, int quantity, int keyCode);
 static void _draw_amount(int value, int inventoryWindowType);
-static int inventoryQuantitySelect(int inventoryWindowType, Object* item, int maximum, int defaultValue = 1);
+static int inventoryQuantitySelect(int inventoryWindowType, Object* item, int maximum, int defaultValue = 1, const std::function<int(int)>& price = nullptr);
 static int inventoryQuantityWindowInit(int inventoryWindowType, Object* item);
 static int inventoryQuantityWindowFree(int inventoryWindowType);
 static void inventoryDisplayMessage(int num);
@@ -6515,10 +6516,10 @@ static int barterItemKeyCode(Object* item, bool playerSide, bool onTable)
     return -1;
 }
 
-int barterGetItemPrice(Object* item, bool playerSide)
+int barterGetItemPrice(Object* item, int quantity, bool playerSide)
 {
-    // One item (`objectGetCost` is the cost of what is inside it).
-    int cost = itemGetCost(item);
+    // Of the item (`objectGetCost` is the cost of what is inside it).
+    int cost = itemStackCost(item, quantity);
     if (gBarterBarterer == nullptr || playerSide || ProtoId(item) == ItemProtoTypeId::Money) {
         return cost;
     }
@@ -6847,7 +6848,16 @@ static int barterGetMovedQuantity(Object* item, int maxQuantity, bool fromPlayer
         return maxQuantity;
     }
 
-    return inventoryQuantitySelect(INVENTORY_WINDOW_TYPE_MOVE_ITEMS, item, maxQuantity, suggestedValue);
+    // CE: What the chosen quantity is worth, shown while choosing (money is
+    // its own price; party members don't sell).
+    std::function<int(int)> price;
+    if (!gGameDialogSpeakerIsPartyMember && ProtoId(item) != ItemProtoTypeId::Money) {
+        price = [item, fromPlayer](int quantity) {
+            return barterGetItemPrice(item, quantity, fromPlayer);
+        };
+    }
+
+    return inventoryQuantitySelect(INVENTORY_WINDOW_TYPE_MOVE_ITEMS, item, maxQuantity, suggestedValue, price);
 }
 
 // clicked on an inventory in preparation of dragging or immediate transfer
@@ -7872,14 +7882,16 @@ static void _draw_amount(int value, int inventoryWindowType)
 }
 
 // 0x47688C do_move_timer
-static int inventoryQuantitySelect(int inventoryWindowType, Object* item, int max, int defaultValue)
+// CE: [price] - the price of a quantity in this deal, shown by the mobile
+// UI's picker.
+static int inventoryQuantitySelect(int inventoryWindowType, Object* item, int max, int defaultValue, const std::function<int(int)>& price)
 {
     ScopedGameMode gm(GameMode::kCounter);
 
     // CE: Mobile UI picker, same ranges (timer: 10..180 s by 10, 60 first).
     if (muiIsEnabled()) {
         if (inventoryWindowType == INVENTORY_WINDOW_TYPE_MOVE_ITEMS) {
-            return muiQuantitySelect(item, 1, std::min(max, 99999), 1, defaultValue, false);
+            return muiQuantitySelect(item, 1, std::min(max, 99999), 1, defaultValue, false, price);
         }
         return muiQuantitySelect(item, 10, max, 10, 60, true);
     }

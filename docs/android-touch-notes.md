@@ -685,11 +685,25 @@ every screen on the new scalable UI, visual style/textures later via theme).
 - Radial menu shows the name of the highlighted action (`game\ce.msg`
   146-155). Opened over a mobile UI screen it takes the mui finger
   (`RadialMenuScreen::pointerInput`).
-- Barter bubble shows the price of this deal (`barterGetItemPrice`, the same
-  formula as the table totals).
+- Ammo is shown in rounds everywhere, as the game's lists do
+  (`_display_inventory_info`): a stack is clips, its object the one clip not
+  full, the others full (`itemStackAmount`); cells show all of a stack, even
+  one clip. Weight and cost of a stack or its part: `itemStackWeight`,
+  `itemStackCost` (the game's inventory totals count with them too; a clip
+  not full weighs as a full one, costs by its rounds).
+- Under the finger (`muiDrawDraggedItem`, inventory, loot, barter): the
+  stack's cell; name, "xN" - the least part that moves (one item, ammo's
+  first clip: the one not full, it goes first), its weight and, in barter,
+  its price in this deal (`barterGetItemPrice`, the same formula as the
+  table totals). So a single clip shows what lands on the table.
 - Quantity picker (`mui_quantity.cc`, `muiQuantitySelect`, used by
-  `inventoryQuantitySelect`): item, value, -/slider/+, all/cancel/done;
-  explosive timer mode (m:ss, step 10). Texts `game\ce.msg` 117-123.
+  `inventoryQuantitySelect`): the stack's cell, name, value, the chosen ones'
+  weight and, in a deal with a trader, price (`barterGetMovedQuantity`
+  passes it), -/slider/+, all/cancel/done; explosive timer mode (m:ss, step
+  10). Ammo: the game moves clips, the picker shows rounds (10 -> 34 -> 58
+  for clips of 10, 24, 24). Texts `game\ce.msg` 121-123.
+- Weight is shown with the weight icon on every screen (inventory, loot,
+  barter, the bubble, the picker), money with "$": symbols, no words.
 - Autotest: `--dev-autotest-scenario=ui`, `DEV_AUTOTEST_ACTION_MUI_TAP` taps
   a widget by id (`muiGetWidgetCenter`), `MUI_DRAG` drags widget -> target.
 - Character screen (`mui_character.cc`, `muiCharacterScreenRun`), in game

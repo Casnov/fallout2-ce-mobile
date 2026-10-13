@@ -288,8 +288,11 @@ Object* muiChooseItemToUse(Object* target);
 void muiInventoryInit();
 
 // Quantity picker (inventory.cc `inventoryQuantitySelect`): returns chosen
-// value or -1. [timer] shows seconds (explosives).
-int muiQuantitySelect(Object* item, int minValue, int maxValue, int step, int defaultValue, bool timer);
+// value or -1. [timer] shows seconds (explosives). Otherwise it's how many of
+// [item]'s stack (ammo: clips, shown as rounds, `itemStackAmount`), shown
+// with their weight and [price] (the price of a quantity in a deal, none:
+// weight only).
+int muiQuantitySelect(Object* item, int minValue, int maxValue, int step, int defaultValue, bool timer, const std::function<int(int)>& price = nullptr);
 
 // Character screen (mui_character.cc) over the character editor's state
 // (character_editor.h): level ups in game, or creating the character.

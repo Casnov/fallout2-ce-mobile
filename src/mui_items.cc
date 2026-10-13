@@ -9,6 +9,7 @@
 #include "item.h"
 #include "mui_icons.h"
 #include "mui_notify.h"
+#include "object.h"
 #include "proto_types.h"
 
 namespace fallout {
@@ -122,7 +123,7 @@ int muiItemsWeight(const std::vector<MuiListItem>& items)
 {
     int weight = 0;
     for (const MuiListItem& entry : items) {
-        weight += itemGetWeight(entry.item) * entry.quantity;
+        weight += itemStackWeight(entry.item, entry.quantity);
     }
     return weight;
 }
@@ -137,7 +138,7 @@ void muiNotifyPartyMemberOutOfReach(Object* critter)
     muiNotify(text, MuiNoticeKind::Warning);
 }
 
-void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed)
+void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pressed)
 {
     const MuiTheme& theme = muiTheme();
     muiFillRoundRect(rect, ui.dp(5.0f), pressed ? theme.buttonPressed : theme.button);
@@ -157,12 +158,63 @@ void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quan
         float h = height * scale;
         muiDrawTexture(texture, { area.centerX() - w / 2.0f, area.centerY() - h / 2.0f, w, h });
     }
+}
 
-    if (quantity > 1 || ProtoId(item) == ItemProtoTypeId::Money) {
-        std::string label = ProtoId(item) == ItemProtoTypeId::Money ? "$" + std::to_string(quantity) : "x" + std::to_string(quantity);
+void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed)
+{
+    const MuiTheme& theme = muiTheme();
+    muiDrawItemImage(ui, rect, item, pressed);
+
+    bool money = ProtoId(item) == ItemProtoTypeId::Money;
+    int amount = itemStackAmount(item, quantity);
+    if (money || amount > 1 || itemGetType(item) == ITEM_TYPE_AMMO) {
+        std::string label = (money ? "$" : "x") + std::to_string(amount);
         float size = ui.dp(11.0f);
         MuiRect labelRect = { rect.x, rect.bottom() - muiLineHeight(size) - ui.dp(2.0f), rect.w - ui.dp(4.0f), muiLineHeight(size) };
         muiDrawTextAligned(muiDecodeUtf8(label.c_str()), labelRect, size, theme.text, MuiAlign::End, MuiAlign::Start);
+    }
+}
+
+void muiDrawDraggedItem(MuiContext& ui, Object* item, int quantity, int price)
+{
+    const MuiTheme& theme = muiTheme();
+
+    float size = ui.dp(64.0f);
+    MuiRect cell = { ui.pointerX() - size / 2.0f, ui.pointerY() - size * 1.1f, size, size };
+    muiDrawItemCell(ui, cell, item, quantity, true);
+
+    std::u32string name = muiDecodeGameText(objectGetName(item));
+    std::u32string amount = muiDecodeUtf8(("x" + std::to_string(itemStackAmount(item, 1))).c_str());
+    std::u32string weight = muiDecodeUtf8(std::to_string(itemStackWeight(item, 1)).c_str());
+    std::u32string cost = price >= 0 ? muiDecodeUtf8(("$" + std::to_string(price)).c_str()) : U"";
+
+    float textSize = ui.dp(13.0f);
+    float iconSize = ui.dp(13.0f);
+    float gap = ui.dp(10.0f);
+    float width = ui.dp(10.0f) + muiTextWidth(name, textSize)
+        + gap + muiTextWidth(amount, textSize)
+        + gap + iconSize + ui.dp(4.0f) + muiTextWidth(weight, textSize)
+        + (cost.empty() ? 0.0f : gap + muiTextWidth(cost, textSize))
+        + ui.dp(10.0f);
+    MuiRect bubble = { std::clamp(ui.pointerX() - width / 2.0f, 0.0f, ui.screenRect().w - width), cell.y - ui.dp(30.0f), width, ui.dp(26.0f) };
+    muiFillRoundRect(bubble, ui.dp(6.0f), theme.panel);
+    muiStrokeRoundRect(bubble, ui.dp(6.0f), ui.dp(1.0f), theme.accent);
+
+    float x = bubble.x + ui.dp(10.0f);
+    auto text = [&](const std::u32string& value, const MuiColor& color) {
+        muiDrawTextAligned(value, { x, bubble.y, width, bubble.h }, textSize, color, MuiAlign::Start, MuiAlign::Center);
+        x += muiTextWidth(value, textSize);
+    };
+    text(name, theme.text);
+    x += gap;
+    text(amount, theme.textDim);
+    x += gap;
+    muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, bubble.centerY(), iconSize, ui.dp(1.3f), theme.textDim);
+    x += iconSize + ui.dp(4.0f);
+    text(weight, theme.text);
+    if (!cost.empty()) {
+        x += gap;
+        text(cost, theme.text);
     }
 }
 

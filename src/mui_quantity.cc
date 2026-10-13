@@ -5,8 +5,9 @@
 #include <string>
 
 #include "game.h"
+#include "item.h"
 #include "kb.h"
-#include "message.h"
+#include "mui_icons.h"
 #include "object.h"
 
 namespace fallout {
@@ -19,7 +20,10 @@ namespace {
     constexpr int kTextDone = 123;
 
     // How many items to move (or explosive timer): slider, -/+ for exact
-    // values, all, cancel, done.
+    // values, all, cancel, done. Items are counted as the game moves them
+    // (ammo in clips) and shown as the player counts them (ammo in rounds:
+    // the first clip, the one not full, then full ones), with what the chosen
+    // ones weigh and, in a deal, are worth.
     class QuantityScreen : public MuiScreen {
     public:
         Object* item = nullptr;
@@ -28,10 +32,8 @@ namespace {
         int step = 1;
         int value = 1;
         bool timer = false;
+        std::function<int(int)> price;
         int result = -1;
-
-        MessageList messageList;
-        bool messageListLoaded = false;
 
         void back() override
         {
@@ -49,26 +51,15 @@ namespace {
 
         void build(MuiContext& ui) override;
 
-        const char* text(int id, const char* fallback)
-        {
-            if (messageListLoaded) {
-                MessageListItem entry;
-                entry.num = id;
-                if (messageListGetItem(&messageList, &entry)) {
-                    return entry.text;
-                }
-            }
-            return fallback;
-        }
-
     private:
-        std::u32string format(int amount) const
+        // [quantity] as shown: seconds, or how many items.
+        std::u32string format(int quantity) const
         {
             char buffer[32];
             if (timer) {
-                snprintf(buffer, sizeof(buffer), "%d:%02d", amount / 60, amount % 60);
+                snprintf(buffer, sizeof(buffer), "%d:%02d", quantity / 60, quantity % 60);
             } else {
-                snprintf(buffer, sizeof(buffer), "%d", amount);
+                snprintf(buffer, sizeof(buffer), "%d", item != nullptr ? itemStackAmount(item, quantity) : quantity);
             }
             return muiDecodeUtf8(buffer);
         }
@@ -90,7 +81,10 @@ namespace {
         float buttonHeight = ui.dp(46.0f);
         float cellSize = ui.dp(64.0f);
         float valueSize = ui.dp(28.0f);
-        float height = padding * 2.0f + cellSize + ui.dp(8.0f) + muiLineHeight(valueSize) + ui.dp(8.0f) + buttonHeight + ui.dp(12.0f) + buttonHeight;
+        float infoSize = ui.dp(14.0f);
+        // Weight and price, a line apart from the value.
+        float infoHeight = timer ? 0.0f : ui.dp(8.0f) + muiLineHeight(infoSize);
+        float height = padding * 2.0f + cellSize + ui.dp(8.0f) + muiLineHeight(valueSize) + infoHeight + ui.dp(14.0f) + buttonHeight + ui.dp(12.0f) + buttonHeight;
 
         MuiRect card = { safe.x + (safe.w - width) / 2.0f, safe.y + (safe.h - height) / 2.0f + (1.0f - ui.appear()) * ui.dp(12.0f), width, height };
         ui.panel(card);
@@ -98,20 +92,41 @@ namespace {
         MuiRect content = card.inset(padding);
         float y = content.y;
 
-        // Item and the available amount.
+        // Item and how many there are.
         if (item != nullptr) {
-            muiDrawItemCell(ui, { content.x, y, cellSize, cellSize }, item, 1, false);
+            muiDrawItemImage(ui, { content.x, y, cellSize, cellSize }, item, false);
             MuiRect nameRect = { content.x + cellSize + ui.dp(12.0f), y, content.w - cellSize - ui.dp(12.0f), cellSize / 2.0f };
             muiDrawTextAligned(muiDecodeGameText(objectGetName(item)), nameRect, ui.dp(17.0f), theme.accent, MuiAlign::Start, MuiAlign::End);
             if (!timer) {
-                MuiRect totalRect = { nameRect.x, y + cellSize / 2.0f, nameRect.w, cellSize / 2.0f };
+                MuiRect totalRect = { nameRect.x, y + cellSize / 2.0f + ui.dp(2.0f), nameRect.w, cellSize / 2.0f };
                 muiDrawTextAligned(U"x" + format(maxValue), totalRect, ui.dp(14.0f), theme.textDim, MuiAlign::Start, MuiAlign::Start);
             }
         }
         y += cellSize + ui.dp(8.0f);
 
         muiDrawTextAligned(format(value), { content.x, y, content.w, muiLineHeight(valueSize) }, valueSize, theme.text, MuiAlign::Center, MuiAlign::Start);
-        y += muiLineHeight(valueSize) + ui.dp(8.0f);
+        y += muiLineHeight(valueSize);
+
+        // What the chosen ones weigh and are worth.
+        if (!timer && item != nullptr) {
+            std::u32string weight = muiDecodeUtf8(std::to_string(itemStackWeight(item, value)).c_str());
+            std::u32string cost = price ? muiDecodeUtf8(("$" + std::to_string(price(value))).c_str()) : U"";
+            float iconSize = infoSize;
+            float gap = ui.dp(14.0f);
+            float infoWidth = iconSize + ui.dp(4.0f) + muiTextWidth(weight, infoSize) + (cost.empty() ? 0.0f : gap + muiTextWidth(cost, infoSize));
+            float x = content.centerX() - infoWidth / 2.0f;
+            float lineY = y + ui.dp(8.0f);
+            float lineHeight = muiLineHeight(infoSize);
+            float centerY = lineY + lineHeight / 2.0f;
+            muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, centerY, iconSize, ui.dp(1.3f), theme.textDim);
+            x += iconSize + ui.dp(4.0f);
+            muiDrawTextAligned(weight, { x, lineY, infoWidth, lineHeight }, infoSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            if (!cost.empty()) {
+                x += muiTextWidth(weight, infoSize) + gap;
+                muiDrawTextAligned(cost, { x, lineY, infoWidth, lineHeight }, infoSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            }
+        }
+        y += infoHeight + ui.dp(14.0f);
 
         // - slider +
         MuiRect minus = { content.x, y, buttonHeight, buttonHeight };
@@ -135,18 +150,18 @@ namespace {
         float buttonWidth = (content.w - gap * (count - 1)) / count;
         float x = content.x;
         if (!timer) {
-            if (ui.button("quantity.all", { x, y, buttonWidth, buttonHeight }, muiDecodeGameText(text(kTextAll, "ALL")))) {
+            if (ui.button("quantity.all", { x, y, buttonWidth, buttonHeight }, muiDecodeGameText(muiText(kTextAll, "ALL")))) {
                 value = maxValue;
             }
             x += buttonWidth + gap;
         }
 
-        if (ui.button("quantity.cancel", { x, y, buttonWidth, buttonHeight }, muiDecodeGameText(text(kTextCancel, "CANCEL")))) {
+        if (ui.button("quantity.cancel", { x, y, buttonWidth, buttonHeight }, muiDecodeGameText(muiText(kTextCancel, "CANCEL")))) {
             back();
         }
         x += buttonWidth + gap;
 
-        if (ui.button("quantity.done", { x, y, buttonWidth, buttonHeight }, muiDecodeGameText(text(kTextDone, "DONE")), MuiButtonStyle::Primary)) {
+        if (ui.button("quantity.done", { x, y, buttonWidth, buttonHeight }, muiDecodeGameText(muiText(kTextDone, "DONE")), MuiButtonStyle::Primary)) {
             result = value;
             finished = true;
         }
@@ -154,7 +169,7 @@ namespace {
 
 } // namespace
 
-int muiQuantitySelect(Object* item, int minValue, int maxValue, int step, int defaultValue, bool timer)
+int muiQuantitySelect(Object* item, int minValue, int maxValue, int step, int defaultValue, bool timer, const std::function<int(int)>& price)
 {
     if (maxValue < minValue) {
         return -1;
@@ -167,16 +182,9 @@ int muiQuantitySelect(Object* item, int minValue, int maxValue, int step, int de
     screen.step = std::max(step, 1);
     screen.value = std::clamp(defaultValue, minValue, maxValue);
     screen.timer = timer;
-
-    if (messageListInit(&(screen.messageList))) {
-        screen.messageListLoaded = messageListLoad(&(screen.messageList), "game\\ce.msg");
-    }
+    screen.price = price;
 
     muiRunModal(&screen);
-
-    if (screen.messageListLoaded) {
-        messageListFree(&(screen.messageList));
-    }
 
     return screen.result;
 }

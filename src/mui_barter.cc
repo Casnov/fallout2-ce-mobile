@@ -12,6 +12,7 @@
 #include "item.h"
 #include "kb.h"
 #include "message.h"
+#include "mui_icons.h"
 #include "object.h"
 #include "stat.h"
 
@@ -23,7 +24,6 @@ namespace {
     constexpr int kTextOffer = 117;
     constexpr int kTextYourOffer = 118;
     constexpr int kTextRequest = 119;
-    constexpr int kTextWeight = 120;
 
     const MuiColor kBackground = muiRgb(0x060A07);
 
@@ -123,6 +123,18 @@ namespace {
         return muiDecodeUtf8(std::to_string(value).c_str());
     }
 
+    // [text] after the weight icon, as the other screens show weight: at the
+    // start of [rect] or centered in it.
+    void drawWeight(MuiContext& ui, const std::u32string& text, const MuiRect& rect, float size, MuiColor color, MuiAlign horizontal)
+    {
+        float iconSize = size;
+        float gap = ui.dp(5.0f);
+        float width = iconSize + gap + muiTextWidth(text, size);
+        float x = horizontal == MuiAlign::Center ? rect.centerX() - width / 2.0f : rect.x;
+        muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.3f), color);
+        muiDrawTextAligned(text, { x + iconSize + gap, rect.y, width, rect.h }, size, color, MuiAlign::Start, MuiAlign::Center);
+    }
+
     void BarterScreen::build(MuiContext& ui)
     {
         const MuiTheme& theme = muiTheme();
@@ -212,21 +224,27 @@ namespace {
         // Totals: player's weight and money (and of the shown category), table
         // prices (weights when bartering with a party member).
         float infoSize = ui.dp(12.0f);
-        std::u32string weightLabel = muiDecodeGameText(text(kTextWeight, "Wt."));
         int weight = objectGetInventoryWeight(view.dude);
         int carry = critterGetStat(view.dude, STAT_CARRY_WEIGHT);
-        std::u32string playerInfo = weightLabel + U" " + number(weight) + U"/" + number(carry) + U"  $" + number(itemGetTotalCaps(view.dude));
+        std::u32string playerInfo = number(weight) + U"/" + number(carry) + U"  $" + number(itemGetTotalCaps(view.dude));
         if (playerFilter.filter != MuiItemFilter::All) {
             playerInfo += U"  (" + number(muiItemsWeight(lists[LIST_PLAYER])) + U")";
         }
-        muiDrawTextAligned(playerInfo, { playerX, sideInfoY, sideWidth, infoHeight }, infoSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        drawWeight(ui, playerInfo, { playerX, sideInfoY, sideWidth, infoHeight }, infoSize, theme.textDim, MuiAlign::Start);
 
-        std::u32string prefix = view.partyMemberBarter ? weightLabel + U" " : U"$";
-        muiDrawTextAligned(prefix + number(view.offerValue), { offerX, tableInfoY, unit, infoHeight }, ui.dp(13.0f), theme.text, MuiAlign::Center, MuiAlign::Center);
-        muiDrawTextAligned(prefix + number(view.requestValue), { requestX, tableInfoY, unit, infoHeight }, ui.dp(13.0f), theme.text, MuiAlign::Center, MuiAlign::Center);
+        float tableInfoSize = ui.dp(13.0f);
+        MuiRect offerInfo = { offerX, tableInfoY, unit, infoHeight };
+        MuiRect requestInfo = { requestX, tableInfoY, unit, infoHeight };
+        if (view.partyMemberBarter) {
+            drawWeight(ui, number(view.offerValue), offerInfo, tableInfoSize, theme.text, MuiAlign::Center);
+            drawWeight(ui, number(view.requestValue), requestInfo, tableInfoSize, theme.text, MuiAlign::Center);
+        } else {
+            muiDrawTextAligned(U"$" + number(view.offerValue), offerInfo, tableInfoSize, theme.text, MuiAlign::Center, MuiAlign::Center);
+            muiDrawTextAligned(U"$" + number(view.requestValue), requestInfo, tableInfoSize, theme.text, MuiAlign::Center, MuiAlign::Center);
+        }
 
         // The trader's shown items' weight, every filter ("All" too).
-        muiDrawTextAligned(weightLabel + U" " + number(muiItemsWeight(lists[LIST_BARTERER])), { bartererX, sideInfoY, sideWidth, infoHeight }, infoSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        drawWeight(ui, number(muiItemsWeight(lists[LIST_BARTERER])), { bartererX, sideInfoY, sideWidth, infoHeight }, infoSize, theme.textDim, MuiAlign::Start);
 
         // Offer under both tables.
         MuiRect offerRect = { offerX, buttonY, requestX + unit - offerX, buttonHeight };
@@ -442,8 +460,6 @@ namespace {
     // deal (weight only when bartering with a party member).
     void BarterScreen::drawDragged(MuiContext& ui, const BarterView& view)
     {
-        const MuiTheme& theme = muiTheme();
-
         int payload;
         if (!ui.dragging(&payload)) {
             return;
@@ -456,22 +472,9 @@ namespace {
         }
 
         const MuiListItem& entry = lists[list][index];
-        float size = cellSize;
-        MuiRect cell = { ui.pointerX() - size / 2.0f, ui.pointerY() - size * 1.1f, size, size };
-        muiDrawItemCell(ui, cell, entry.item, entry.quantity, true);
-
-        std::u32string info = muiDecodeGameText(objectGetName(entry.item));
-        info += U"  " + muiDecodeGameText(text(kTextWeight, "Wt.")) + U" " + number(itemGetWeight(entry.item));
-        if (!view.partyMemberBarter) {
-            bool playerSide = list == LIST_PLAYER || list == LIST_PLAYER_TABLE;
-            info += U"  $" + number(barterGetItemPrice(entry.item, playerSide));
-        }
-        float textSize = ui.dp(13.0f);
-        float width = muiTextWidth(info, textSize) + ui.dp(16.0f);
-        MuiRect bubble = { std::clamp(ui.pointerX() - width / 2.0f, 0.0f, ui.screenRect().w - width), cell.y - ui.dp(30.0f), width, ui.dp(26.0f) };
-        muiFillRoundRect(bubble, ui.dp(6.0f), theme.panel);
-        muiStrokeRoundRect(bubble, ui.dp(6.0f), ui.dp(1.0f), theme.accent);
-        muiDrawTextAligned(info, bubble, textSize, theme.text, MuiAlign::Center, MuiAlign::Center);
+        bool playerSide = list == LIST_PLAYER || list == LIST_PLAYER_TABLE;
+        int price = view.partyMemberBarter ? -1 : barterGetItemPrice(entry.item, 1, playerSide);
+        muiDrawDraggedItem(ui, entry.item, entry.quantity, price);
     }
 
 } // namespace

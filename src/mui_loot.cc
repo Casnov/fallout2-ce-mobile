@@ -440,8 +440,6 @@ namespace {
     // Dragged item under the finger with its name and weight.
     void LootScreen::drawDragged(MuiContext& ui)
     {
-        const MuiTheme& theme = muiTheme();
-
         int payload;
         if (!ui.dragging(&payload)) {
             return;
@@ -454,24 +452,7 @@ namespace {
         }
 
         const MuiListItem& entry = lists[side][index];
-        float size = ui.dp(64.0f);
-        MuiRect cell = { ui.pointerX() - size / 2.0f, ui.pointerY() - size * 1.1f, size, size };
-        muiDrawItemCell(ui, cell, entry.item, entry.quantity, true);
-
-        std::u32string text = muiDecodeGameText(objectGetName(entry.item));
-        std::u32string weight = number(itemGetWeight(entry.item));
-        float textSize = ui.dp(13.0f);
-        float iconSize = ui.dp(13.0f);
-        float width = muiTextWidth(text, textSize) + ui.dp(10.0f) + iconSize + ui.dp(4.0f) + muiTextWidth(weight, textSize) + ui.dp(20.0f);
-        MuiRect bubble = { std::clamp(ui.pointerX() - width / 2.0f, 0.0f, ui.screenRect().w - width), cell.y - ui.dp(30.0f), width, ui.dp(26.0f) };
-        muiFillRoundRect(bubble, ui.dp(6.0f), theme.panel);
-        muiStrokeRoundRect(bubble, ui.dp(6.0f), ui.dp(1.0f), theme.accent);
-        float x = bubble.x + ui.dp(10.0f);
-        muiDrawTextAligned(text, { x, bubble.y, width, bubble.h }, textSize, theme.text, MuiAlign::Start, MuiAlign::Center);
-        x += muiTextWidth(text, textSize) + ui.dp(10.0f);
-        muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, bubble.centerY(), iconSize, ui.dp(1.3f), theme.textDim);
-        x += iconSize + ui.dp(4.0f);
-        muiDrawTextAligned(weight, { x, bubble.y, width, bubble.h }, textSize, theme.text, MuiAlign::Start, MuiAlign::Center);
+        muiDrawDraggedItem(ui, entry.item, entry.quantity, -1);
     }
 
 } // namespace
