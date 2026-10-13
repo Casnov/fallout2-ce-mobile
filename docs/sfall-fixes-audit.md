@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 4 ([fallout2-ce#839](https://github.com/fallout2-ce/fallout2-ce/pull/839), [#840](https://github.com/fallout2-ce/fallout2-ce/pull/840)) |
-| **Missing in CE** | **33** (25 gameplay, 8 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 5 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **32** (24 gameplay, 8 scripts) + 6 likely + 1 partly |
 | Unclear | 5 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,31 +41,28 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#181** Critical hit table fixes (sfall's `OverrideCriticalTable=2`,
-   the default): wrong effects and messages of many critical hits (men,
-   children, centaurs, geckos, ...).
-2. **#55** Action points are set for everyone at the start of the round,
+1. **#55** Action points are set for everyone at the start of the round,
    not at each critter's turn.
-3. **#68, #115, #116** Bonus Move: replenished by saving and loading in
+2. **#68, #115, #116** Bonus Move: replenished by saving and loading in
    combat; the player's moves ignore their distance; using objects or
    ladders interrupts the movement.
-4. **#47, #48, #50** Knockouts: critters woken outside their turn,
+3. **#47, #48, #50** Knockouts: critters woken outside their turn,
    stand-up without the prone frame, knocked-down NPCs stay prone after
    combat.
-5. **#108** A dead party member's corpse disappears on map load; **#107**
+4. **#108** A dead party member's corpse disappears on map load; **#107**
    critters don't heal over time on maps with `dead_bodies_age=No`.
-6. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
+5. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
    nothing can be sold or given while overloaded.
-7. **#36** Wielding a weapon from a stack puts the whole stack in the hand
+6. **#36** Wielding a weapon from a stack puts the whole stack in the hand
    (Unlimited Ammo exploit); **#30** drug effects after save/load
    (more than two doses).
 8. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
    distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
-9. **#53** destroy_p_proc not run for critters killed by explosives when
+8. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
-10. **#75** exit grids while loading or entering a map; **#109** the
+9. **#75** exit grids while loading or entering a map; **#109** the
     automap reveals unexplored areas when entering a map; **#160**
     misc items' charges not fixed on load; **#152** knocked-down team
     members can be pushed in combat.
@@ -259,7 +256,7 @@ amount, **#147** create_object_sid with no script, **#47** critter_state.
 | 178 | Fix to prevent overflow when the AI calculates distance for its actions | `BugFixes.cpp:4842` | yes | game | tileDistanceBetween is bounded and validates tiles |
 | 179 | Fix missing combat xp and NPCs not reloading weapons when ending combat via elevation change with 0 AP left | `BugFixes.cpp:4845` | yes | game | _combat_over gives xp and reloads for NONE and END_COMBAT (same as sfall's <= 1) |
 | 180 | Fix for the entire stack of flares being lit instead of just one when using the stack on scenery or a critter | `BugFixes.cpp:4848` | yes | game | CE note in _obj_use_flare (one flare off a stack) |
-| 181 | Fixes for uncalled tables Men | `Criticals.cpp:282` | **no** | game | critical hit table fixes (sfall OverrideCriticalTable=2 by default: men, children, centaurs, geckos and other uncalled/called entries); CE's gCriticalHitTables keeps the original values |
+| 181 | Critical hit table fixes (`OverrideCriticalTable=2`, the default) | `Criticals.cpp:282` | port | game | CE applies sfall's 2020 set at start (criticalsInit, OverrideCriticalTable=2); sfall's later corrections (right arm messages 2023-12, super mutants 2024-02) ported, see sfall-fixes-carried.md |
 | 182 | Fix/tweak for party control | `CritterPoison.cpp:127` | n/a | mods | poison/radiation tweak for sfall's party control |
 | 183 | Fix to prevent crashes when there is a '%' character in the printed message | `DebugEditor.cpp:552` | n/a | debug | '%' in debug messages |
 | 184 | Fix the format of some debug messages | `DebugEditor.cpp:563` | n/a | debug | debug message format |
