@@ -18,6 +18,7 @@
 #include "art.h"
 #include "character_editor.h"
 #include "combat.h"
+#include "combat_ai.h"
 #include "critter.h"
 #include "db.h"
 #include "elevator.h"
@@ -217,7 +218,8 @@ enum DevAutotestAction {
     // (direction `c`) with script `widget` (file name in scripts.lst), joins
     // the party; it's the one GIVE_PARTY_ITEM gives to.
     DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER,
-    // Item pid `a` x `b` to the last added party member.
+    // Item pid `a` x `b` to the last added party member (else the first one
+    // of a loaded game).
     DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM,
     // The party member of `ADD_PARTY_MEMBER` gets items of pid [a] until he
     // can carry only [b] more.
@@ -236,12 +238,27 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_CHECK_SAVE_SESSION,
     // Loads slot `a` (0-based).
     DEV_AUTOTEST_ACTION_LOAD_GAME,
-    // Logs party members.
+    // Logs party members and what their combat AI goes by.
     DEV_AUTOTEST_ACTION_LOG_PARTY,
+    // The hit points of the last added party member (else the first one of a
+    // loaded game): [a]; [b] - the party member of pid `0x01000000 + b`.
+    DEV_AUTOTEST_ACTION_SET_PARTY_HP,
+    // FAIL unless the party member of SET_PARTY_HP has fewer healing drugs
+    // and more hit points than then, at least its run away hit points, and
+    // isn't fleeing.
+    DEV_AUTOTEST_ACTION_CHECK_PARTY_HEALED,
+    // In combat: the dude counts as hit by the nearest critter not in the
+    // party, so combat goes on after the round (nobody turns hostile).
+    DEV_AUTOTEST_ACTION_KEEP_COMBAT,
+    // Ends the dude's turn and waits (up to `a` frames) for his turn in the
+    // next combat round, then as NONE.
+    DEV_AUTOTEST_ACTION_END_TURN_WAIT,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
-    // Talks to the first party member (the dialog loop runs inside).
+    // Talks to the first party member, or with `a` the one of pid
+    // `0x01000000 + a` (the dialog loop runs inside); he's the party member
+    // of the party actions below.
     DEV_AUTOTEST_ACTION_TALK_PARTY_MEMBER,
     // Taps at ([a], [b]) in the game dialog's lower window (the game's own
     // windows, for screens without the mobile UI).
@@ -863,6 +880,38 @@ static std::set<int> gDevAutotestStartWindows;
 static bool gDevAutotestStartWindowsTaken = false;
 static Object* gDevAutotestCorpse = nullptr;
 static Object* gDevAutotestPartyMember = nullptr;
+
+// SET_PARTY_HP: the party member's healing drugs and hit points then.
+static int gDevAutotestPartyHealing = 0;
+static int gDevAutotestPartyHitPoints = 0;
+
+// Healing drugs (stimpaks, healing powder) the critter carries.
+static int devAutotestHealingDrugs(Object* critter)
+{
+    int count = 0;
+    for (int index = 0; index < critter->data.inventory.length; index++) {
+        InventoryItem* inventoryItem = &(critter->data.inventory.items[index]);
+        if (itemGetType(inventoryItem->item) == ITEM_TYPE_DRUG && itemIsHealing(inventoryItem->item)) {
+            count += inventoryItem->quantity;
+        }
+    }
+    return count;
+}
+
+// The party member of ADD_PARTY_MEMBER, else the first one of a loaded game.
+static Object* devAutotestPartyMember()
+{
+    if (gDevAutotestPartyMember != nullptr) {
+        return gDevAutotestPartyMember;
+    }
+
+    for (Object* member : get_all_party_members_objects(false)) {
+        if (member != gDude) {
+            return member;
+        }
+    }
+    return nullptr;
+}
 
 static const DevAutotestStep* gDevAutotestSteps = kDevAutotestSteps;
 static int gDevAutotestStepCount = sizeof(kDevAutotestSteps) / sizeof(kDevAutotestSteps[0]);
@@ -1927,10 +1976,48 @@ static const DevAutotestStep kDevAutotestFloatTextSteps[] = {
     { DEV_AUTOTEST_ACTION_PAN, 0, -260, 0, 20, "f05_dude_near_top" },
 };
 
+// A party member in combat below its run away hit points with stimpaks
+// heals and fights on (sfall's fix, combat_ai.cc); it used to flee for the
+// rest of combat with them unused (Vic, 2026-10-13).
+static const DevAutotestStep kDevAutotestFleeHealSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "f00_start" },
+    { DEV_AUTOTEST_ACTION_MOVE_NEAR_CRITTER, 8, 0, 0, 20, "f01_near_critter" },
+    { DEV_AUTOTEST_ACTION_LOG_CRITTERS, 0, 0, 0, 1, "f02_critters" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 2, ROTATION_SE, 10, "f03_sulik", "Kcsulik.int" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 40, 5, 0, 1, "f04_stimpaks" },
+    { DEV_AUTOTEST_ACTION_SET_PARTY_HP, 3, 0, 0, 1, "f05_hurt" },
+    { DEV_AUTOTEST_ACTION_LOG_PARTY, 0, 0, 0, 1, "f06_party" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 30, "f07_combat" },
+    { DEV_AUTOTEST_ACTION_KEEP_COMBAT, 0, 0, 0, 90, "f08_keep_combat" },
+    { DEV_AUTOTEST_ACTION_END_TURN_WAIT, 1800, 0, 0, 10, "f09_next_turn" },
+    { DEV_AUTOTEST_ACTION_LOG_PARTY, 0, 0, 0, 1, "f10_party" },
+    { DEV_AUTOTEST_ACTION_CHECK_PARTY_HEALED, 0, 0, 0, 1, "f11_healed" },
+};
+
+// A hurt party member asked to heal himself in a talk (party.h obj_heal:
+// use_obj_on_obj of a stimpak on himself) uses the stimpak at once, as with
+// sfall: his answer is by his health after it. It used to wait for the end
+// of the talk, one stimpak however many times asked (Vic, 2026-10-13). Vic
+// of the test save.
+static const DevAutotestStep kDevAutotestTalkHealSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "h00_start" },
+    { DEV_AUTOTEST_ACTION_LOAD_GAME, 9, 0, 0, 90, "h00b_loaded" },
+    { DEV_AUTOTEST_ACTION_SET_PARTY_HP, 19, 62, 0, 1, "h01_vic_hurt" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 40, 5, 0, 1, "h02_stimpaks" },
+    { DEV_AUTOTEST_ACTION_SET_PARTY_HP, 19, 0, 0, 1, "h03_vic_state" },
+    { DEV_AUTOTEST_ACTION_TALK_PARTY_MEMBER, 62, 0, 0, 150, "h04_talk" },
+    { DEV_AUTOTEST_ACTION_LOG_DIALOG, 0, 0, 0, 1, "h05_options" },
+    { DEV_AUTOTEST_ACTION_CHOOSE_OPTION, 1, 0, 0, 240, "h06_heal" },
+    { DEV_AUTOTEST_ACTION_LOG_DIALOG, 0, 0, 0, 1, "h07_reply" },
+    { DEV_AUTOTEST_ACTION_LOG_PARTY, 0, 0, 0, 1, "h08_party" },
+    { DEV_AUTOTEST_ACTION_CHECK_PARTY_HEALED, 0, 0, 0, 1, "h09_healed" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "t00_state" },
+    { DEV_AUTOTEST_ACTION_LOG_PARTY, 0, 0, 0, 1, "t00b_party" },
     { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Inventory), 0, 0, 120, "t01_inventory" },
     { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 60, "t02_closed" },
 };
@@ -2293,6 +2380,12 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "talkheal") == 0) {
+        gDevAutotestSteps = kDevAutotestTalkHealSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestTalkHealSteps) / sizeof(kDevAutotestTalkHealSteps[0]);
+    } else if (strcmp(name, "fleeheal") == 0) {
+        gDevAutotestSteps = kDevAutotestFleeHealSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestFleeHealSteps) / sizeof(kDevAutotestFleeHealSteps[0]);
     } else if (strcmp(name, "pcparty") == 0) {
         gDevAutotestSteps = kDevAutotestPcPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPcPartySteps) / sizeof(kDevAutotestPcPartySteps[0]);
@@ -2637,6 +2730,30 @@ void devAutotestTick()
         waited = 0;
     }
 
+    if (step->action == DEV_AUTOTEST_ACTION_END_TURN_WAIT && !gDevAutotestStepStarted) {
+        static int waited = 0;
+        static int round = -1;
+        if (round == -1) {
+            round = _combatNumTurns;
+            gameCommandPost(GameCommandType::EndTurn);
+            return;
+        }
+        bool next = isInCombat() && _combatNumTurns > round && _combat_whose_turn() == gDude;
+        if (isInCombat() && !next && waited < static_cast<int>(step->a)) {
+            waited++;
+            return;
+        }
+        Object* turn = _combat_whose_turn();
+        devAutotestLog("  %s after %d frames (round %d, was %d; turn of pid %d)\n", next ? "the dude's next turn" : (isInCombat() ? "STILL WAITING" : "combat is over"), waited,
+            _combatNumTurns, round, turn != nullptr ? turn->pid : -1);
+        if (!next) {
+            devAutotestLog("FAIL: no next turn in combat\n");
+            exit(EXIT_FAILURE);
+        }
+        waited = 0;
+        round = -1;
+    }
+
     if (step->action == DEV_AUTOTEST_ACTION_WAIT_MAP_LOADED && !gDevAutotestStepStarted) {
         static int waited = 0;
         if (mapIsLoading() && waited < static_cast<int>(step->a)) {
@@ -2712,12 +2829,13 @@ void devAutotestTick()
         case DEV_AUTOTEST_ACTION_TALK_PARTY_MEMBER: {
             Object* member = nullptr;
             for (Object* candidate : get_all_party_members_objects(false)) {
-                if (candidate != gDude) {
+                if (candidate != gDude && (step->a == 0 || candidate->pid == (0x1000000 | static_cast<int>(step->a)))) {
                     member = candidate;
                     break;
                 }
             }
             if (member != nullptr) {
+                gDevAutotestPartyMember = member;
                 devAutotestLog("  talk to party member pid %d\n", member->pid);
                 gDevAutotestPendingCapture = step->name;
                 gDevAutotestStep++;
@@ -3459,9 +3577,10 @@ void devAutotestTick()
             break;
         case DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM: {
             Object* item;
-            if (gDevAutotestPartyMember != nullptr && objectCreateWithProtoId(&item, ProtoId(static_cast<int>(step->a))) == 0) {
+            Object* member = devAutotestPartyMember();
+            if (member != nullptr && objectCreateWithProtoId(&item, ProtoId(static_cast<int>(step->a))) == 0) {
                 int quantity = step->b > 0 ? static_cast<int>(step->b) : 1;
-                if (itemAdd(gDevAutotestPartyMember, item, quantity) == 0) {
+                if (itemAdd(member, item, quantity) == 0) {
                     _obj_disconnect(item, nullptr);
                 }
                 devAutotestLog("  gave party member item pid %d x%d\n", static_cast<int>(step->a), quantity);
@@ -3489,8 +3608,69 @@ void devAutotestTick()
             for (Object* member : get_all_party_members_objects(false)) {
                 Object* weapon = critterGetItem2(member);
                 devAutotestLog("  party member pid %d, items %d, script %d, in hand pid %d\n", member->pid, member->data.inventory.length, member->sid, weapon != nullptr ? weapon->pid : -1);
+                // What its combat AI goes by: running away below min hp,
+                // drugs (combat_ai.cc).
+                if (ProtoId(member->pid).objectType() == OBJ_TYPE_CRITTER) {
+                    AiPacket* ai = aiGetPacket(member);
+                    int healing = devAutotestHealingDrugs(member);
+                    devAutotestLog("    hp %d/%d, ai packet %d \"%s\", min hp %d, run away mode %d, chem use %d, disposition %d, hurt too much 0x%x, maneuver 0x%x, healing drugs %d\n",
+                        critterGetStat(member, STAT_CURRENT_HIT_POINTS), critterGetStat(member, STAT_MAXIMUM_HIT_POINTS),
+                        ai != nullptr ? ai->packet_num : -1, ai != nullptr && ai->name != nullptr ? ai->name : "",
+                        ai != nullptr ? ai->min_hp : -1, ai != nullptr ? static_cast<int>(ai->run_away_mode) : -99,
+                        ai != nullptr ? static_cast<int>(ai->chem_use) : -99, ai != nullptr ? static_cast<int>(ai->disposition) : -99,
+                        ai != nullptr ? static_cast<unsigned>(ai->hurt_too_much) : 0u, static_cast<unsigned>(member->data.critter.combat.maneuver), healing);
+                }
             }
             break;
+        case DEV_AUTOTEST_ACTION_KEEP_COMBAT: {
+            Object* critter = devAutotestFindNearestEnemyInSight();
+            if (critter != nullptr && isInCombat()) {
+                critterSetWhoHitMe(gDude, critter);
+                devAutotestLog("  the dude hit by pid %d, %d hexes away\n", critter->pid, objectGetDistanceBetween(gDude, critter));
+            } else {
+                devAutotestLog("FAIL: no critter in sight or not in combat\n");
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_SET_PARTY_HP: {
+            if (step->b != 0) {
+                gDevAutotestPartyMember = nullptr;
+                for (Object* candidate : get_all_party_members_objects(false)) {
+                    if (candidate->pid == (0x1000000 | static_cast<int>(step->b))) {
+                        gDevAutotestPartyMember = candidate;
+                    }
+                }
+            }
+            Object* member = devAutotestPartyMember();
+            if (member == nullptr) {
+                devAutotestLog("FAIL: no party member\n");
+                exit(EXIT_FAILURE);
+            }
+            member->data.critter.hp = static_cast<int>(step->a);
+            gDevAutotestPartyHealing = devAutotestHealingDrugs(member);
+            gDevAutotestPartyHitPoints = critterGetStat(member, STAT_CURRENT_HIT_POINTS);
+            devAutotestLog("  party member pid %d hp %d, healing drugs %d\n", member->pid, gDevAutotestPartyHitPoints, gDevAutotestPartyHealing);
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_PARTY_HEALED: {
+            Object* member = devAutotestPartyMember();
+            AiPacket* ai = member != nullptr ? aiGetPacket(member) : nullptr;
+            if (ai == nullptr) {
+                devAutotestLog("FAIL: no party member\n");
+                exit(EXIT_FAILURE);
+            }
+            int healing = devAutotestHealingDrugs(member);
+            int hp = critterGetStat(member, STAT_CURRENT_HIT_POINTS);
+            bool fleeing = (member->data.critter.combat.maneuver & CRITTER_MANUEVER_FLEEING) != CRITTER_MANEUVER_NONE;
+            bool ok = healing < gDevAutotestPartyHealing && hp > gDevAutotestPartyHitPoints && hp >= ai->min_hp && !fleeing;
+            devAutotestLog("  party member healing drugs %d (were %d), hp %d (was %d, runs away below %d), %s: %s\n",
+                healing, gDevAutotestPartyHealing, hp, gDevAutotestPartyHitPoints, ai->min_hp, fleeing ? "fleeing" : "not fleeing", ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
         case DEV_AUTOTEST_ACTION_QUICK_SAVE:
             if (lsgSaveGame(LOAD_SAVE_MODE_QUICK) != 1) {
                 devAutotestLog("FAIL: quick save\n");
