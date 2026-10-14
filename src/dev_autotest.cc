@@ -268,6 +268,16 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_SET_FREE_MOVE,
     // FAIL unless the dude's free move points are [a] (in combat).
     DEV_AUTOTEST_ACTION_CHECK_FREE_MOVE,
+    // The dude uses a new item of pid [a] (put in his inventory) on the
+    // nearest critter (walks there first).
+    DEV_AUTOTEST_ACTION_USE_ITEM_ON_CRITTER,
+    // FAIL unless the dude is at most [a] hexes from the nearest critter.
+    DEV_AUTOTEST_ACTION_CHECK_NEAR_CRITTER,
+    // The dude walks towards the free tile [a] hexes away from the nearest
+    // critter, the walk's distance [b] (as the engine's walks to tiles).
+    DEV_AUTOTEST_ACTION_WALK_LIMITED,
+    // FAIL unless the dude is [a] hexes from where WALK_LIMITED started.
+    DEV_AUTOTEST_ACTION_CHECK_WALKED,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -899,6 +909,9 @@ static Object* gDevAutotestPartyMember = nullptr;
 // SET_PARTY_HP: the party member's healing drugs and hit points then.
 static int gDevAutotestPartyHealing = 0;
 static int gDevAutotestPartyHitPoints = 0;
+
+// WALK_LIMITED: the dude's tile when it started.
+static int gDevAutotestWalkStart = -1;
 
 // Healing drugs (stimpaks, healing powder) the critter carries.
 static int devAutotestHealingDrugs(Object* critter)
@@ -2082,6 +2095,27 @@ static const DevAutotestStep kDevAutotestBonusMoveLoadSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_FREE_MOVE, 1, 0, 0, 1, "b10_one_left" },
 };
 
+// Bonus Move in walks (sfall's fixes, actions.cc, animation.cc): with no
+// action points and two free move points the dude walks to a critter 3
+// hexes away to use a stimpak on it (the walk counted only the action points:
+// he couldn't go); a walk to a free tile with a distance of 2 out of 10 move
+// points stops after 2 hexes (the distance was ignored for the dude).
+static const DevAutotestStep kDevAutotestBonusMoveWalkSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "w00_start" },
+    { DEV_AUTOTEST_ACTION_ADD_DUDE_PERK, PERK_BONUS_MOVE, 0, 0, 1, "w01_perk" },
+    { DEV_AUTOTEST_ACTION_MOVE_NEAR_CRITTER, 3, 0, 0, 20, "w02_near_critter" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 30, "w03_combat" },
+    { DEV_AUTOTEST_ACTION_KEEP_COMBAT, 0, 0, 0, 30, "w04_keep_combat" },
+    { DEV_AUTOTEST_ACTION_SET_ACTION_POINTS, 0, 0, 0, 1, "w05_no_ap" },
+    { DEV_AUTOTEST_ACTION_SET_FREE_MOVE, 2, 0, 0, 1, "w06_free_move" },
+    { DEV_AUTOTEST_ACTION_USE_ITEM_ON_CRITTER, 40, 0, 0, 150, "w07_use_stimpak" },
+    { DEV_AUTOTEST_ACTION_CHECK_NEAR_CRITTER, 1, 0, 0, 1, "w08_reached" },
+    { DEV_AUTOTEST_ACTION_SET_ACTION_POINTS, 10, 0, 0, 1, "w09_ap" },
+    { DEV_AUTOTEST_ACTION_SET_FREE_MOVE, 0, 0, 0, 1, "w10_no_free_move" },
+    { DEV_AUTOTEST_ACTION_WALK_LIMITED, 5, 2, 0, 150, "w11_walk" },
+    { DEV_AUTOTEST_ACTION_CHECK_WALKED, 2, 0, 0, 1, "w12_walked" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2449,6 +2483,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "bonusmovewalk") == 0) {
+        gDevAutotestSteps = kDevAutotestBonusMoveWalkSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestBonusMoveWalkSteps) / sizeof(kDevAutotestBonusMoveWalkSteps[0]);
     } else if (strcmp(name, "bonusmoveload") == 0) {
         gDevAutotestSteps = kDevAutotestBonusMoveLoadSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestBonusMoveLoadSteps) / sizeof(kDevAutotestBonusMoveLoadSteps[0]);
@@ -3747,6 +3784,50 @@ void devAutotestTick()
         case DEV_AUTOTEST_ACTION_CHECK_FREE_MOVE: {
             bool ok = isInCombat() && _combat_free_move == static_cast<int>(step->a);
             devAutotestLog("  free move points %d (expected %d, in combat %d): %s\n", _combat_free_move, static_cast<int>(step->a), isInCombat() ? 1 : 0, ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_USE_ITEM_ON_CRITTER: {
+            Object* critter = devAutotestFindNearestEnemyInSight();
+            Object* item;
+            if (critter == nullptr || objectCreateWithProtoId(&item, ProtoId(static_cast<int>(step->a))) != 0) {
+                devAutotestLog("FAIL: no critter or item\n");
+                exit(EXIT_FAILURE);
+            }
+            if (itemAdd(gDude, item, 1) == 0) {
+                _obj_disconnect(item, nullptr);
+            }
+            int rc = _action_use_an_item_on_object(gDude, critter, item);
+            devAutotestLog("  dude uses pid %d on pid %d, %d hexes away: rc %d\n", static_cast<int>(step->a), critter->pid, objectGetDistanceBetween(gDude, critter), rc);
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_NEAR_CRITTER: {
+            Object* critter = devAutotestFindNearestEnemyInSight();
+            int distance = critter != nullptr ? objectGetDistanceBetween(gDude, critter) : -1;
+            bool ok = distance >= 0 && distance <= static_cast<int>(step->a);
+            devAutotestLog("  dude %d hexes from the critter (at most %d): %s\n", distance, static_cast<int>(step->a), ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_WALK_LIMITED: {
+            Object* critter = devAutotestFindNearestEnemyInSight();
+            Rotation away = critter != nullptr ? tileGetRotationTo(critter->tile, gDude->tile) : ROTATION_SE;
+            int tile = tileGetTileInDirection(gDude->tile, away, static_cast<int>(step->a));
+            gDevAutotestWalkStart = gDude->tile;
+            reg_anim_begin(ANIMATION_REQUEST_RESERVED);
+            animationRegisterMoveToTile(gDude, tile, gDude->elevation, static_cast<int>(step->b), 0);
+            int rc = reg_anim_end();
+            devAutotestLog("  walk from %d to %d (%d hexes), distance %d: rc %d\n", gDude->tile, tile, static_cast<int>(step->a), static_cast<int>(step->b), rc);
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_WALKED: {
+            int walked = tileDistanceBetween(gDevAutotestWalkStart, gDude->tile);
+            bool ok = walked == static_cast<int>(step->a);
+            devAutotestLog("  walked %d hexes (expected %d): %s\n", walked, static_cast<int>(step->a), ok ? "PASS" : "FAIL");
             if (!ok) {
                 exit(EXIT_FAILURE);
             }
