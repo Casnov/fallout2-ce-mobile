@@ -34,6 +34,8 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for critters not being healed over time when entering a map with 'dead_bodies_age=No' set in maps.txt (`Modules/BugFixes.cpp`, `map_age_dead_critters_hack`) | 84c3439f | [fallout2-ce#848](https://github.com/fallout2-ce/fallout2-ce/pull/848) | `mapageheal` | open |
 | Fix for being unable to sell used geiger counters or stealth boys (`Modules/BugFixes.cpp`, `CanSellUsedGeiger`) | 12dda5a2 | [fallout2-ce#853](https://github.com/fallout2-ce/fallout2-ce/pull/853) | `barterfixes` | open |
 | Fix for being unable to sell/give items in the barter screen when the player/party member is overloaded (`Modules/BugFixes.cpp`) | b974b00b | [fallout2-ce#854](https://github.com/fallout2-ce/fallout2-ce/pull/854) | `barterfixes` | open |
+| Fix for gaining stats from more than two doses of a specific chem after save-load (`Modules/BugFixes.cpp`, drug pids in `sfallgv.sav`) | e887915a | [fallout2-ce#855](https://github.com/fallout2-ce/fallout2-ce/pull/855) | `drugsave` | open |
+| Fix for "Unlimited Ammo" exploit (`Modules/BugFixes.cpp`, `invenWieldFunc_item_get_type_hook`) | 2b5e62bd | [fallout2-ce#856](https://github.com/fallout2-ce/fallout2-ce/pull/856) | `wieldstack` | open |
 
 ## Other fixes offered to CE
 

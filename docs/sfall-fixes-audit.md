@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 17 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **21** (14 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 19 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **19** (12 gameplay, 7 scripts) + 6 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,16 +41,13 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#36** Wielding a weapon from a stack puts the whole stack in the hand
-   (Unlimited Ammo exploit); **#30** drug effects after save/load
-   (more than two doses).
-2. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
+1. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
    distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
-3. **#53** destroy_p_proc not run for critters killed by explosives when
+2. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
-4. **#75** exit grids while loading or entering a map; **#109** the
+3. **#75** exit grids while loading or entering a map; **#109** the
    automap reveals unexplored areas when entering a map; **#160**
    misc items' charges not fixed on load; **#152** knocked-down team
    members can be pushed in combat.
@@ -93,13 +90,13 @@ amount, **#147** create_object_sid with no script.
 | 27 | Fix for "Too Many Items" bug | `BugFixes.cpp:3998` | unclear | game | "Too Many Items" script block writing; CE rewrote scriptSaveAll lists, needs a deeper check |
 | 28 | Fix for cells getting consumed even when the car is already fully charged | `BugFixes.cpp:4005` | yes | game | SFALL note in _obj_use_power_on_car |
 | 29 | Fix for being able to charge the car by using cells on other scenery/critters | `BugFixes.cpp:4008` | yes | game | SFALL note in _protinst_default_use_item |
-| 30 | Fix for gaining stats from more than two doses of a specific chem after save-load | `BugFixes.cpp:4014` | **no** | game | drug effect events don't save the drug pid (save-load gives stats from more than two doses) |
+| 30 | Fix for gaining stats from more than two doses of a specific chem after save-load | `BugFixes.cpp:4014` | port | game | drug effect pids saved in sfallgv.sav in queue order and restored after loading (fallout2-ce#855) |
 | 31 | Fix crash when leaving the map while waiting for someone to die of a super stimpak overdose | `BugFixes.cpp:4019` | yes | game | SFALL note in queueClearByEventType |
 | 32 | Fix for move_obj_inven_to_obj function | `BugFixes.cpp:4030` | yes | scripts | opMoveObjectInventoryToObject runs InvenWield hooks and adjusts the dude's armor |
 | 33 | Fix for drop_obj function | `BugFixes.cpp:4034` | **no** | scripts | objectDrop: no InvenWield hook and no AC adjustment when a worn armor is dropped (drop_obj) |
 | 34 | Fix of invalid stats when party member gains a level while being on drugs | `BugFixes.cpp:4038` | yes | game | SFALL note in _partyMemberIncLevels |
 | 35 | Fix for display issues when highlighting a multiline dialogue option | `BugFixes.cpp:4048` | yes | original screens | SFALL notes in _gdProcessUpdate (multiline option highlight) |
-| 36 | Fix for "Unlimited Ammo" exploit | `BugFixes.cpp:4051` | **no** | game | inventoryEquipFunc puts a whole stack in hand; sfall splits one item off (Unlimited Ammo exploit via wield_obj_critter / party equip) |
+| 36 | Fix for "Unlimited Ammo" exploit | `BugFixes.cpp:4051` | port | game | inventoryEquipFunc wields one item of a stack (fallout2-ce#856) |
 | 37 | Fix for negative values in Skilldex window ("S") | `BugFixes.cpp:4055` | yes | original screens | SFALL note in skilldexWindowInit |
 | 38 | Fix for negative SPECIAL values in character creation | `BugFixes.cpp:4059` | **no** | game | _is_supper_bonus / stat buttons: no lower bound for SPECIAL in character creation |
 | 39 | Fix for not counting in the weight/size of equipped items on NPC when stealing or bartering | `BugFixes.cpp:4066` | yes | game | objectGetInventoryWeight counts equipped items (barter/loot screen parts not checked) |
