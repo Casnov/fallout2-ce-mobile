@@ -1,5 +1,6 @@
 #include "mapper/mp_instance.h"
 
+#include <array>
 #include <stdio.h>
 #include <string.h>
 
@@ -357,17 +358,17 @@ static int applyLightEdit(Object* obj)
     return 1;
 }
 
-static void selectNewScript(Object* obj, int scriptType, int winId, int scriptNameY)
+static void selectNewScript(Object* obj, ScriptType scriptType, int winId, int scriptNameY)
 {
-    int scriptIndex = scr_choose(scriptType);
-    if (scriptIndex != -1) {
+    int sid = scr_choose(scriptType);
+    if (sid != -1) {
         if (obj->sid != -1) {
             scriptRemove(obj->sid);
             obj->sid = -1;
         }
     }
-    if (scriptIndex >= 0) {
-        objectSetScript(obj, scriptIndex >> 24, scriptIndex & 0xFFFFFF);
+    if (sid >= 0) {
+        objectSetScript(obj, scriptTypeFromSid(sid), scriptIdFromSid(sid));
     }
 
     char scriptName[64];
@@ -467,8 +468,8 @@ static void protoInstChooseItemsForInvenList(Object* obj)
     proto_inst_who_obj = obj;
 
     constexpr int kMaxItems = 200;
-    char** names = static_cast<char**>(internal_malloc(sizeof(char*) * kMaxItems));
-    int* pids = static_cast<int*>(internal_malloc(sizeof(int) * kMaxItems));
+    std::array<char*, kMaxItems> names;
+    std::array<ProtoId, kMaxItems> protoIds;
     int count = 0;
 
     for (int pid = 0x00000001; count < kMaxItems; pid++) {
@@ -479,22 +480,21 @@ static void protoInstChooseItemsForInvenList(Object* obj)
 
         names[count] = static_cast<char*>(internal_malloc(64));
         snprintf(names[count], 64, "%s", protoGetName(protoId));
-        pids[count] = protoId.pid();
+        protoIds[count] = protoId;
         count++;
     }
 
-    int selection = _win_list_select("Pick item to add", names, count, nullptr, 80, 200, COLOR_LIGHT_YELLOW | DRAW_TEXT_FLAG_SHADOWED);
+    int selection = _win_list_select("Pick item to add", names.data(), count, nullptr, 80, 200, COLOR_LIGHT_YELLOW | DRAW_TEXT_FLAG_SHADOWED);
     if (selection != -1) {
         int quantity = 1;
         win_get_num_i(&quantity, 1, 32000, false, "How many?", 100, 100);
-        protoInstAddToInven(ProtoId(pids[selection]), quantity);
+        protoInstAddToInven(protoIds[selection], quantity);
     }
 
     for (int i = 0; i < count; i++) {
         internal_free(names[i]);
     }
-    internal_free(names);
-    internal_free(pids);
+
     proto_inst_who_obj = nullptr;
 }
 

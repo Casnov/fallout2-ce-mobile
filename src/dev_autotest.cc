@@ -3037,7 +3037,7 @@ static void devAutotestLogItems()
     // The look on the map is what the dude wears (the art; the weapon part
     // follows the hands).
     const FrmId dudeFrmId = FrmId(gDude);
-    const FrmId expectedFrmId = inventoryComputeCritterFrmId(gDude, gDude->pid, right, left, armor,
+    const FrmId expectedFrmId = inventoryComputeCritterFrmId(gDude, gDude, right, left, armor,
         interfaceGetCurrentHand(), dudeFrmId.animationType(), dudeFrmId.rotation());
     int lookArt = static_cast<int>(dudeFrmId.frameId<CritterFrameId>());
     int expectedArt = static_cast<int>(expectedFrmId.frameId<CritterFrameId>());

@@ -969,7 +969,7 @@ static void op_set_script(Program* program)
         obj->scriptIndex = -1;
     }
 
-    int scriptType = (ProtoId(obj).objectType() == OBJ_TYPE_CRITTER) ? SCRIPT_TYPE_CRITTER : SCRIPT_TYPE_ITEM;
+    ScriptType scriptType = (ProtoId(obj).objectType() == OBJ_TYPE_CRITTER) ? SCRIPT_TYPE_CRITTER : SCRIPT_TYPE_ITEM;
     if (objectSetScript(obj, scriptType, scriptIndex) == -1) {
         obj->sid = -1;
         obj->scriptIndex = -1;
@@ -1266,7 +1266,7 @@ static void op_refresh_pc_art(Program* program)
     _proto_dude_update_gender();
 
     const FrmId frmId = inventoryComputeCritterFrmId(gDude,
-        gDude->pid,
+        gDude,
         critterGetItem2(gDude),
         critterGetItem1(gDude),
         critterGetArmor(gDude),

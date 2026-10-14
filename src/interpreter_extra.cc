@@ -23,6 +23,7 @@
 #include "game_sound.h"
 #include "geometry.h"
 #include "interface.h"
+#include "inventory.h"
 #include "item.h"
 #include "light.h"
 #include "loadsave.h"
@@ -894,7 +895,7 @@ static void opCreateObject(Program* program)
     }
 
     if (sid != -1) {
-        int scriptType = 0;
+        ScriptType scriptType = SCRIPT_TYPE_SYSTEM;
         switch (ProtoId(object).objectType()) {
         case OBJ_TYPE_CRITTER:
             scriptType = SCRIPT_TYPE_CRITTER;
@@ -969,8 +970,16 @@ static void opDestroyObject(Program* program)
 
     Object* owner = objectGetOwner(object);
     if (owner != nullptr) {
+        // CE: Read before itemRemoveWithReason() clears the hand flags.
+        bool heldLitFlare = ProtoId(object) == ItemProtoTypeId::LitFlare
+            && (object->flags & OBJECT_IN_ANY_HAND) != OBJECT_NONE;
+
         int quantity = itemGetQuantity(owner, object);
         itemRemoveWithReason(owner, object, quantity, RemoveInventoryObjectHookReason::ItemDestroyed);
+
+        if (heldLitFlare) {
+            critterRestoreLightWithoutFlare(owner);
+        }
 
         if (owner == gDude) {
             bool animated = !gameUiIsDisabled();

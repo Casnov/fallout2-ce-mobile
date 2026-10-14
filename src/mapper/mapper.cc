@@ -1746,11 +1746,11 @@ void edit_mapper()
             break;
         case kBtnSetMapScript: {
             if (map_entered) break;
-            int id = scr_choose(0);
-            if (id == -2) {
+            int sid = scr_choose(SCRIPT_TYPE_SYSTEM);
+            if (sid == -2) {
                 map_set_script(-1);
-            } else if (id >= 0) {
-                map_set_script((id & 0xFFFFFF) + 1);
+            } else if (sid >= 0) {
+                map_set_script(scriptIdFromSid(sid) + 1);
             }
             break;
         }
@@ -2600,7 +2600,7 @@ static int mapperPickObject(Object* obj, int* outOffset)
         if (protoGetProto(protoId, &proto) == -1) {
             return -1;
         }
-        if (proto->pid == obj->pid) {
+        if (ProtoId(proto) == ProtoId(obj)) {
             *outOffset = std::min(idx, maxId - kScrollOffset);
             return 0;
         }

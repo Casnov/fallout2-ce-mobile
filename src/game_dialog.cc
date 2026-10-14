@@ -222,10 +222,10 @@ typedef enum PartyMemberCustomizationOption {
 } PartyMemberCustomizationOption;
 
 // 0x444D10 Dogs
-static int _Dogs[3] = {
-    ProtoId(CritterProtoTypeId::Cyberdog).pid(),
-    ProtoId(CritterProtoTypeId::Dogmeat).pid(),
-    ProtoId(CritterProtoTypeId::PariahDog).pid(),
+static constexpr ProtoId kDogsProtoIds[3] = {
+    CritterProtoTypeId::Cyberdog,
+    CritterProtoTypeId::Dogmeat,
+    CritterProtoTypeId::PariahDog,
 };
 
 static std::unordered_map<int, AiMessageRange> partyMemberCcMsgIds;
@@ -913,7 +913,7 @@ void gameDialogEnter(Object* speaker, int mode)
         return;
     }
 
-    if (ProtoId(speaker).objectType() != OBJ_TYPE_ITEM && SID_TYPE(speaker->sid) != SCRIPT_TYPE_SPATIAL) {
+    if (ProtoId(speaker).objectType() != OBJ_TYPE_ITEM && scriptTypeFromSid(speaker->sid) != SCRIPT_TYPE_SPATIAL) {
         MessageListItem messageListItem;
 
         int rc = _action_can_talk_to(gDude, speaker);
@@ -4255,11 +4255,8 @@ int _gdPickAIUpdateMsg(Object* critter)
         return randomBetween(it->second.start, it->second.end);
     }
 
-    int pids[3];
-    memcpy(pids, _Dogs, sizeof(pids));
-
     for (int index = 0; index < 3; index++) {
-        if (critter->pid == pids[index]) {
+        if (ProtoId(critter) == kDogsProtoIds[index]) {
             return 677 + randomBetween(0, 1);
         }
     }

@@ -252,7 +252,7 @@ namespace {
         if ((modes & kEquipmentScreens) == 0) {
             const FrmId frmId(gDude);
             const FrmId expected = inventoryComputeCritterFrmId(gDude,
-                gDude->pid,
+                gDude,
                 critterGetItem2(gDude),
                 critterGetItem1(gDude),
                 critterGetArmor(gDude),

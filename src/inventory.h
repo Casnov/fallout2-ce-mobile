@@ -67,11 +67,12 @@ void inventoryGetHeldEquipment(InventoryHeldEquipment* held);
 // (`[qol] party_loot_and_barter`): the dude always, the others on his
 // elevation within 30 tiles (Inventory Filter's range).
 bool inventoryPartyMemberIsReachable(Object* critter);
-FrmId inventoryComputeCritterFrmId(Object* critter, int basePid, Object* rightHandItem, Object* leftHandItem, Object* armor, Hand activeHand, AnimationType anim, Rotation rotation);
+FrmId inventoryComputeCritterFrmId(Object* critter, const ProtoId& baseProtoId, Object* rightHandItem, Object* leftHandItem, Object* armor, Hand activeHand, AnimationType anim, Rotation rotation);
 void inventoryOpenUseItemOn(Object* targetObj);
 Object* critterGetItem2(Object* critter);
 Object* critterGetItem1(Object* critter);
 Object* critterGetArmor(Object* critter);
+void critterRestoreLightWithoutFlare(Object* critter);
 
 struct CritterEquipped {
     Object* leftHand = nullptr;
