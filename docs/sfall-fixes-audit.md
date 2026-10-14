@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 6 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **31** (23 gameplay, 8 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 7 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **30** (22 gameplay, 8 scripts) + 6 likely + 1 partly |
 | Unclear | 5 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,9 +41,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#68, #115, #116** Bonus Move: replenished by saving and loading in
-   combat; the player's moves ignore their distance; using objects or
-   ladders interrupts the movement.
+1. **#115, #116** Bonus Move: the player's moves ignore their distance;
+   using objects or ladders interrupts the movement.
 2. **#47, #48, #50** Knockouts: critters woken outside their turn,
    stand-up without the prone frame, knocked-down NPCs stay prone after
    combat.
@@ -141,7 +140,7 @@ amount, **#147** create_object_sid with no script, **#47** critter_state.
 | 65 | Fix item_count_ function returning incorrect value when there is a container-item inside | `BugFixes.cpp:4257` | yes | game | itemGetQuantity (see 18) |
 | 66 | Fix for Sequence stat value not being printed correctly when using "print to file" option | `BugFixes.cpp:4260` | not checked | original screens | print to file: Sequence value |
 | 67 | Fix for the incorrect object type search when loading a game saved in combat mode | `BugFixes.cpp:4263` | yes | game | SFALL notes in combatLoad |
-| 68 | Fix for Bonus Move APs being replenished when you save and load the game in combat | `BugFixes.cpp:4267` | **no** | game | Bonus Move replenished at every dude turn start incl. after loading in combat (exploit) |
+| 68 | Fix for Bonus Move APs being replenished when you save and load the game in combat | `BugFixes.cpp:4267` | port | game | the turn resumed after loading keeps the saved free move points (fallout2-ce#844) |
 | 69 | Fix for the displayed message when the attack randomly hits a target that is not a critter and has a script attached Tweak: if the main target has Flat flag set, display the "You missed" message instead of the message of hitting another object | `BugFixes.cpp:4274` | no? | game | _combat_display: no special message for a scripted non-critter main target |
 | 70 | Fix for damage_p_proc being called for misses if the target is not a critter | `BugFixes.cpp:4278` | **no** | game | _apply_damage runs damage_p_proc of a non-critter target on misses too |
 | 71 | Fix for the double damage effect of Silent Death perk not being applied to critical hits | `BugFixes.cpp:4281` | yes | game | SFALL note in attackCompute (Silent Death) |
