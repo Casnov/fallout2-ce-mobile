@@ -32,6 +32,8 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for critter_state function when a critter in combat recovers from the knockout state outside its turn; Fixes for knockout/down issues; Fix for "NPC turns into a container" bug; Fix for knocked down critters not playing stand up animation when the combat ends (`Modules/BugFixes.cpp`) | 7f8dd5ff | [fallout2-ce#846](https://github.com/fallout2-ce/fallout2-ce/pull/846) | `knockouts` | open |
 | Fix for the removal of party member's corpse when loading the map (`Modules/BugFixes.cpp`, `partyFixMultipleMembers_hack`) | f96c6285 | [fallout2-ce#847](https://github.com/fallout2-ce/fallout2-ce/pull/847) | `partycorpse` | open |
 | Fix for critters not being healed over time when entering a map with 'dead_bodies_age=No' set in maps.txt (`Modules/BugFixes.cpp`, `map_age_dead_critters_hack`) | 84c3439f | [fallout2-ce#848](https://github.com/fallout2-ce/fallout2-ce/pull/848) | `mapageheal` | open |
+| Fix for being unable to sell used geiger counters or stealth boys (`Modules/BugFixes.cpp`, `CanSellUsedGeiger`) | 12dda5a2 | [fallout2-ce#853](https://github.com/fallout2-ce/fallout2-ce/pull/853) | `barterfixes` | open |
+| Fix for being unable to sell/give items in the barter screen when the player/party member is overloaded (`Modules/BugFixes.cpp`) | b974b00b | [fallout2-ce#854](https://github.com/fallout2-ce/fallout2-ce/pull/854) | `barterfixes` | open |
 
 ## Other fixes offered to CE
 

@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 15 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **23** (16 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 17 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **21** (14 gameplay, 7 scripts) + 6 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,18 +41,16 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
-   nothing can be sold or given while overloaded.
-2. **#36** Wielding a weapon from a stack puts the whole stack in the hand
+1. **#36** Wielding a weapon from a stack puts the whole stack in the hand
    (Unlimited Ammo exploit); **#30** drug effects after save/load
    (more than two doses).
-3. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
+2. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
    distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
-4. **#53** destroy_p_proc not run for critters killed by explosives when
+3. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
-5. **#75** exit grids while loading or entering a map; **#109** the
+4. **#75** exit grids while loading or entering a map; **#109** the
    automap reveals unexplored areas when entering a map; **#160**
    misc items' charges not fixed on load; **#152** knocked-down team
    members can be pushed in combat.
@@ -119,7 +117,7 @@ amount, **#147** create_object_sid with no script.
 | 51 | Fix to prevent dead NPCs from reloading their weapons when the combat ends | `BugFixes.cpp:4192` | yes | game | SFALL note in _combat_over |
 | 52 | Fix crashes when killing critters with explosives | `BugFixes.cpp:4196` | yes | game | whoHitMe saved through objectPrepareWhoHitMeForSave (CE's own) |
 | 53 | Fix for destroy_p_proc not being called if the critter is killed by explosives when you leave the map | `BugFixes.cpp:4199` | **no** | game | actionExplode doesn't run destroy_p_proc for critters killed by explosives when leaving the map |
-| 54 | Fix for being unable to sell used geiger counters or stealth boys | `BugFixes.cpp:4203` | **no** | game | can't sell used geiger counter / stealth boy (itemIsQueued returns bool; no turn-off in barter) |
+| 54 | Fix for being unable to sell used geiger counters or stealth boys | `BugFixes.cpp:4203` | port | game | item_queued returns the item, active Geiger counters/Stealth Boys in the offer turned off, OBJECT_QUEUED cleared on turn off (fallout2-ce#853) |
 | 55 | Fix for incorrect initialization of action points at the beginning of each turn | `BugFixes.cpp:4211` | port | game | each critter gets its action points at its turn (fallout2-ce#850) |
 | 56 | Fix for incorrect death animations being used when killing critters with kill_critter_type function | `BugFixes.cpp:4216` | yes | scripts | SFALL note in opKillCritterType (death animation) |
 | 57 | Fix for checking the horizontal position on the y-axis instead of x when setting coordinates on the world map | `BugFixes.cpp:4221` | yes | game | wmAreaSetWorldPos checks x and y |
@@ -149,7 +147,7 @@ amount, **#147** create_object_sid with no script.
 | 81 | Fix broken obj_can_hear_obj function | `BugFixes.cpp:4347` | yes | scripts | SFALL note in opObjectCanHearObject (sfall: option, off by default) |
 | 82 | Fix for the incorrect item being checked for the presence of weapon perks | `BugFixes.cpp:4359` | yes | game | SFALL notes in _ai_best_weapon |
 | 83 | Fix for the encounter description being displayed in two lines instead of one | `BugFixes.cpp:4371` | not checked | original screens | encounter description on two lines |
-| 84 | Fix for being unable to sell/give items in the barter screen when the player/party member is overloaded | `BugFixes.cpp:4376` | **no** | game | barterAttemptTransaction refuses an empty table when overloaded (selling/giving while overloaded) |
+| 84 | Fix for being unable to sell/give items in the barter screen when the player/party member is overloaded | `BugFixes.cpp:4376` | port | game | a table that weighs nothing always fits (fallout2-ce#854) |
 | 85 | Fix for the underline position in the inventory display window when the item name is longer than one line | `BugFixes.cpp:4379` | yes | original screens | SFALL note in inventoryExamineItem |
 | 86 | Fix for the exploit that allows you to gain excessive skill points from Tag! perk before leaving the character screen | `BugFixes.cpp:4382` | yes | game | tagSkill4LevelBase (sfall's Tag! fix) in character_editor.cc |
 | 87 | Fix for ai_retrieve_object_ engine function not returning the requested object when there are different objects with the same ID | `BugFixes.cpp:4387` | **no** | game | _ai_retrieve_object looks items up by id only (vanilla), not by the object first |
