@@ -1246,6 +1246,12 @@ void _GNW95_process_message()
                 touchRefreshLongPressMs();
                 break;
             case SDL_WINDOWEVENT_FOCUS_LOST:
+                // Autotests keep running in the background (several at once:
+                // only one window can have the focus).
+                if (devAutotestIsEnabled()) {
+                    break;
+                }
+
                 touchLogFocus(false);
                 actionLog("the game went to the background");
                 actionLogFlush();
