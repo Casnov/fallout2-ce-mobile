@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 23 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **15** (8 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 24 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **14** (7 gameplay, 7 scripts) + 6 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,7 +41,7 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. AI: **#45** (and likely **#124**) multihex critters.
+1. Party: likely **#124** multihex party members' placement.
 2. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
@@ -103,7 +103,7 @@ amount, **#147** create_object_sid with no script.
 | 42 | Fix for using only one box of ammo when a weapon is above the ammo in the inventory list | `BugFixes.cpp:4083` | not checked | original screens | dropping ammo on a weapon above it in the list uses one box |
 | 43 | Fix for Jet antidote not being removed after removing the addiction effect (when using the item) | `BugFixes.cpp:4113` | yes | game | SFALL note in drugItemTakeDrug |
 | 44 | Fix for op_lookup_string_proc_ engine function not searching the last procedure in a script | `BugFixes.cpp:4140` | yes | scripts | opLookupStringProc loops to the last procedure |
-| 45 | Fix for multihex critters moving too close and overlapping their targets in combat | `BugFixes.cpp:4155` | **no** | game | _ai_move_steps_closer / _cai_retargetTileFromFriendlyFire: no multihex run/move/retarget fixes |
+| 45 | Fix for multihex critters moving too close and overlapping their targets in combat | `BugFixes.cpp:4155` | port | game | _ai_move_steps_closer / _cai_retargetTileFromFriendlyFire: multihex run/move/retarget as sfall (fallout2-ce#861) |
 | 46 | Fix for multiple knockout events being added to the queue | `BugFixes.cpp:4169` | yes | game | SFALL note in _set_new_results |
 | 47 | Fix for critter_state function when a critter in combat recovers from the knockout state outside its turn DAM_KNOCKOUT_WOKEN flag lets the function know that the critter was knocked out before it actually woke up (stand up) | `BugFixes.cpp:4172` | port | scripts | critter_wake_up marks a critter woken outside its turn (DAM_KNOCKOUT_WOKEN), critter_state reports it prone (fallout2-ce#846) |
 | 48 | Fixes for knockout/down issues | `BugFixes.cpp:4177` | port | game | _dude_standup only from the prone frame; a critter woken during map_exit_p_proc stands at once (fallout2-ce#846) |
