@@ -306,6 +306,12 @@ enum DevAutotestAction {
     // nearest critter whose body ages; 4 - FAIL unless its body became a
     // blood stain; 5 - FAIL unless that blood stain is gone.
     DEV_AUTOTEST_ACTION_ORIGINAL_675,
+    // Barter (sfall's fixes in barterAttemptTransaction): `a` 1 - gives the
+    // dude an item of pid `b`, `c` 1 - turned on, 2 - turned on and off
+    // (used); 2 - gives the dude items of pid `b` until he's overloaded;
+    // 3 - FAIL unless the barter partner has items of pids `b` and `c` (0 -
+    // none) and the dude has none of them.
+    DEV_AUTOTEST_ACTION_BARTER_SALE,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2209,6 +2215,28 @@ static const DevAutotestStep kDevAutotestOriginal675Steps[] = {
     { DEV_AUTOTEST_ACTION_ORIGINAL_675, 5, 0, 0, 10, "o13_no_blood" },
 };
 
+// Barter (sfall's fixes in barterAttemptTransaction, inventory.cc): a used
+// Geiger counter (turned on and off) and an active Stealth Boy are sold (the
+// Stealth Boy turned off), then a knife while the dude is overloaded.
+static const DevAutotestStep kDevAutotestBarterFixesSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "f00_map" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 1, 52, 2, 1, "f01_used_geiger" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 1, 54, 1, 1, "f02_active_stealth_boy" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 4, 0, 0, 1, "f03_give_knife" },
+    { DEV_AUTOTEST_ACTION_CENTER_CRITTER, 0, 0, 0, 10, "f04_center_critter" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 0, 0, 300, "f05_talk" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "f06_barter", "dialog.tab.barter" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 40, "f07_offer_geiger", "barter.player.pid.52", "barter.offer" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 40, "f08_offer_stealth_boy", "barter.player.pid.210", "barter.offer" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "f09_offer", "barter.offer.button" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 3, 52, 54, 1, "f10_sold" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 2, 12, 0, 1, "f11_overloaded" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 40, "f12_offer_knife", "barter.player.pid.4", "barter.offer" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "f13_offer", "barter.offer.button" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 3, 4, 0, 1, "f14_sold_overloaded" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "f15_back_to_talk", "dialog.tab.talk" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2576,6 +2604,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "barterfixes") == 0) {
+        gDevAutotestSteps = kDevAutotestBarterFixesSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestBarterFixesSteps) / sizeof(kDevAutotestBarterFixesSteps[0]);
     } else if (strcmp(name, "orig675") == 0) {
         gDevAutotestSteps = kDevAutotestOriginal675Steps;
         gDevAutotestStepCount = sizeof(kDevAutotestOriginal675Steps) / sizeof(kDevAutotestOriginal675Steps[0]);
@@ -3993,6 +4024,60 @@ void devAutotestTick()
             }
             if (!ok) {
                 exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_BARTER_SALE: {
+            auto countPid = [](Object* owner, int pid) {
+                int quantity = 0;
+                if (owner != nullptr) {
+                    for (int index = 0; index < owner->data.inventory.length; index++) {
+                        InventoryItem* inventoryItem = &(owner->data.inventory.items[index]);
+                        if (inventoryItem->item->pid == pid) {
+                            quantity += inventoryItem->quantity;
+                        }
+                    }
+                }
+                return quantity;
+            };
+            int pidB = static_cast<int>(step->b);
+            int pidC = static_cast<int>(step->c);
+            if (step->a == 1) {
+                Object* item;
+                if (objectCreateWithProtoId(&item, ProtoId(pidB)) != 0 || itemAdd(gDude, item, 1) != 0) {
+                    devAutotestLog("FAIL: no item pid %d\n", pidB);
+                    exit(EXIT_FAILURE);
+                }
+                _obj_disconnect(item, nullptr);
+                if (step->c >= 1) {
+                    miscItemTurnOn(item);
+                }
+                if (step->c >= 2) {
+                    miscItemTurnOff(item);
+                }
+                devAutotestLog("  dude's item pid %d (turned %s): now pid %d, queued %d\n", pidB, step->c == 0 ? "never on" : (step->c == 1 ? "on" : "on and off"), item->pid, itemIsQueued(item) ? 1 : 0);
+            } else if (step->a == 2) {
+                int added = 0;
+                while (objectGetInventoryWeight(gDude) <= critterGetStat(gDude, STAT_CARRY_WEIGHT) && added < 100) {
+                    Object* item;
+                    if (objectCreateWithProtoId(&item, ProtoId(pidB)) != 0 || itemAdd(gDude, item, 1) != 0) {
+                        break;
+                    }
+                    _obj_disconnect(item, nullptr);
+                    added++;
+                }
+                devAutotestLog("  dude overloaded with %d x pid %d: weight %d of %d\n", added, pidB, objectGetInventoryWeight(gDude), critterGetStat(gDude, STAT_CARRY_WEIGHT));
+            } else {
+                Object* partner = gGameDialogSpeaker;
+                int partnerB = countPid(partner, pidB);
+                int partnerC = pidC != 0 ? countPid(partner, pidC) : 1;
+                int dudeB = countPid(gDude, pidB);
+                int dudeC = pidC != 0 ? countPid(gDude, pidC) : 0;
+                bool ok = partner != nullptr && partnerB > 0 && partnerC > 0 && dudeB == 0 && dudeC == 0;
+                devAutotestLog("  sold: partner pid %d x%d, pid %d x%d; dude x%d, x%d: %s\n", pidB, partnerB, pidC, pidC != 0 ? partnerC : 0, dudeB, dudeC, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
             }
             break;
         }
