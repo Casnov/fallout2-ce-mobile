@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 20 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **18** (11 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 21 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **17** (10 gameplay, 7 scripts) + 6 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,8 +41,7 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. AI: **#13** moving away a
-   distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
+1. AI: **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
 2. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
@@ -73,7 +72,7 @@ amount, **#147** create_object_sid with no script.
 | 10 | Fix for NPC stuck in fleeing mode when the hit chance of a target was too low | `AI.cpp:647` | port | game | fallout2-ce#839 |
 | 11 | Fix AI target selection for combat_check_bad_shot_ function returning a no_ammo result | `AI.cpp:654` | yes | game | SFALL note in _ai_danger_source (no ammo recoverable) |
 | 12 | Fix AI behavior for "Snipe" distance preference The attacker will try to shoot the target instead of always running away from it at the beginning of the turn | `AI.cpp:657` | yes | game | SFALL note in _cai_perform_distance_prefs |
-| 13 | Fix for ai_move_away_ engine function not working correctly in cases when needing to move a distance away from the target now the function also takes the distance argument in a negative value for moving away at a distance | `AI.cpp:661` | **no** | game | _ai_move_away has no negative distance mode; combat_safety out_range sign not changed |
+| 13 | Fix for ai_move_away_ engine function not working correctly in cases when needing to move a distance away from the target now the function also takes the distance argument in a negative value for moving away at a distance | `AI.cpp:661` | port | game | negative distance to move away from combat_safety, ai_move_away moves it (fallout2-ce#858) |
 | 14 | Fix for calling anim() functions in combat | `Animations.cpp:670` | yes | game | _anim_set_end calls _combat_anim_finished by the sequence's combat flag |
 | 15 | Fix crash when the critter goes through a door with animation trigger | `Animations.cpp:674` | yes | game | _object_move: door step check (complete or closed door out of combat) |
 | 16 | Fix for the player stuck at "climbing" frame after ladder climbing animation | `Animations.cpp:677` | yes | game | _action_climb_ladder sets NO_STAND only for another map / no destination tile |
