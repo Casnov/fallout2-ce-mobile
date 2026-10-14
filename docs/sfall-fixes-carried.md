@@ -32,3 +32,13 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for critter_state function when a critter in combat recovers from the knockout state outside its turn; Fixes for knockout/down issues; Fix for "NPC turns into a container" bug; Fix for knocked down critters not playing stand up animation when the combat ends (`Modules/BugFixes.cpp`) | 7f8dd5ff | [fallout2-ce#846](https://github.com/fallout2-ce/fallout2-ce/pull/846) | `knockouts` | open |
 | Fix for the removal of party member's corpse when loading the map (`Modules/BugFixes.cpp`, `partyFixMultipleMembers_hack`) | f96c6285 | [fallout2-ce#847](https://github.com/fallout2-ce/fallout2-ce/pull/847) | `partycorpse` | open |
 | Fix for critters not being healed over time when entering a map with 'dead_bodies_age=No' set in maps.txt (`Modules/BugFixes.cpp`, `map_age_dead_critters_hack`) | 84c3439f | [fallout2-ce#848](https://github.com/fallout2-ce/fallout2-ce/pull/848) | `mapageheal` | open |
+
+## Other fixes offered to CE
+
+Where CE differs from the original game in a way sfall doesn't change
+(checked against the original `fallout2.exe`), the same scheme: a branch
+from upstream `main`, a pull request, a cherry-pick here, an autotest.
+
+| Fix | Port commit | Pull request | Autotest | State |
+|---|---|---|---|---|
+| Corpse aging after 6/14 days, party member placement's first direction, automap dots, a new critter proto's team: four changes of fallout2-ce#675 that differ from the original | 379f3359 | [fallout2-ce#849](https://github.com/fallout2-ce/fallout2-ce/pull/849) | `orig675` | open |
