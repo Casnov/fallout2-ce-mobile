@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 25 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **14** (7 gameplay, 7 scripts) + 5 likely + 1 partly |
+| Ported by the port, offered to CE | 26 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **13** (6 gameplay, 7 scripts) + 5 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,8 +41,7 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#53** destroy_p_proc not run for critters killed by explosives when
-   leaving the map; **#70** damage_p_proc of non-critters on misses;
+1. **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
 2. **#75** exit grids while loading or entering a map; **#109** the
    automap reveals unexplored areas when entering a map; **#160**
@@ -110,7 +109,7 @@ amount, **#147** create_object_sid with no script.
 | 50 | Fix for knocked down critters not playing stand up animation when the combat ends (when DAM_LOSE_TURN and DAM_KNOCKED_DOWN flags are set) | `BugFixes.cpp:4188` | port | game | _combat_over stands up knocked-down critters (fallout2-ce#846) |
 | 51 | Fix to prevent dead NPCs from reloading their weapons when the combat ends | `BugFixes.cpp:4192` | yes | game | SFALL note in _combat_over |
 | 52 | Fix crashes when killing critters with explosives | `BugFixes.cpp:4196` | yes | game | whoHitMe saved through objectPrepareWhoHitMeForSave (CE's own) |
-| 53 | Fix for destroy_p_proc not being called if the critter is killed by explosives when you leave the map | `BugFixes.cpp:4199` | **no** | game | actionExplode doesn't run destroy_p_proc for critters killed by explosives when leaving the map |
+| 53 | Fix for destroy_p_proc not being called if the critter is killed by explosives when you leave the map | `BugFixes.cpp:4199` | port | game | actionExplode without animation runs destroy_p_proc before critterKill (fallout2-ce#863) |
 | 54 | Fix for being unable to sell used geiger counters or stealth boys | `BugFixes.cpp:4203` | port | game | item_queued returns the item, active Geiger counters/Stealth Boys in the offer turned off, OBJECT_QUEUED cleared on turn off (fallout2-ce#853) |
 | 55 | Fix for incorrect initialization of action points at the beginning of each turn | `BugFixes.cpp:4211` | port | game | each critter gets its action points at its turn (fallout2-ce#850) |
 | 56 | Fix for incorrect death animations being used when killing critters with kill_critter_type function | `BugFixes.cpp:4216` | yes | scripts | SFALL note in opKillCritterType (death animation) |

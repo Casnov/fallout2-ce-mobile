@@ -42,6 +42,7 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for NPC stuck in a loop of picking up items in combat and the incorrect message being displayed when the NPC cannot pick up an item due to not enough space in the inventory (`Modules/BugFixes.cpp`; the message in `game\ce.msg`, sfall's translation) | ba666c92 | [fallout2-ce#860](https://github.com/fallout2-ce/fallout2-ce/pull/860) | `npcpickup` | open |
 | Fix for multihex critters moving too close and overlapping their targets in combat (`Modules/BugFixes.cpp`) | 28d0b87e | [fallout2-ce#861](https://github.com/fallout2-ce/fallout2-ce/pull/861) | `multihexmove`, `multihexretarget` | open |
 | Fix the placement of multihex critters in the player's party when entering a map or elevation (`Modules/BugFixes.cpp`) | e67d3b60 | [fallout2-ce#862](https://github.com/fallout2-ce/fallout2-ce/pull/862) | `multihexparty` | open |
+| Fix for destroy_p_proc not being called if the critter is killed by explosives when you leave the map (`Modules/BugFixes.cpp`) | a9939729 | [fallout2-ce#863](https://github.com/fallout2-ce/fallout2-ce/pull/863) | `explodeleave` | open |
 
 ## Other fixes offered to CE
 
