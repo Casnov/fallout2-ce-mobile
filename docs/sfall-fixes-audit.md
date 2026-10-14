@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 13 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **25** (18 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 15 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **23** (16 gameplay, 7 scripts) + 6 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,20 +41,18 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#108** A dead party member's corpse disappears on map load; **#107**
-   critters don't heal over time on maps with `dead_bodies_age=No`.
-2. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
+1. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
    nothing can be sold or given while overloaded.
-3. **#36** Wielding a weapon from a stack puts the whole stack in the hand
+2. **#36** Wielding a weapon from a stack puts the whole stack in the hand
    (Unlimited Ammo exploit); **#30** drug effects after save/load
    (more than two doses).
-4. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
+3. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
    distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
-5. **#53** destroy_p_proc not run for critters killed by explosives when
+4. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
-6. **#75** exit grids while loading or entering a map; **#109** the
+5. **#75** exit grids while loading or entering a map; **#109** the
    automap reveals unexplored areas when entering a map; **#160**
    misc items' charges not fixed on load; **#152** knocked-down team
    members can be pushed in combat.
@@ -174,8 +172,8 @@ amount, **#147** create_object_sid with no script.
 | 104 | Fix for the reserved item FRM being displayed in the top-left corner when in the loot/barter screens | `BugFixes.cpp:4500` | not checked | original screens | reserved item FRM in loot/barter screens |
 | 105 | Fix the return value of has_skill function for incorrect skill numbers | `BugFixes.cpp:4503` | **no** | scripts | has_skill returns -5 for an invalid skill (sfall: 0) |
 | 106 | Fix for NPC stuck in a loop of reloading melee/unarmed weapons or solar scorcher when out of ammo | `BugFixes.cpp:4506` | yes? | game | _ai_search_inven_weap checks ammo for the attack and AI ammo; melee/scorcher loop not compared |
-| 107 | Fix for critters not being healed over time when entering a map with 'dead_bodies_age=No' set in maps.txt also fix the zero initialization of a local variable to correct time for removing corpses and blood | `BugFixes.cpp:4511` | **no** | game | _map_age_dead_critters returns early with dead_bodies_age=No: living critters aren't healed either |
-| 108 | Fix for the removal of party member's corpse when loading the map | `BugFixes.cpp:4518` | **no** | game | partyFixMultipleMembers removes a dead party member's corpse on map load |
+| 107 | Fix for critters not being healed over time when entering a map with 'dead_bodies_age=No' set in maps.txt also fix the zero initialization of a local variable to correct time for removing corpses and blood | `BugFixes.cpp:4511` | port | game | _map_age_dead_critters heals the living critters before the dead_bodies_age check (fallout2-ce#848); the aging type is already 0-initialized in CE |
+| 108 | Fix for the removal of party member's corpse when loading the map | `BugFixes.cpp:4518` | port | game | partyFixMultipleMembers keeps dead critters (fallout2-ce#847) |
 | 109 | Fix for unexplored areas being revealed on the automap when entering a map | `BugFixes.cpp:4521` | **no** | game | objectSetLocation marks tiles seen while entering a map / loading (unexplored automap areas revealed) |
 | 110 | Fix for the overflow of the automap tables when the number of maps in maps.txt is more than 160 also fix "out of bounds" bug when printing the automap list | `BugFixes.cpp:4524` | not checked | mods | automap tables with more than 160 maps in maps.txt |
 | 111 | Fix for a duplicate obj_dude script being created when loading a saved game | `BugFixes.cpp:4530` | unclear | game | duplicate obj_dude script on load: CE's _obj_load_dude clears/sets the dude script; map_load_file part not compared |
