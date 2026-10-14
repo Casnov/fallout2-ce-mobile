@@ -320,6 +320,11 @@ enum DevAutotestAction {
     // "Unlimited Ammo" fix): FAIL unless one item is in the hand and the
     // rest (`b` in all) stays in the inventory.
     DEV_AUTOTEST_ACTION_WIELD_STACK,
+    // Burst friendly fire (sfall's fix in _combat_safety_invalidate_weapon):
+    // an attacker (Intelligence 10, weapon pid `a`) `b` hexes from the dude,
+    // a critter of its team with no damage resistance between them: FAIL
+    // unless the burst at the dude counts as unsafe.
+    DEV_AUTOTEST_ACTION_BURST_FRIENDLY,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2265,6 +2270,13 @@ static const DevAutotestStep kDevAutotestWieldStackSteps[] = {
     { DEV_AUTOTEST_ACTION_WIELD_STACK, 4, 2, 0, 30, "u02_wielded" },
 };
 
+// Burst friendly fire (sfall's fix in combat.cc): an attacker with a 10mm SMG
+// sees its team mate in the line of fire and doesn't burst.
+static const DevAutotestStep kDevAutotestBurstFriendlySteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "y00_start" },
+    { DEV_AUTOTEST_ACTION_BURST_FRIENDLY, 9, 4, 0, 30, "y01_burst" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2632,6 +2644,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "burstfriendly") == 0) {
+        gDevAutotestSteps = kDevAutotestBurstFriendlySteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestBurstFriendlySteps) / sizeof(kDevAutotestBurstFriendlySteps[0]);
     } else if (strcmp(name, "wieldstack") == 0) {
         gDevAutotestSteps = kDevAutotestWieldStackSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestWieldStackSteps) / sizeof(kDevAutotestWieldStackSteps[0]);
@@ -4056,6 +4071,52 @@ void devAutotestTick()
                 break;
             }
             }
+            if (!ok) {
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_BURST_FRIENDLY: {
+            int distance = static_cast<int>(step->b);
+            // A direction with free tiles from the dude.
+            int rotation = -1;
+            for (int candidate = 0; candidate < ROTATION_COUNT && rotation == -1; candidate++) {
+                bool free = true;
+                for (int hex = 1; hex <= distance; hex++) {
+                    int tile = tileGetTileInDirection(gDude->tile, static_cast<Rotation>(candidate), hex);
+                    if (_obj_blocking_at(nullptr, tile, gDude->elevation) != nullptr) {
+                        free = false;
+                    }
+                }
+                if (free) {
+                    rotation = candidate;
+                }
+            }
+            Object* attacker = nullptr;
+            Object* friendly = nullptr;
+            Object* weapon = nullptr;
+            if (rotation == -1
+                || objectCreateWithProtoId(&attacker, ProtoId(0x1000000 | 97)) != 0
+                || objectCreateWithProtoId(&friendly, ProtoId(0x1000000 | 97)) != 0
+                || objectCreateWithProtoId(&weapon, ProtoId(static_cast<int>(step->a))) != 0) {
+                devAutotestLog("FAIL: no free line or no objects\n");
+                exit(EXIT_FAILURE);
+            }
+            attacker->sid = -1;
+            friendly->sid = -1;
+            objectSetLocation(attacker, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance), gDude->elevation, nullptr);
+            objectSetLocation(friendly, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance / 2), gDude->elevation, nullptr);
+            critterSetBaseStat(attacker, STAT_INTELLIGENCE, 10);
+            friendly->data.critter.combat.team = attacker->data.critter.combat.team;
+            critterSetBaseStat(friendly, STAT_DAMAGE_RESISTANCE, 0);
+            int burst = weaponGetAnimationForHitMode(weapon, HIT_MODE_RIGHT_WEAPON_SECONDARY) == ANIM_FIRE_BURST ? 1 : 0;
+            bool unsafe = _combat_safety_invalidate_weapon(attacker, weapon, HIT_MODE_RIGHT_WEAPON_SECONDARY, gDude, nullptr);
+            bool ok = burst == 1 && unsafe;
+            devAutotestLog("  burst (%d) at the dude with a team mate (team %d, DR %d) in the line, rotation %d: unsafe %d: %s\n", burst,
+                friendly->data.critter.combat.team, critterGetStat(friendly, STAT_DAMAGE_RESISTANCE), rotation, unsafe ? 1 : 0, ok ? "PASS" : "FAIL");
+            objectDestroy(attacker, nullptr);
+            objectDestroy(friendly, nullptr);
+            objectDestroy(weapon, nullptr);
             if (!ok) {
                 exit(EXIT_FAILURE);
             }
