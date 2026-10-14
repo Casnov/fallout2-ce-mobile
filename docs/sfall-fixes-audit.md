@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 7 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **30** (22 gameplay, 8 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 9 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **28** (20 gameplay, 8 scripts) + 6 likely + 1 partly |
 | Unclear | 5 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,25 +41,23 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#115, #116** Bonus Move: the player's moves ignore their distance;
-   using objects or ladders interrupts the movement.
-2. **#47, #48, #50** Knockouts: critters woken outside their turn,
+1. **#47, #48, #50** Knockouts: critters woken outside their turn,
    stand-up without the prone frame, knocked-down NPCs stay prone after
    combat.
-3. **#108** A dead party member's corpse disappears on map load; **#107**
+2. **#108** A dead party member's corpse disappears on map load; **#107**
    critters don't heal over time on maps with `dead_bodies_age=No`.
-4. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
+3. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
    nothing can be sold or given while overloaded.
-5. **#36** Wielding a weapon from a stack puts the whole stack in the hand
+4. **#36** Wielding a weapon from a stack puts the whole stack in the hand
    (Unlimited Ammo exploit); **#30** drug effects after save/load
    (more than two doses).
 8. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
    distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
-7. **#53** destroy_p_proc not run for critters killed by explosives when
+6. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
-8. **#75** exit grids while loading or entering a map; **#109** the
+7. **#75** exit grids while loading or entering a map; **#109** the
     automap reveals unexplored areas when entering a map; **#160**
     misc items' charges not fixed on load; **#152** knocked-down team
     members can be pushed in combat.
@@ -187,8 +185,8 @@ amount, **#147** create_object_sid with no script, **#47** critter_state.
 | 112 | Fix for the start procedure not being called correctly if the required standard script procedure is missing | `BugFixes.cpp:4537` | yes | scripts | CE note in scriptExecProc |
 | 113 | Fix the argument value of dialogue_reaction function | `BugFixes.cpp:4541` | **no** | scripts | opGameDialogReaction passes the raw value (sfall maps fidget 1-3/4/5+ to good/neutral/bad) |
 | 114 | Fix for NPC stuck in a loop of picking up items in combat and the incorrect message being displayed when the NPC cannot pick up an item due to not enough space in the inventory | `BugFixes.cpp:4544` | **no** | game | objectPickup: an NPC in combat over its weight fails (pickup loop) and gets the player's "you cannot pick up" message |
-| 115 | Fix for anim_move_to_tile_ engine function ignoring the distance argument for the player | `BugFixes.cpp:4550` | **no** | game | animateMoveObjectToTile ignores the distance argument for the player (sfall stops at the move points left) |
-| 116 | Fix for the player's movement in combat being interrupted when trying to use objects with Bonus Move APs available | `BugFixes.cpp:4554` | **no** | game | _action_climb_ladder / _action_use_an_item_on_object don't add Bonus Move free move points (movement interrupted) |
+| 115 | Fix for anim_move_to_tile_ engine function ignoring the distance argument for the player | `BugFixes.cpp:4550` | port | game | the player's walk to a free tile stops at its distance (fallout2-ce#845) |
+| 116 | Fix for the player's movement in combat being interrupted when trying to use objects with Bonus Move APs available | `BugFixes.cpp:4554` | port | game | walks to use objects and ladders count the free move points (fallout2-ce#845) |
 | 117 | Fix for Scout perk being taken into account when setting the visibility of locations with mark_area_known function also fix the incorrect coordinates for small/medium location circles that the engine uses to highlight their sub-tiles and fix visited tiles on the world map being darkened again when a location is added next to them | `BugFixes.cpp:4564` | not checked | game | mark_area_known and the Scout perk / location circle coordinates |
 | 118 | Fix the position of the destination marker for small/medium location circles | `BugFixes.cpp:4570` | not checked | game | destination marker position for small/medium circles (world map; our touch world map draws its own marker) |
 | 119 | Fix to prevent using number keys to enter unvisited areas on a town map | `BugFixes.cpp:4573` | yes | game | SFALL note in wmTownMapFunc (number keys) |
