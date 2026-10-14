@@ -325,6 +325,11 @@ enum DevAutotestAction {
     // a critter of its team with no damage resistance between them: FAIL
     // unless the burst at the dude counts as unsafe.
     DEV_AUTOTEST_ACTION_BURST_FRIENDLY,
+    // Moving away before an explosion (sfall's ai_move_away fix): `a` 1 - a
+    // hostile critter `b` hexes from the dude with grenades of pid `c` in
+    // hand; 2 - FAIL unless the distance to move away was negative and it
+    // left its tile.
+    DEV_AUTOTEST_ACTION_MOVE_AWAY,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2277,6 +2282,17 @@ static const DevAutotestStep kDevAutotestBurstFriendlySteps[] = {
     { DEV_AUTOTEST_ACTION_BURST_FRIENDLY, 9, 4, 0, 30, "y01_burst" },
 };
 
+// Moving away before an explosion (sfall's fix in combat_ai.cc, combat.cc): a
+// hostile critter with frag grenades 2 hexes from the dude (its distance
+// preference "on your own") attacks: it steps out of the blast first; without
+// the fix it throws from where it stands.
+static const DevAutotestStep kDevAutotestMoveAwaySteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "m00_start" },
+    { DEV_AUTOTEST_ACTION_MOVE_AWAY, 1, 2, 25, 10, "m01_grenadier" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT_ATTACKED, 0, 0, 0, 60, "m02_attacked" },
+    { DEV_AUTOTEST_ACTION_MOVE_AWAY, 2, 2, 25, 10, "m03_moved_away" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2644,6 +2660,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "moveaway") == 0) {
+        gDevAutotestSteps = kDevAutotestMoveAwaySteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMoveAwaySteps) / sizeof(kDevAutotestMoveAwaySteps[0]);
     } else if (strcmp(name, "burstfriendly") == 0) {
         gDevAutotestSteps = kDevAutotestBurstFriendlySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestBurstFriendlySteps) / sizeof(kDevAutotestBurstFriendlySteps[0]);
@@ -4073,6 +4092,71 @@ void devAutotestTick()
             }
             if (!ok) {
                 exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MOVE_AWAY: {
+            static int grenadierId = -1;
+            static int startTile = -1;
+            static int startSafeDistance = 0;
+            Object* grenadier = nullptr;
+            int distance = static_cast<int>(step->b);
+            if (step->a == 1) {
+                int rotation = -1;
+                for (int candidate = 0; candidate < ROTATION_COUNT && rotation == -1; candidate++) {
+                    bool free = true;
+                    for (int hex = 1; hex <= distance + 3; hex++) {
+                        int tile = tileGetTileInDirection(gDude->tile, static_cast<Rotation>(candidate), hex);
+                        if (_obj_blocking_at(nullptr, tile, gDude->elevation) != nullptr) {
+                            free = false;
+                        }
+                    }
+                    if (free) {
+                        rotation = candidate;
+                    }
+                }
+                Object* grenade = nullptr;
+                if (rotation == -1 || objectCreateWithProtoId(&grenadier, ProtoId(0x1000000 | 97)) != 0
+                    || objectCreateWithProtoId(&grenade, ProtoId(static_cast<int>(step->c))) != 0) {
+                    devAutotestLog("FAIL: no free line or no objects\n");
+                    exit(EXIT_FAILURE);
+                }
+                grenadier->sid = -1;
+                grenadier->data.critter.combat.team = 77;
+                objectSetLocation(grenadier, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance), gDude->elevation, nullptr);
+                itemAdd(grenadier, grenade, 3);
+                _obj_disconnect(grenade, nullptr);
+                inventoryEquipFunc(grenadier, grenade, HAND_RIGHT, false);
+                // Its distance preference neither closes in nor backs off
+                // (the AI packet in memory, for this run): only the fix moves
+                // it out of the blast.
+                aiGetPacket(grenadier)->distance = DISTANCE_ON_YOUR_OWN;
+                // Both survive the blast.
+                for (Object* critter : { gDude, grenadier }) {
+                    critterSetBonusStat(critter, STAT_MAXIMUM_HIT_POINTS, 500);
+                    critter->data.critter.hp = critterGetStat(critter, STAT_MAXIMUM_HIT_POINTS);
+                }
+                grenadierId = grenadier->id;
+                int safeDistance = 0;
+                bool unsafe = _combat_safety_invalidate_weapon(grenadier, critterGetItem2(grenadier), HIT_MODE_RIGHT_WEAPON_PRIMARY, gDude, &safeDistance);
+                startTile = grenadier->tile;
+                startSafeDistance = safeDistance;
+                devAutotestLog("  grenadier at tile %d, %d hexes from the dude, in hand pid %d: unsafe %d, safe distance %d\n", grenadier->tile,
+                    objectGetDistanceBetween(grenadier, gDude), critterGetItem2(grenadier) != nullptr ? critterGetItem2(grenadier)->pid : -1, unsafe ? 1 : 0, safeDistance);
+            } else {
+                for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                    if (object->id == grenadierId && FrmId(object).objectType() == OBJ_TYPE_CRITTER) {
+                        grenadier = object;
+                    }
+                }
+                // The distance to move away comes negative (see
+                // `_ai_move_away`), and it left its tile.
+                bool ok = startSafeDistance < 0 && grenadier != nullptr && grenadier->tile != startTile;
+                devAutotestLog("  after its turn: safe distance %d, tile %d -> %d, hp %d: %s\n", startSafeDistance, startTile, grenadier != nullptr ? grenadier->tile : -1,
+                    grenadier != nullptr ? critterGetStat(grenadier, STAT_CURRENT_HIT_POINTS) : -1, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
             }
             break;
         }
