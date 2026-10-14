@@ -282,3 +282,4 @@
 {372}{}{Licenses}
 {373}{}{Tactical view}
 {374}{}{Combat button: see-through figures, tiles and where you can walk}
+{375}{}{%s cannot pick up the item.}

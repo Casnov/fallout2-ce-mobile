@@ -24,6 +24,7 @@
 #include "item.h"
 #include "map.h"
 #include "message.h"
+#include "mui.h"
 #include "object.h"
 #include "palette.h"
 #include "perk.h"
@@ -638,8 +639,10 @@ int objectPickup(Object* critter, Object* item)
             // SFALL: Fix for the incorrect message being displayed when the NPC
             // cannot pick up an item due to not enough space in the inventory
             // (the player's one).
+            // CE: The text in `game\ce.msg` (sfall's NPCPickupFail of its
+            // translations).
             char formattedMessage[160];
-            snprintf(formattedMessage, sizeof(formattedMessage), "%s cannot pick up the item.", critterGetName(critter));
+            snprintf(formattedMessage, sizeof(formattedMessage), muiText(375, "%s cannot pick up the item."), critterGetName(critter));
             displayMonitorAddMessage(formattedMessage);
         } else {
             MessageListItem messageListItem;
