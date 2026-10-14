@@ -316,6 +316,10 @@ enum DevAutotestAction {
     // effects): `a` 1 - the dude takes `b` doses; 2 - FAIL unless the dude
     // has `b` drug effects of that drug, or one more dose changes Strength.
     DEV_AUTOTEST_ACTION_DRUG_DOSES,
+    // The dude's stack of item pid `a` wielded in the right hand (sfall's
+    // "Unlimited Ammo" fix): FAIL unless one item is in the hand and the
+    // rest (`b` in all) stays in the inventory.
+    DEV_AUTOTEST_ACTION_WIELD_STACK,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2252,6 +2256,15 @@ static const DevAutotestStep kDevAutotestDrugSaveSteps[] = {
     { DEV_AUTOTEST_ACTION_DRUG_DOSES, 2, 4, 87, 10, "d04_third_dose" },
 };
 
+// "Unlimited Ammo" (sfall's fix in inventoryEquipFunc): a stack of two
+// knives wielded puts one in the hand, the other stays in the inventory (the
+// starting dude has no pistol animations to wield a gun).
+static const DevAutotestStep kDevAutotestWieldStackSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "u00_start" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 4, 2, 0, 1, "u01_two_knives" },
+    { DEV_AUTOTEST_ACTION_WIELD_STACK, 4, 2, 0, 30, "u02_wielded" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2619,6 +2632,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "wieldstack") == 0) {
+        gDevAutotestSteps = kDevAutotestWieldStackSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestWieldStackSteps) / sizeof(kDevAutotestWieldStackSteps[0]);
     } else if (strcmp(name, "drugsave") == 0) {
         gDevAutotestSteps = kDevAutotestDrugSaveSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestDrugSaveSteps) / sizeof(kDevAutotestDrugSaveSteps[0]);
@@ -4040,6 +4056,41 @@ void devAutotestTick()
                 break;
             }
             }
+            if (!ok) {
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_WIELD_STACK: {
+            int pid = static_cast<int>(step->a);
+            Object* stack = nullptr;
+            for (int index = 0; index < gDude->data.inventory.length; index++) {
+                if (gDude->data.inventory.items[index].item->pid == pid) {
+                    stack = gDude->data.inventory.items[index].item;
+                }
+            }
+            if (stack == nullptr) {
+                devAutotestLog("FAIL: no item pid %d\n", pid);
+                exit(EXIT_FAILURE);
+            }
+            int rc = inventoryEquipFunc(gDude, stack, HAND_RIGHT, false);
+            Object* inHand = critterGetItem2(gDude);
+
+            int inHandQuantity = 0;
+            int total = 0;
+            int entries = 0;
+            for (int index = 0; index < gDude->data.inventory.length; index++) {
+                InventoryItem* inventoryItem = &(gDude->data.inventory.items[index]);
+                if (inventoryItem->item->pid == pid) {
+                    entries++;
+                    total += inventoryItem->quantity;
+                    if (inventoryItem->item == inHand) {
+                        inHandQuantity = inventoryItem->quantity;
+                    }
+                }
+            }
+            bool ok = rc == 0 && inHand != nullptr && inHand->pid == pid && inHandQuantity == 1 && total == static_cast<int>(step->b);
+            devAutotestLog("  stack of pid %d wielded (rc %d): in hand x%d, %d in %d entries: %s\n", pid, rc, inHandQuantity, total, entries, ok ? "PASS" : "FAIL");
             if (!ok) {
                 exit(EXIT_FAILURE);
             }
