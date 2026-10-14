@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 24 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **14** (7 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 25 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **14** (7 gameplay, 7 scripts) + 5 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,11 +41,10 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. Party: likely **#124** multihex party members' placement.
-2. **#53** destroy_p_proc not run for critters killed by explosives when
+1. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
-3. **#75** exit grids while loading or entering a map; **#109** the
+2. **#75** exit grids while loading or entering a map; **#109** the
    automap reveals unexplored areas when entering a map; **#160**
    misc items' charges not fixed on load; **#152** knocked-down team
    members can be pushed in combat.
@@ -182,7 +181,7 @@ amount, **#147** create_object_sid with no script.
 | 121 | Fix for combat not ending automatically when there are no hostile critters | `BugFixes.cpp:4583` | yes | game | _combat_should_end matches sfall's check (note there) |
 | 122 | Fix for the car being lost when entering a location via the Town/World button and then leaving on foot (sets GVAR_CAR_PLACED_TILE (633) to -1 on exit to the world map) | `BugFixes.cpp:4587` | yes | game | SFALL note in wmWorldMapFunc (car placed tile) |
 | 123 | Fix for the "Move_on_Car" engine variable not being reset when entering a location via the Town/World button | `BugFixes.cpp:4593` | not checked | game | Move_on_Car not reset when entering via Town/World button |
-| 124 | Fix the placement of multihex critters in the player's party when entering a map or elevation | `BugFixes.cpp:4599` | no? | game | _partyMemberSyncPosition: no multihex placement handling found |
+| 124 | Fix the placement of multihex critters in the player's party when entering a map or elevation | `BugFixes.cpp:4599` | port | game | _partyMemberSyncPosition: multihex members behind/in front of the dude with free tiles around (fallout2-ce#862) |
 | 125 | Fix for critter_add/rm_trait functions ignoring the "amount" argument Note: pass negative amount values to critter_rm_trait to remove all ranks of the perk (vanilla behavior) | `BugFixes.cpp:4602` | **no** | scripts | opCritterAddTrait/RemoveTrait add or remove one rank, ignoring the amount |
 | 126 | Fix to prevent corpses from blocking line of fire | `BugFixes.cpp:4607` | yes | game | SFALL notes in _obj_shoot_blocking_at |
 | 127 | Fix for party member's equipped weapon being placed in the incorrect item slot after leveling up | `BugFixes.cpp:4614` | yes | game | SFALL note in _partyMemberCopyLevelInfo |

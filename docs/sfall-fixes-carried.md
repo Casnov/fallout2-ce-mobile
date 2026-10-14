@@ -41,6 +41,7 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for ai_retrieve_object_ engine function not returning the requested object when there are different objects with the same ID (`Modules/BugFixes.cpp`) | 8c8be205 | [fallout2-ce#859](https://github.com/fallout2-ce/fallout2-ce/pull/859) | `retrieveobj` | open |
 | Fix for NPC stuck in a loop of picking up items in combat and the incorrect message being displayed when the NPC cannot pick up an item due to not enough space in the inventory (`Modules/BugFixes.cpp`; the message in `game\ce.msg`, sfall's translation) | ba666c92 | [fallout2-ce#860](https://github.com/fallout2-ce/fallout2-ce/pull/860) | `npcpickup` | open |
 | Fix for multihex critters moving too close and overlapping their targets in combat (`Modules/BugFixes.cpp`) | 28d0b87e | [fallout2-ce#861](https://github.com/fallout2-ce/fallout2-ce/pull/861) | `multihexmove`, `multihexretarget` | open |
+| Fix the placement of multihex critters in the player's party when entering a map or elevation (`Modules/BugFixes.cpp`) | e67d3b60 | [fallout2-ce#862](https://github.com/fallout2-ce/fallout2-ce/pull/862) | `multihexparty` | open |
 
 ## Other fixes offered to CE
 
