@@ -312,6 +312,10 @@ enum DevAutotestAction {
     // 3 - FAIL unless the barter partner has items of pids `b` and `c` (0 -
     // none) and the dude has none of them.
     DEV_AUTOTEST_ACTION_BARTER_SALE,
+    // Doses of drug pid `c` (sfall's fix for the drug pids of saved drug
+    // effects): `a` 1 - the dude takes `b` doses; 2 - FAIL unless the dude
+    // has `b` drug effects of that drug, or one more dose changes Strength.
+    DEV_AUTOTEST_ACTION_DRUG_DOSES,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2237,6 +2241,17 @@ static const DevAutotestStep kDevAutotestBarterFixesSteps[] = {
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "f15_back_to_talk", "dialog.tab.talk" },
 };
 
+// Drug doses after save/load (sfall's fix, item.cc, sfall_ext.cc): two
+// doses of Buffout (its limit), a quick save and load; the loaded effects
+// still count, so a third dose doesn't raise Strength.
+static const DevAutotestStep kDevAutotestDrugSaveSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "d00_start" },
+    { DEV_AUTOTEST_ACTION_DRUG_DOSES, 1, 2, 87, 10, "d01_two_doses" },
+    { DEV_AUTOTEST_ACTION_QUICK_SAVE, 0, 0, 0, 30, "d02_saved" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "d03_loaded" },
+    { DEV_AUTOTEST_ACTION_DRUG_DOSES, 2, 4, 87, 10, "d04_third_dose" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2604,6 +2619,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "drugsave") == 0) {
+        gDevAutotestSteps = kDevAutotestDrugSaveSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestDrugSaveSteps) / sizeof(kDevAutotestDrugSaveSteps[0]);
     } else if (strcmp(name, "barterfixes") == 0) {
         gDevAutotestSteps = kDevAutotestBarterFixesSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestBarterFixesSteps) / sizeof(kDevAutotestBarterFixesSteps[0]);
@@ -4024,6 +4042,43 @@ void devAutotestTick()
             }
             if (!ok) {
                 exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_DRUG_DOSES: {
+            int drugPid = static_cast<int>(step->c);
+            auto takeDose = [drugPid]() {
+                Object* drug;
+                if (objectCreateWithProtoId(&drug, ProtoId(drugPid)) == 0) {
+                    drugItemTakeDrug(gDude, drug);
+                    objectDestroy(drug, nullptr);
+                }
+            };
+            auto countEffects = [drugPid]() {
+                int count = 0;
+                for (DrugEffectEvent* event = static_cast<DrugEffectEvent*>(queueFindFirstEvent(gDude, EVENT_TYPE_DRUG)); event != nullptr; event = static_cast<DrugEffectEvent*>(queueFindNextEvent(gDude, EVENT_TYPE_DRUG))) {
+                    if (event->drugPid == drugPid) {
+                        count++;
+                    }
+                }
+                return count;
+            };
+            if (step->a == 1) {
+                int strength = critterGetStat(gDude, STAT_STRENGTH);
+                for (int dose = 0; dose < static_cast<int>(step->b); dose++) {
+                    takeDose();
+                }
+                devAutotestLog("  %d doses of pid %d: Strength %d -> %d, effects %d\n", static_cast<int>(step->b), drugPid, strength, critterGetStat(gDude, STAT_STRENGTH), countEffects());
+            } else {
+                int effects = countEffects();
+                int strength = critterGetStat(gDude, STAT_STRENGTH);
+                takeDose();
+                int strengthAfter = critterGetStat(gDude, STAT_STRENGTH);
+                bool ok = effects == static_cast<int>(step->b) && strengthAfter == strength;
+                devAutotestLog("  after loading: effects of pid %d %d; one more dose: Strength %d -> %d: %s\n", drugPid, effects, strength, strengthAfter, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
             }
             break;
         }
