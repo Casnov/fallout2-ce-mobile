@@ -262,6 +262,12 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_START_COMBAT_ATTACKED,
     // FAIL unless the dude has his maximum action points.
     DEV_AUTOTEST_ACTION_CHECK_DUDE_AP,
+    // The dude gets perk [a] (one rank).
+    DEV_AUTOTEST_ACTION_ADD_DUDE_PERK,
+    // In combat: the dude's Bonus Move free move points are [a].
+    DEV_AUTOTEST_ACTION_SET_FREE_MOVE,
+    // FAIL unless the dude's free move points are [a] (in combat).
+    DEV_AUTOTEST_ACTION_CHECK_FREE_MOVE,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2059,6 +2065,23 @@ static const DevAutotestStep kDevAutotestApTurnSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_DUDE_AP, 0, 0, 0, 1, "a03_dude_ap" },
 };
 
+// Bonus Move points aren't replenished by loading in combat (sfall's fix,
+// combat.cc _combat_turn): the dude with the perk spends one of his two free
+// move points, quick saves, loads: one left.
+static const DevAutotestStep kDevAutotestBonusMoveLoadSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "b00_start" },
+    { DEV_AUTOTEST_ACTION_ADD_DUDE_PERK, PERK_BONUS_MOVE, 0, 0, 1, "b01_perk" },
+    { DEV_AUTOTEST_ACTION_MOVE_NEAR_CRITTER, 8, 0, 0, 20, "b02_near_critter" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 30, "b03_combat" },
+    { DEV_AUTOTEST_ACTION_KEEP_COMBAT, 0, 0, 0, 30, "b04_keep_combat" },
+    { DEV_AUTOTEST_ACTION_CHECK_FREE_MOVE, 2, 0, 0, 1, "b05_two" },
+    { DEV_AUTOTEST_ACTION_SET_FREE_MOVE, 1, 0, 0, 1, "b06_spent_one" },
+    { DEV_AUTOTEST_ACTION_QUICK_SAVE, 0, 0, 0, 20, "b07_saved" },
+    { DEV_AUTOTEST_ACTION_SET_FREE_MOVE, 0, 0, 0, 1, "b08_spent_all" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 90, "b09_loaded" },
+    { DEV_AUTOTEST_ACTION_CHECK_FREE_MOVE, 1, 0, 0, 1, "b10_one_left" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2426,6 +2449,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "bonusmoveload") == 0) {
+        gDevAutotestSteps = kDevAutotestBonusMoveLoadSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestBonusMoveLoadSteps) / sizeof(kDevAutotestBonusMoveLoadSteps[0]);
     } else if (strcmp(name, "apturn") == 0) {
         gDevAutotestSteps = kDevAutotestApTurnSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestApTurnSteps) / sizeof(kDevAutotestApTurnSteps[0]);
@@ -3706,6 +3732,25 @@ void devAutotestTick()
             gDevAutotestStepStarted = false;
             _combat(&combatStartData);
             return;
+        }
+        case DEV_AUTOTEST_ACTION_ADD_DUDE_PERK: {
+            Perk perk = static_cast<Perk>(static_cast<int>(step->a));
+            int rc = perkAddForce(gDude, perk);
+            devAutotestLog("  dude perk %d: %s, rank %d\n", static_cast<int>(step->a), rc == 0 ? "added" : "FAIL", perkGetRank(gDude, perk));
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_SET_FREE_MOVE:
+            _combat_free_move = static_cast<int>(step->a);
+            interfaceRenderActionPoints(gDude->data.critter.combat.ap, _combat_free_move);
+            devAutotestLog("  free move points %d\n", _combat_free_move);
+            break;
+        case DEV_AUTOTEST_ACTION_CHECK_FREE_MOVE: {
+            bool ok = isInCombat() && _combat_free_move == static_cast<int>(step->a);
+            devAutotestLog("  free move points %d (expected %d, in combat %d): %s\n", _combat_free_move, static_cast<int>(step->a), isInCombat() ? 1 : 0, ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
+            }
+            break;
         }
         case DEV_AUTOTEST_ACTION_CHECK_DUDE_AP: {
             int ap = gDude->data.critter.combat.ap;
