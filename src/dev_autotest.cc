@@ -338,6 +338,7 @@ enum DevAutotestAction {
     // hand.
     DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT,
     DEV_AUTOTEST_ACTION_NPC_PICKUP,
+    DEV_AUTOTEST_ACTION_MULTIHEX_MOVE,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2327,6 +2328,36 @@ static const DevAutotestStep kDevAutotestNpcPickupSteps[] = {
     { DEV_AUTOTEST_ACTION_NPC_PICKUP, 2, 3, 4, 10, "k03_picked_up" },
 };
 
+// A multihex critter closing in on the dude in combat (sfall's fix in
+// combat_ai.cc): it stops next to him, not over him. Without the fix it
+// runs to the dude's own tile and ends one tile from him, its body over
+// his.
+static const DevAutotestStep kDevAutotestMultihexMoveSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "m00_start" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_MOVE, 1, 5, 0, 10, "m01_multihex" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_MOVE, 2, 5, 0, 60, "m02_attacked" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_MOVE, 3, 5, 0, 10, "m03_closed_in" },
+};
+
+// The same with a team mate behind it shooting at the dude through it: the
+// AI retargets its tile to a side one (_cai_retargetTileFromFriendlyFire),
+// next to the dude. sfall's fix checks the tiles around a multihex critter
+// there; without it the critter goes to that tile, its body over the dude.
+//
+// The AI's info (its last target) starts afresh with the combat: the
+// gunman's target is set in the dude's first turn, the critter far enough
+// not to reach the dude before its second (it starts the combat, then the
+// dude is first in each round).
+static const DevAutotestStep kDevAutotestMultihexRetargetSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "n00_start" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_MOVE, 1, 11, 1, 10, "n01_multihex" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_MOVE, 2, 11, 1, 60, "n02_attacked" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_MOVE, 4, 11, 1, 1, "n03_gunman_target" },
+    { DEV_AUTOTEST_ACTION_END_TURN_WAIT, 1800, 0, 0, 10, "n04_next_turn" },
+    { DEV_AUTOTEST_ACTION_END_TURN_WAIT, 1800, 0, 0, 10, "n05_its_second_turn" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_MOVE, 3, 11, 1, 10, "n06_closed_in" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2694,6 +2725,12 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "multihexmove") == 0) {
+        gDevAutotestSteps = kDevAutotestMultihexMoveSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMultihexMoveSteps) / sizeof(kDevAutotestMultihexMoveSteps[0]);
+    } else if (strcmp(name, "multihexretarget") == 0) {
+        gDevAutotestSteps = kDevAutotestMultihexRetargetSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMultihexRetargetSteps) / sizeof(kDevAutotestMultihexRetargetSteps[0]);
     } else if (strcmp(name, "npcpickup") == 0) {
         gDevAutotestSteps = kDevAutotestNpcPickupSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestNpcPickupSteps) / sizeof(kDevAutotestNpcPickupSteps[0]);
@@ -4203,6 +4240,168 @@ void devAutotestTick()
                 }
                 bool ok = inHand != nullptr && inHand->pid == weaponPid;
                 devAutotestLog("  after its turn: in hand pid %d: %s\n", inHand != nullptr ? inHand->pid : -1, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MULTIHEX_MOVE: {
+            static int critterId = -1;
+            static int critterPid = -1;
+            static int gunmanId = -1;
+            int distance = static_cast<int>(step->b);
+            bool gunman = step->c != 0;
+            // The gunman's place: behind the critter on the line.
+            int gunmanDistance = distance + 3;
+            if (step->a == 1) {
+                // The first multihex critter in the protos.
+                int maxId = proto_max_id(OBJ_TYPE_CRITTER);
+                for (int index = 1; index <= maxId && critterPid == -1; index++) {
+                    Proto* proto;
+                    if (protoGetProto(ProtoId(0x1000000 | index), &proto) == 0 && (proto->flags & OBJECT_MULTIHEX) != 0) {
+                        critterPid = 0x1000000 | index;
+                    }
+                }
+                // Only the dude and these critters: the villagers would
+                // start a fight with a monster themselves.
+                std::vector<Object*> others;
+                for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                    if (object != gDude && FrmId(object).objectType() == OBJ_TYPE_CRITTER && !objectIsPartyMember(object)) {
+                        others.push_back(object);
+                    }
+                }
+                for (Object* object : others) {
+                    objectDestroy(object, nullptr);
+                }
+                // A free line, the tiles around it too on the critter's way.
+                int rotation = -1;
+                for (int candidate = 0; candidate < ROTATION_COUNT && rotation == -1; candidate++) {
+                    bool free = true;
+                    for (int hex = 1; hex <= (gunman ? gunmanDistance : distance) + 1; hex++) {
+                        int tile = tileGetTileInDirection(gDude->tile, static_cast<Rotation>(candidate), hex);
+                        // The tiles around only on the critter's way.
+                        int aroundCount = hex <= distance + 1 ? ROTATION_COUNT : 0;
+                        for (int around = -1; around < aroundCount; around++) {
+                            int checkTile = around == -1 ? tile : tileGetTileInDirection(tile, static_cast<Rotation>(around), 1);
+                            if (_obj_blocking_at(gDude, checkTile, gDude->elevation) != nullptr) {
+                                free = false;
+                            }
+                        }
+                    }
+                    if (free) {
+                        rotation = candidate;
+                    }
+                }
+                Object* critter = nullptr;
+                if (critterPid == -1 || rotation == -1 || objectCreateWithProtoId(&critter, ProtoId(critterPid)) != 0) {
+                    devAutotestLog("FAIL: no multihex critter (pid 0x%x) or no free line\n", critterPid);
+                    exit(EXIT_FAILURE);
+                }
+                critter->sid = -1;
+                critter->data.critter.combat.team = 77;
+                // It fights in melee.
+                while (critter->data.inventory.length > 0) {
+                    Object* item = critter->data.inventory.items[0].item;
+                    itemRemove(critter, item, critter->data.inventory.items[0].quantity);
+                }
+                objectSetLocation(critter, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance), gDude->elevation, nullptr);
+                // Both survive its attacks.
+                for (Object* object : { gDude, critter }) {
+                    critterSetBonusStat(object, STAT_MAXIMUM_HIT_POINTS, 500);
+                    object->data.critter.hp = critterGetStat(object, STAT_MAXIMUM_HIT_POINTS);
+                }
+                critterId = critter->id;
+                if (gunman) {
+                    // A team mate with a loaded 10mm SMG (Sulik's look has its
+                    // animations; a party member's pid, but the NPC armor mod
+                    // only swaps unanimated weapons), rated above the critter
+                    // (AC).
+                    Object* mate = nullptr;
+                    Object* smg = nullptr;
+                    Object* ammo = nullptr;
+                    if (objectCreateWithProtoId(&mate, ProtoId(0x1000000 | 97)) != 0
+                        || objectCreateWithProtoId(&smg, ProtoId(9)) != 0
+                        || objectCreateWithProtoId(&ammo, ProtoId(29)) != 0) {
+                        devAutotestLog("FAIL: no gunman\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    mate->sid = -1;
+                    mate->data.critter.combat.team = critter->data.critter.combat.team;
+                    while (mate->data.inventory.length > 0) {
+                        Object* item = mate->data.inventory.items[0].item;
+                        itemRemove(mate, item, mate->data.inventory.items[0].quantity);
+                    }
+                    weaponReload(smg, ammo);
+                    itemAdd(mate, smg, 1);
+                    _obj_disconnect(smg, nullptr);
+                    inventoryEquipFunc(mate, smg, HAND_RIGHT, false);
+                    objectSetLocation(mate, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), gunmanDistance), gDude->elevation, nullptr);
+                    critterSetBonusStat(mate, STAT_ARMOR_CLASS, 100);
+                    critterSetBonusStat(mate, STAT_MAXIMUM_HIT_POINTS, 500);
+                    mate->data.critter.hp = critterGetStat(mate, STAT_MAXIMUM_HIT_POINTS);
+                    // It shoots from its place.
+                    aiGetPacket(mate)->distance = DISTANCE_STAY;
+                    gunmanId = mate->id;
+                    devAutotestLog("  gunman at tile %d, %d tiles from the dude, ammo %d, in hand pid %d\n", mate->tile, tileDistanceBetween(mate->tile, gDude->tile), ammoGetQuantity(smg),
+                        critterGetItem2(mate) != nullptr ? critterGetItem2(mate)->pid : -1);
+                }
+                devAutotestLog("  multihex critter pid 0x%x (%s) at tile %d, %d tiles from the dude, AP %d\n", critterPid, critterGetName(critter), critter->tile,
+                    tileDistanceBetween(critter->tile, gDude->tile), critterGetStat(critter, STAT_MAXIMUM_ACTION_POINTS));
+            } else {
+                Object* critter = nullptr;
+                for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                    if (object->id == critterId && object->pid == critterPid) {
+                        critter = object;
+                    }
+                }
+                if (step->a == 4) {
+                    Object* mate = nullptr;
+                    for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                        if (object->id == gunmanId && FrmId(object).objectType() == OBJ_TYPE_CRITTER) {
+                            mate = object;
+                        }
+                    }
+                    if (mate == nullptr || critter == nullptr || !isInCombat()) {
+                        devAutotestLog("FAIL: no gunman or not in combat\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    aiInfoSetLastTarget(mate, gDude);
+                    devAutotestLog("  the dude's turn: the critter %d tiles from him, the gunman at tile %d targets him\n", tileDistanceBetween(critter->tile, gDude->tile), mate->tile);
+                    break;
+                }
+                if (step->a == 2 && isInCombat()) {
+                    // Hostile, it starts the combat itself on seeing the dude.
+                    devAutotestLog("  the combat has started already (they attacked on seeing the dude)\n");
+                    break;
+                }
+                if (step->a == 2) {
+                    // Else it attacks him (START_COMBAT_ATTACKED doesn't find
+                    // a multihex critter in its line of fire).
+                    if (critter == nullptr) {
+                        devAutotestLog("FAIL: no critter (id %d pid 0x%x)\n", critterId, critterPid);
+                        exit(EXIT_FAILURE);
+                    }
+                    static CombatStartData combatStartData;
+                    combatStartData = {};
+                    combatStartData.attacker = critter;
+                    combatStartData.defender = gDude;
+                    combatStartData.maxDamage = 500;
+                    gDevAutotestPendingCapture = step->name;
+                    gDevAutotestStep++;
+                    gDevAutotestStepStarted = false;
+                    _combat(&combatStartData);
+                    return;
+                }
+                int tiles = critter != nullptr ? tileDistanceBetween(critter->tile, gDude->tile) : -1;
+                if (critter != nullptr) {
+                    devAutotestLog("  round %d, the critter: tile %d, results 0x%x, AP %d, HP %d\n", _combatNumTurns, critter->tile,
+                        static_cast<unsigned>(critter->data.critter.combat.results), critter->data.critter.combat.ap, critter->data.critter.hp);
+                }
+                // Its body takes the tiles around its own: one tile away is over the dude.
+                bool ok = tiles >= 2 && tiles < distance;
+                devAutotestLog("  after its turn: %d tiles from the dude (object distance %d): %s\n", tiles,
+                    critter != nullptr ? objectGetDistanceBetween(critter, gDude) : -1, ok ? "PASS" : "FAIL");
                 if (!ok) {
                     exit(EXIT_FAILURE);
                 }
