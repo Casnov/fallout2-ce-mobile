@@ -2301,9 +2301,10 @@ static const DevAutotestStep kDevAutotestMoveAwaySteps[] = {
 
 // The AI picking up a weapon (sfall's fix in combat_ai.cc): an unarmed
 // critter with a Stimpak of the same id as a knife on the ground next to it
-// attacks the dude (a knife in hand) and ends its turn with the knife. Without
-// the fix the pickup returns the Stimpak (found by the id) and the AI only
-// gets the knife on its next attempt, so this checks the flow, not the fix.
+// attacks the dude (a spear in hand) and wields the knife. Without the fix the
+// pickup returns the Stimpak and its hand stays empty. Run on a game without
+// mods' hook scripts (suite.sh: testgame-plain): RPU's HOOK_INVENWIELD script
+// wields the knife itself when the AI tries the Stimpak.
 static const DevAutotestStep kDevAutotestRetrieveObjectSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "j00_start" },
     { DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT, 1, 3, 4, 10, "j01_unarmed" },
@@ -4157,9 +4158,10 @@ void devAutotestTick()
                 _obj_disconnect(decoy, nullptr);
                 critterId = critter->id;
                 // The AI looks for a weapon (_ai_switch_weapons) when its target
-                // holds one: the dude wields a knife.
+                // holds one: the dude wields a spear (the starting dude of the
+                // unmodded game has no knife animations).
                 Object* dudeWeapon = nullptr;
-                if (objectCreateWithProtoId(&dudeWeapon, ProtoId(4)) == 0) {
+                if (objectCreateWithProtoId(&dudeWeapon, ProtoId(7)) == 0) {
                     itemAdd(gDude, dudeWeapon, 1);
                     _obj_disconnect(dudeWeapon, nullptr);
                     inventoryEquipFunc(gDude, dudeWeapon, interfaceGetCurrentHand(), false);
@@ -4173,6 +4175,12 @@ void devAutotestTick()
                     }
                 }
                 Object* inHand = critter != nullptr ? critterGetItem2(critter) : nullptr;
+                if (critter != nullptr) {
+                    for (int index = 0; index < critter->data.inventory.length; index++) {
+                        Object* item = critter->data.inventory.items[index].item;
+                        devAutotestLog("  inventory %d: pid %d id %d flags 0x%x\n", index, item->pid, item->id, static_cast<unsigned>(item->flags));
+                    }
+                }
                 bool ok = inHand != nullptr && inHand->pid == weaponPid;
                 devAutotestLog("  after its turn: in hand pid %d: %s\n", inHand != nullptr ? inHand->pid : -1, ok ? "PASS" : "FAIL");
                 if (!ok) {
