@@ -36,6 +36,7 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for being unable to sell/give items in the barter screen when the player/party member is overloaded (`Modules/BugFixes.cpp`) | b974b00b | [fallout2-ce#854](https://github.com/fallout2-ce/fallout2-ce/pull/854) | `barterfixes` | open |
 | Fix for gaining stats from more than two doses of a specific chem after save-load (`Modules/BugFixes.cpp`, drug pids in `sfallgv.sav`) | e887915a | [fallout2-ce#855](https://github.com/fallout2-ce/fallout2-ce/pull/855) | `drugsave` | open |
 | Fix for "Unlimited Ammo" exploit (`Modules/BugFixes.cpp`, `invenWieldFunc_item_get_type_hook`) | 2b5e62bd | [fallout2-ce#856](https://github.com/fallout2-ce/fallout2-ce/pull/856) | `wieldstack` | open |
+| Fix to reduce friendly fire in burst attacks (`Modules/AI.cpp`, `Game/AI/AIHelpers.cpp`) | c5d865eb | [fallout2-ce#857](https://github.com/fallout2-ce/fallout2-ce/pull/857) | `burstfriendly` | open |
 
 ## Other fixes offered to CE
 

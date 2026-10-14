@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 19 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **19** (12 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 20 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **18** (11 gameplay, 7 scripts) + 6 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,7 +41,7 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
+1. AI: **#13** moving away a
    distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
 2. **#53** destroy_p_proc not run for critters killed by explosives when
@@ -65,7 +65,7 @@ amount, **#147** create_object_sid with no script.
 | 2 | Fix for NPCs not fully reloading a weapon if it has an ammo capacity more than a box of ammo | `AI.cpp:603` | yes | game | CE reloads from several boxes (aiAttemptWeaponReload, _ai_try_attack loop) |
 | 3 | Fix for the incorrect check and AP cost when AI reloads a weapon | `AI.cpp:609` | yes | game | marked SFALL in _ai_try_attack |
 | 4 | Fix AI weapon switching when not having enough AP to make an attack AI will try to change attack mode before deciding to switch weapon | `AI.cpp:617` | yes | game | aiTryAttackSwitchFix |
-| 5 | Fix to reduce friendly fire in burst attacks Adds a check/roll for friendly critters in the line of fire when AI uses burst attacks | `AI.cpp:621` | **no** | game | no RollFriendlyFire (IQ roll for friendlies in the line of a burst) before combat_ctd_init in _combat_safety_invalidate_weapon_func |
+| 5 | Fix to reduce friendly fire in burst attacks Adds a check/roll for friendly critters in the line of fire when AI uses burst attacks | `AI.cpp:621` | port | game | friendly in the straight line of fire stops a burst (IQ roll), random area_attack_mode checks burst safety (fallout2-ce#857) |
 | 6 | Fix for duplicate critters being added to the list of potential targets for AI | `AI.cpp:627` | yes | game | aiFindAttackers rejects duplicates |
 | 7 | Fix to allow fleeing NPC to use drugs | `AI.cpp:637` | port | game | fallout2-ce#839 |
 | 8 | Fix for AI not checking minimum hp properly for using stimpaks (prevents premature fleeing) | `AI.cpp:639` | port | game | fallout2-ce#839 |
