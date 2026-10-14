@@ -256,6 +256,12 @@ enum DevAutotestAction {
     // FAIL unless the critical hit table has [c] in kill type `a / 100`, hit
     // location `a / 10 % 10`, effect `a % 10` (0-based), data member [b].
     DEV_AUTOTEST_ACTION_CHECK_CRITICAL,
+    // The nearest critter not in the party the dude can shoot at starts
+    // combat attacking the dude, with [a] bonus action points (combat start
+    // data, as scripts' attacks); the script continues in the dude's turn.
+    DEV_AUTOTEST_ACTION_START_COMBAT_ATTACKED,
+    // FAIL unless the dude has his maximum action points.
+    DEV_AUTOTEST_ACTION_CHECK_DUDE_AP,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2042,6 +2048,17 @@ static const DevAutotestStep kDevAutotestCritTableSteps[] = {
 
 #undef CHECK_CRITICAL
 
+// A critter gets its action points when its turn comes (sfall's fix,
+// combat.cc _combat_set_move): a critter attacking the dude with bonus action
+// points (combat start data) has them in its own turn, the dude has his
+// maximum; before, everyone got the bonus at the start of the round.
+static const DevAutotestStep kDevAutotestApTurnSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "a00_start" },
+    { DEV_AUTOTEST_ACTION_MOVE_NEAR_CRITTER, 8, 0, 0, 20, "a01_near_critter" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT_ATTACKED, 5, 0, 0, 30, "a02_attacked" },
+    { DEV_AUTOTEST_ACTION_CHECK_DUDE_AP, 0, 0, 0, 1, "a03_dude_ap" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2409,6 +2426,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "apturn") == 0) {
+        gDevAutotestSteps = kDevAutotestApTurnSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestApTurnSteps) / sizeof(kDevAutotestApTurnSteps[0]);
     } else if (strcmp(name, "crittable") == 0) {
         gDevAutotestSteps = kDevAutotestCritTableSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestCritTableSteps) / sizeof(kDevAutotestCritTableSteps[0]);
@@ -3661,6 +3681,38 @@ void devAutotestTick()
                 devAutotestLog("  the dude hit by pid %d, %d hexes away\n", critter->pid, objectGetDistanceBetween(gDude, critter));
             } else {
                 devAutotestLog("FAIL: no critter in sight or not in combat\n");
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_START_COMBAT_ATTACKED: {
+            Object* critter = devAutotestFindNearestEnemyInSight();
+            if (critter == nullptr || isInCombat()) {
+                devAutotestLog("FAIL: no critter in sight or already in combat\n");
+                exit(EXIT_FAILURE);
+            }
+            devAutotestLog("  pid %d attacks the dude with %d bonus action points\n", critter->pid, static_cast<int>(step->a));
+
+            static CombatStartData combatStartData;
+            combatStartData = {};
+            combatStartData.attacker = critter;
+            combatStartData.defender = gDude;
+            combatStartData.actionPointsBonus = static_cast<int>(step->a);
+            combatStartData.maxDamage = 500;
+
+            // The combat loop runs inside, the script continues from there.
+            gDevAutotestPendingCapture = step->name;
+            gDevAutotestStep++;
+            gDevAutotestStepStarted = false;
+            _combat(&combatStartData);
+            return;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_DUDE_AP: {
+            int ap = gDude->data.critter.combat.ap;
+            int maximum = critterGetStat(gDude, STAT_MAXIMUM_ACTION_POINTS);
+            bool ok = isInCombat() && ap == maximum;
+            devAutotestLog("  dude action points %d (maximum %d, in combat %d): %s\n", ap, maximum, isInCombat() ? 1 : 0, ok ? "PASS" : "FAIL");
+            if (!ok) {
                 exit(EXIT_FAILURE);
             }
             break;
