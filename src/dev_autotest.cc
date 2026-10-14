@@ -46,6 +46,7 @@
 #include "platform_compat.h"
 #include "player_commands.h"
 #include "preferences.h"
+#include "queue.h"
 #include "save_storage.h"
 #include "scripts.h"
 #include "settings.h"
@@ -278,6 +279,14 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_WALK_LIMITED,
     // FAIL unless the dude is [a] hexes from where WALK_LIMITED started.
     DEV_AUTOTEST_ACTION_CHECK_WALKED,
+    // Knockouts of the nearest critter not in the party (sfall's fixes),
+    // `a`: 1 - stand up standing (FAIL if it animates or stays knocked
+    // down); 2 - in combat, wake up from a knockout (FAIL unless marked woken
+    // and knocked down); 3 - knock it down, losing its turn, prone; 4 - the
+    // dude isn't hit by anyone (combat may end); 5 - FAIL if it's knocked
+    // down or loses a turn; 6 - knocked out, the map left (FAIL unless
+    // knocked down and its wake up event removed).
+    DEV_AUTOTEST_ACTION_KNOCKOUT,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2116,6 +2125,25 @@ static const DevAutotestStep kDevAutotestBonusMoveWalkSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_WALKED, 2, 0, 0, 1, "w12_walked" },
 };
 
+// Knockouts (sfall's "NPC turns into a container" / knockout fixes,
+// critter.cc, animation.cc, combat.cc): Klint stands up standing without an
+// animation; woken in combat outside his turn he's marked prone; knocked down
+// losing his turn he stands up when combat ends; knocked out when the map is
+// left he stays knocked down, his wake up event removed.
+static const DevAutotestStep kDevAutotestKnockoutsSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "k00_start" },
+    { DEV_AUTOTEST_ACTION_MOVE_NEAR_CRITTER, 4, 0, 0, 20, "k01_near_critter" },
+    { DEV_AUTOTEST_ACTION_KNOCKOUT, 1, 0, 0, 30, "k02_standup_standing" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 30, "k03_combat" },
+    { DEV_AUTOTEST_ACTION_KEEP_COMBAT, 0, 0, 0, 10, "k04_keep_combat" },
+    { DEV_AUTOTEST_ACTION_KNOCKOUT, 2, 0, 0, 10, "k05_woken" },
+    { DEV_AUTOTEST_ACTION_KNOCKOUT, 3, 0, 0, 10, "k06_knocked_down" },
+    { DEV_AUTOTEST_ACTION_KNOCKOUT, 4, 0, 0, 10, "k07_nobody_hits" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::EndTurn), 0, 0, 240, "k08_combat_over" },
+    { DEV_AUTOTEST_ACTION_KNOCKOUT, 5, 0, 0, 10, "k09_stood_up" },
+    { DEV_AUTOTEST_ACTION_KNOCKOUT, 6, 0, 0, 10, "k10_map_left" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2483,6 +2511,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "knockouts") == 0) {
+        gDevAutotestSteps = kDevAutotestKnockoutsSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestKnockoutsSteps) / sizeof(kDevAutotestKnockoutsSteps[0]);
     } else if (strcmp(name, "bonusmovewalk") == 0) {
         gDevAutotestSteps = kDevAutotestBonusMoveWalkSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestBonusMoveWalkSteps) / sizeof(kDevAutotestBonusMoveWalkSteps[0]);
@@ -3828,6 +3859,64 @@ void devAutotestTick()
             int walked = tileDistanceBetween(gDevAutotestWalkStart, gDude->tile);
             bool ok = walked == static_cast<int>(step->a);
             devAutotestLog("  walked %d hexes (expected %d): %s\n", walked, static_cast<int>(step->a), ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_KNOCKOUT: {
+            Object* critter = devAutotestFindNearestEnemyInSight();
+            if (critter == nullptr) {
+                devAutotestLog("FAIL: no critter in sight\n");
+                exit(EXIT_FAILURE);
+            }
+            Dam& results = critter->data.critter.combat.results;
+            bool ok = true;
+            switch (static_cast<int>(step->a)) {
+            case 1:
+                results |= DAM_KNOCKED_DOWN;
+                _dude_standup(critter);
+                ok = !animationIsBusy(critter) && (results & DAM_KNOCKED_DOWN) == DAM_NONE;
+                devAutotestLog("  stand up standing: animates %d, knocked down %d: %s\n", animationIsBusy(critter) ? 1 : 0, (results & DAM_KNOCKED_DOWN) != DAM_NONE ? 1 : 0, ok ? "PASS" : "FAIL");
+                break;
+            case 2:
+                results |= DAM_KNOCKED_OUT;
+                knockoutEventProcess(critter, nullptr);
+                ok = isInCombat() && (results & DAM_KNOCKOUT_WOKEN) != DAM_NONE && (results & DAM_KNOCKED_DOWN) != DAM_NONE;
+                devAutotestLog("  woken in combat: results 0x%x: %s\n", static_cast<unsigned>(results), ok ? "PASS" : "FAIL");
+                results &= ~(DAM_KNOCKOUT_WOKEN | DAM_KNOCKED_DOWN);
+                break;
+            case 3: {
+                results |= DAM_KNOCKED_DOWN | DAM_LOSE_TURN;
+                Rect rect;
+                objectSetFrmId(critter, FrmId(critter, ANIM_FALL_BACK, critter->rotation + 1), &rect);
+                tileWindowRefreshRect(&rect, critter->elevation);
+                devAutotestLog("  knocked down, loses a turn: results 0x%x\n", static_cast<unsigned>(results));
+                break;
+            }
+            case 4:
+                critterSetWhoHitMe(gDude, nullptr);
+                break;
+            case 5:
+                ok = !isInCombat() && (results & (DAM_KNOCKED_DOWN | DAM_LOSE_TURN)) == DAM_NONE;
+                devAutotestLog("  after combat (in combat %d): results 0x%x, animation %d: %s\n", isInCombat() ? 1 : 0, static_cast<unsigned>(results), static_cast<int>(FrmId(critter).animationType()), ok ? "PASS" : "FAIL");
+                break;
+            case 6: {
+                // queueFindFirstEvent returns the event's data: a marker
+                // (knockout events have no data to free).
+                static int marker;
+                results |= DAM_KNOCKED_OUT;
+                queueAddEvent(100, critter, &marker, EVENT_TYPE_KNOCKOUT);
+                bool eventAdded = queueFindFirstEvent(critter, EVENT_TYPE_KNOCKOUT) == &marker;
+                _queue_leaving_map();
+                bool eventLeft = queueFindFirstEvent(critter, EVENT_TYPE_KNOCKOUT) != nullptr;
+                ok = eventAdded && (results & DAM_KNOCKED_DOWN) != DAM_NONE && (results & DAM_KNOCKED_OUT) == DAM_NONE && !eventLeft;
+                devAutotestLog("  knocked out, map left: results 0x%x, wake up event %d -> %d: %s\n", static_cast<unsigned>(results), eventAdded ? 1 : 0, eventLeft ? 1 : 0, ok ? "PASS" : "FAIL");
+                results &= ~(DAM_KNOCKED_OUT | DAM_KNOCKED_DOWN);
+                queueRemoveEventsByType(critter, EVENT_TYPE_KNOCKOUT);
+                break;
+            }
+            }
             if (!ok) {
                 exit(EXIT_FAILURE);
             }
