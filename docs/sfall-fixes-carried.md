@@ -38,6 +38,7 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for "Unlimited Ammo" exploit (`Modules/BugFixes.cpp`, `invenWieldFunc_item_get_type_hook`) | 2b5e62bd | [fallout2-ce#856](https://github.com/fallout2-ce/fallout2-ce/pull/856) | `wieldstack` | open |
 | Fix to reduce friendly fire in burst attacks (`Modules/AI.cpp`, `Game/AI/AIHelpers.cpp`) | c5d865eb | [fallout2-ce#857](https://github.com/fallout2-ce/fallout2-ce/pull/857) | `burstfriendly` | open |
 | Fix for ai_move_away_ engine function not working correctly in cases when needing to move a distance away from the target (`Modules/AI.cpp`) | 7908dc0a | [fallout2-ce#858](https://github.com/fallout2-ce/fallout2-ce/pull/858) | `moveaway` | open |
+| Fix for ai_retrieve_object_ engine function not returning the requested object when there are different objects with the same ID (`Modules/BugFixes.cpp`) | 8c8be205 | [fallout2-ce#859](https://github.com/fallout2-ce/fallout2-ce/pull/859) | `retrieveobj` (flow only) | open |
 
 ## Other fixes offered to CE
 

@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 21 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **17** (10 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 22 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **16** (9 gameplay, 7 scripts) + 6 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,8 +41,7 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. AI: **#45** (and likely **#124**) multihex critters, **#87** picking up items
-   by id, **#114** an NPC stuck picking up an item in combat.
+1. AI: **#45** (and likely **#124**) multihex critters, **#114** an NPC stuck picking up an item in combat.
 2. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
@@ -146,7 +145,7 @@ amount, **#147** create_object_sid with no script.
 | 84 | Fix for being unable to sell/give items in the barter screen when the player/party member is overloaded | `BugFixes.cpp:4376` | port | game | a table that weighs nothing always fits (fallout2-ce#854) |
 | 85 | Fix for the underline position in the inventory display window when the item name is longer than one line | `BugFixes.cpp:4379` | yes | original screens | SFALL note in inventoryExamineItem |
 | 86 | Fix for the exploit that allows you to gain excessive skill points from Tag! perk before leaving the character screen | `BugFixes.cpp:4382` | yes | game | tagSkill4LevelBase (sfall's Tag! fix) in character_editor.cc |
-| 87 | Fix for ai_retrieve_object_ engine function not returning the requested object when there are different objects with the same ID | `BugFixes.cpp:4387` | **no** | game | _ai_retrieve_object looks items up by id only (vanilla), not by the object first |
+| 87 | Fix for ai_retrieve_object_ engine function not returning the requested object when there are different objects with the same ID | `BugFixes.cpp:4387` | port | game | _ai_retrieve_object looks for the object itself first, then by id (fallout2-ce#859) |
 | 88 | Fix for the "mood" argument of start_gdialog function being ignored for talking heads | `BugFixes.cpp:4393` | sfall option, off (`Misc/StartGDialogFix=0`) | scripts | sfall StartGDialogFix=0 (off by default); CE has its own start_gdialog target note |
 | 89 | Fix crash when calling start_gdialog outside of the talk_p_proc procedure for talking heads | `BugFixes.cpp:4398` | yes | scripts | SFALL note in opStartGameDialog |
 | 90 | Fix for Heave Ho! perk increasing Strength stat above 10 when determining the maximum range of thrown weapons | `BugFixes.cpp:4403` | yes | game | SFALL note in weaponGetRange (Heave Ho!) |
