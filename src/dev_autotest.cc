@@ -330,6 +330,12 @@ enum DevAutotestAction {
     // hand; 2 - FAIL unless the distance to move away was negative and it
     // left its tile.
     DEV_AUTOTEST_ACTION_MOVE_AWAY,
+    // Picking up a weapon by the AI (sfall's ai_retrieve_object fix): `a`
+    // 1 - an unarmed hostile critter `b` hexes from the dude, a weapon of
+    // pid `c` on the ground next to it and in its inventory a Stimpak with
+    // the weapon's id, the dude armed; 2 - FAIL unless the weapon is in its
+    // hand.
+    DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2293,6 +2299,18 @@ static const DevAutotestStep kDevAutotestMoveAwaySteps[] = {
     { DEV_AUTOTEST_ACTION_MOVE_AWAY, 2, 2, 25, 10, "m03_moved_away" },
 };
 
+// The AI picking up a weapon (sfall's fix in combat_ai.cc): an unarmed
+// critter with a Stimpak of the same id as a knife on the ground next to it
+// attacks the dude (a knife in hand) and ends its turn with the knife. Without
+// the fix the pickup returns the Stimpak (found by the id) and the AI only
+// gets the knife on its next attempt, so this checks the flow, not the fix.
+static const DevAutotestStep kDevAutotestRetrieveObjectSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "j00_start" },
+    { DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT, 1, 3, 4, 10, "j01_unarmed" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT_ATTACKED, 0, 0, 0, 60, "j02_attacked" },
+    { DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT, 2, 3, 4, 10, "j03_wielded" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2660,6 +2678,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "retrieveobj") == 0) {
+        gDevAutotestSteps = kDevAutotestRetrieveObjectSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestRetrieveObjectSteps) / sizeof(kDevAutotestRetrieveObjectSteps[0]);
     } else if (strcmp(name, "moveaway") == 0) {
         gDevAutotestSteps = kDevAutotestMoveAwaySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMoveAwaySteps) / sizeof(kDevAutotestMoveAwaySteps[0]);
@@ -4092,6 +4113,71 @@ void devAutotestTick()
             }
             if (!ok) {
                 exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT: {
+            static int critterId = -1;
+            int weaponPid = static_cast<int>(step->c);
+            if (step->a == 1) {
+                int distance = static_cast<int>(step->b);
+                int rotation = -1;
+                for (int candidate = 0; candidate < ROTATION_COUNT && rotation == -1; candidate++) {
+                    bool free = true;
+                    for (int hex = 1; hex <= distance + 1; hex++) {
+                        int tile = tileGetTileInDirection(gDude->tile, static_cast<Rotation>(candidate), hex);
+                        if (_obj_blocking_at(nullptr, tile, gDude->elevation) != nullptr) {
+                            free = false;
+                        }
+                    }
+                    if (free) {
+                        rotation = candidate;
+                    }
+                }
+                Object* critter = nullptr;
+                Object* weapon = nullptr;
+                Object* decoy = nullptr;
+                if (rotation == -1 || objectCreateWithProtoId(&critter, ProtoId(0x1000000 | 97)) != 0
+                    || objectCreateWithProtoId(&weapon, ProtoId(weaponPid)) != 0
+                    || objectCreateWithProtoId(&decoy, ProtoId(ItemProtoTypeId::Stimpak)) != 0) {
+                    devAutotestLog("FAIL: no free line or no objects\n");
+                    exit(EXIT_FAILURE);
+                }
+                critter->sid = -1;
+                critter->data.critter.combat.team = 77;
+                // Nothing to fight with in its inventory.
+                while (critter->data.inventory.length > 0) {
+                    Object* item = critter->data.inventory.items[0].item;
+                    itemRemove(critter, item, critter->data.inventory.items[0].quantity);
+                }
+                objectSetLocation(critter, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance), gDude->elevation, nullptr);
+                objectSetLocation(weapon, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance + 1), gDude->elevation, nullptr);
+                decoy->id = weapon->id;
+                itemAdd(critter, decoy, 1);
+                _obj_disconnect(decoy, nullptr);
+                critterId = critter->id;
+                // The AI looks for a weapon (_ai_switch_weapons) when its target
+                // holds one: the dude wields a knife.
+                Object* dudeWeapon = nullptr;
+                if (objectCreateWithProtoId(&dudeWeapon, ProtoId(4)) == 0) {
+                    itemAdd(gDude, dudeWeapon, 1);
+                    _obj_disconnect(dudeWeapon, nullptr);
+                    inventoryEquipFunc(gDude, dudeWeapon, interfaceGetCurrentHand(), false);
+                }
+                devAutotestLog("  unarmed critter at tile %d, weapon pid %d (id %d) on tile %d, Stimpak with that id in its inventory; the dude's weapon animation %d\n", critter->tile, weaponPid, weapon->id, weapon->tile, static_cast<int>(FrmId(gDude).weaponAnimation()));
+            } else {
+                Object* critter = nullptr;
+                for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                    if (object->id == critterId && FrmId(object).objectType() == OBJ_TYPE_CRITTER) {
+                        critter = object;
+                    }
+                }
+                Object* inHand = critter != nullptr ? critterGetItem2(critter) : nullptr;
+                bool ok = inHand != nullptr && inHand->pid == weaponPid;
+                devAutotestLog("  after its turn: in hand pid %d: %s\n", inHand != nullptr ? inHand->pid : -1, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
             }
             break;
         }
