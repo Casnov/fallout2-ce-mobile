@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 5 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **32** (24 gameplay, 8 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 6 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **31** (23 gameplay, 8 scripts) + 6 likely + 1 partly |
 | Unclear | 5 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,28 +41,26 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#55** Action points are set for everyone at the start of the round,
-   not at each critter's turn.
-2. **#68, #115, #116** Bonus Move: replenished by saving and loading in
+1. **#68, #115, #116** Bonus Move: replenished by saving and loading in
    combat; the player's moves ignore their distance; using objects or
    ladders interrupts the movement.
-3. **#47, #48, #50** Knockouts: critters woken outside their turn,
+2. **#47, #48, #50** Knockouts: critters woken outside their turn,
    stand-up without the prone frame, knocked-down NPCs stay prone after
    combat.
-4. **#108** A dead party member's corpse disappears on map load; **#107**
+3. **#108** A dead party member's corpse disappears on map load; **#107**
    critters don't heal over time on maps with `dead_bodies_age=No`.
-5. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
+4. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
    nothing can be sold or given while overloaded.
-6. **#36** Wielding a weapon from a stack puts the whole stack in the hand
+5. **#36** Wielding a weapon from a stack puts the whole stack in the hand
    (Unlimited Ammo exploit); **#30** drug effects after save/load
    (more than two doses).
 8. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
    distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
-8. **#53** destroy_p_proc not run for critters killed by explosives when
+7. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
-9. **#75** exit grids while loading or entering a map; **#109** the
+8. **#75** exit grids while loading or entering a map; **#109** the
     automap reveals unexplored areas when entering a map; **#160**
     misc items' charges not fixed on load; **#152** knocked-down team
     members can be pushed in combat.
@@ -130,7 +128,7 @@ amount, **#147** create_object_sid with no script, **#47** critter_state.
 | 52 | Fix crashes when killing critters with explosives | `BugFixes.cpp:4196` | yes | game | whoHitMe saved through objectPrepareWhoHitMeForSave (CE's own) |
 | 53 | Fix for destroy_p_proc not being called if the critter is killed by explosives when you leave the map | `BugFixes.cpp:4199` | **no** | game | actionExplode doesn't run destroy_p_proc for critters killed by explosives when leaving the map |
 | 54 | Fix for being unable to sell used geiger counters or stealth boys | `BugFixes.cpp:4203` | **no** | game | can't sell used geiger counter / stealth boy (itemIsQueued returns bool; no turn-off in barter) |
-| 55 | Fix for incorrect initialization of action points at the beginning of each turn | `BugFixes.cpp:4211` | **no** | game | AP set for everyone at round start (_combat_set_move_all); sfall sets them at each critter's turn |
+| 55 | Fix for incorrect initialization of action points at the beginning of each turn | `BugFixes.cpp:4211` | port | game | each critter gets its action points at its turn (fallout2-ce#843) |
 | 56 | Fix for incorrect death animations being used when killing critters with kill_critter_type function | `BugFixes.cpp:4216` | yes | scripts | SFALL note in opKillCritterType (death animation) |
 | 57 | Fix for checking the horizontal position on the y-axis instead of x when setting coordinates on the world map | `BugFixes.cpp:4221` | yes | game | wmAreaSetWorldPos checks x and y |
 | 58 | Fix for display issues when calling gdialog_mod_barter with critters with no "Barter" flag set | `BugFixes.cpp:4229` | not checked | original screens | gdialog_mod_barter display with no Barter flag |
