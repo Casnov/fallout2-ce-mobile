@@ -32,40 +32,37 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 9 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **28** (20 gameplay, 8 scripts) + 6 likely + 1 partly |
-| Unclear | 5 |
+| Ported by the port, offered to CE | 13 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **25** (18 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
 | Not applicable (platform, debug, other mods) | 9 |
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#47, #48, #50** Knockouts: critters woken outside their turn,
-   stand-up without the prone frame, knocked-down NPCs stay prone after
-   combat.
-2. **#108** A dead party member's corpse disappears on map load; **#107**
+1. **#108** A dead party member's corpse disappears on map load; **#107**
    critters don't heal over time on maps with `dead_bodies_age=No`.
-3. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
+2. **#54** Used Geiger counters and Stealth Boys can't be sold; **#84**
    nothing can be sold or given while overloaded.
-4. **#36** Wielding a weapon from a stack puts the whole stack in the hand
+3. **#36** Wielding a weapon from a stack puts the whole stack in the hand
    (Unlimited Ammo exploit); **#30** drug effects after save/load
    (more than two doses).
-8. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
+4. AI: **#5** bursts into friendlies (no roll), **#13** moving away a
    distance, **#45** (and likely **#124**) multihex critters, **#87** picking up items
    by id, **#114** an NPC stuck picking up an item in combat.
-6. **#53** destroy_p_proc not run for critters killed by explosives when
+5. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
-7. **#75** exit grids while loading or entering a map; **#109** the
-    automap reveals unexplored areas when entering a map; **#160**
-    misc items' charges not fixed on load; **#152** knocked-down team
-    members can be pushed in combat.
+6. **#75** exit grids while loading or entering a map; **#109** the
+   automap reveals unexplored areas when entering a map; **#160**
+   misc items' charges not fixed on load; **#152** knocked-down team
+   members can be pushed in combat.
 
 Script functions: **#96** attack_complex result flags, **#101**
 pickup_obj/drop_obj/use_obj take `self`, **#105** has_skill for an invalid
 skill, **#113** dialogue_reaction argument, **#125** critter_add/rm_trait
-amount, **#147** create_object_sid with no script, **#47** critter_state.
+amount, **#147** create_object_sid with no script.
 
 ## All fixes
 
@@ -117,10 +114,10 @@ amount, **#147** create_object_sid with no script, **#47** critter_state.
 | 44 | Fix for op_lookup_string_proc_ engine function not searching the last procedure in a script | `BugFixes.cpp:4140` | yes | scripts | opLookupStringProc loops to the last procedure |
 | 45 | Fix for multihex critters moving too close and overlapping their targets in combat | `BugFixes.cpp:4155` | **no** | game | _ai_move_steps_closer / _cai_retargetTileFromFriendlyFire: no multihex run/move/retarget fixes |
 | 46 | Fix for multiple knockout events being added to the queue | `BugFixes.cpp:4169` | yes | game | SFALL note in _set_new_results |
-| 47 | Fix for critter_state function when a critter in combat recovers from the knockout state outside its turn DAM_KNOCKOUT_WOKEN flag lets the function know that the critter was knocked out before it actually woke up (stand up) | `BugFixes.cpp:4172` | **no** | scripts | no DAM_KNOCKOUT_WOKEN: critter_state wrong for a critter woken outside its turn |
-| 48 | Fixes for knockout/down issues | `BugFixes.cpp:4177` | **no** | game | _dude_standup plays stand-up without checking the prone frame; wake-up on map leave not handled |
-| 49 | Fix for "NPC turns into a container" bug | `BugFixes.cpp:4181` | unclear | game | "NPC turns into a container": CE's knockoutClear clears both flags and sets the stand frame (sfall sets knocked down); obj_load and party prep-load parts not found |
-| 50 | Fix for knocked down critters not playing stand up animation when the combat ends (when DAM_LOSE_TURN and DAM_KNOCKED_DOWN flags are set) | `BugFixes.cpp:4188` | **no** | game | _combat_over stands up only the dude; knocked-down NPCs (LOSE_TURN) stay prone |
+| 47 | Fix for critter_state function when a critter in combat recovers from the knockout state outside its turn DAM_KNOCKOUT_WOKEN flag lets the function know that the critter was knocked out before it actually woke up (stand up) | `BugFixes.cpp:4172` | port | scripts | critter_wake_up marks a critter woken outside its turn (DAM_KNOCKOUT_WOKEN), critter_state reports it prone (fallout2-ce#846) |
+| 48 | Fixes for knockout/down issues | `BugFixes.cpp:4177` | port | game | _dude_standup only from the prone frame; a critter woken during map_exit_p_proc stands at once (fallout2-ce#846) |
+| 49 | Fix for "NPC turns into a container" bug | `BugFixes.cpp:4181` | port | game | knockoutClear leaves a knocked out critter knocked down and drops its wake up event; obj_load and party prep-load parts (fallout2-ce#846) |
+| 50 | Fix for knocked down critters not playing stand up animation when the combat ends (when DAM_LOSE_TURN and DAM_KNOCKED_DOWN flags are set) | `BugFixes.cpp:4188` | port | game | _combat_over stands up knocked-down critters (fallout2-ce#846) |
 | 51 | Fix to prevent dead NPCs from reloading their weapons when the combat ends | `BugFixes.cpp:4192` | yes | game | SFALL note in _combat_over |
 | 52 | Fix crashes when killing critters with explosives | `BugFixes.cpp:4196` | yes | game | whoHitMe saved through objectPrepareWhoHitMeForSave (CE's own) |
 | 53 | Fix for destroy_p_proc not being called if the critter is killed by explosives when you leave the map | `BugFixes.cpp:4199` | **no** | game | actionExplode doesn't run destroy_p_proc for critters killed by explosives when leaving the map |
