@@ -339,6 +339,7 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT,
     DEV_AUTOTEST_ACTION_NPC_PICKUP,
     DEV_AUTOTEST_ACTION_MULTIHEX_MOVE,
+    DEV_AUTOTEST_ACTION_CHECK_MULTIHEX_PARTY,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2358,6 +2359,19 @@ static const DevAutotestStep kDevAutotestMultihexRetargetSteps[] = {
     { DEV_AUTOTEST_ACTION_MULTIHEX_MOVE, 3, 11, 1, 10, "n06_closed_in" },
 };
 
+// A multihex party member (a Lesser Scorpion) placed as on entering a map
+// or an elevation (partyMemberSyncPosition, sfall's fix in
+// party_member.cc): the tiles around it are free, not the dude's. Without
+// the fix it is placed beside the dude like the others, its body over his.
+// Checked right after the placement: the scorpion attacks the dude anyway
+// (its AI), which would move it. The villagers are removed first, and the
+// scorpion comes from another elevation.
+static const DevAutotestStep kDevAutotestMultihexPartySteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "p00_start" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 6, 4, ROTATION_SE, 1, "p01_scorpion" },
+    { DEV_AUTOTEST_ACTION_CHECK_MULTIHEX_PARTY, 0, 0, 0, 10, "p02_placed" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2725,6 +2739,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "multihexparty") == 0) {
+        gDevAutotestSteps = kDevAutotestMultihexPartySteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMultihexPartySteps) / sizeof(kDevAutotestMultihexPartySteps[0]);
     } else if (strcmp(name, "multihexmove") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexMoveSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexMoveSteps) / sizeof(kDevAutotestMultihexMoveSteps[0]);
@@ -4243,6 +4260,47 @@ void devAutotestTick()
                 if (!ok) {
                     exit(EXIT_FAILURE);
                 }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_MULTIHEX_PARTY: {
+            // Without the villagers: where they stand differs between the
+            // game copies (behind the dude, a villager blocks the tiles).
+            std::vector<Object*> others;
+            for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                if (object != gDude && FrmId(object).objectType() == OBJ_TYPE_CRITTER && !objectIsPartyMember(object)) {
+                    others.push_back(object);
+                }
+            }
+            for (Object* object : others) {
+                objectDestroy(object, nullptr);
+            }
+            Object* member = nullptr;
+            for (Object* object : get_all_party_members_objects(false)) {
+                if (object != gDude && (object->flags & OBJECT_MULTIHEX) != 0) {
+                    member = object;
+                }
+            }
+            // As on entering an elevation: the party member comes from
+            // another one (here it would block the tiles itself, it walks to
+            // the dude to attack him).
+            if (member != nullptr) {
+                objectSetLocation(member, member->tile, (gDude->elevation + 1) % ELEVATION_COUNT, nullptr);
+            }
+            _partyMemberSyncPosition();
+            Object* blocker = nullptr;
+            if (member != nullptr) {
+                for (int around = 0; around < ROTATION_COUNT && blocker == nullptr; around++) {
+                    blocker = _obj_blocking_at(member, tileGetTileInDirection(member->tile, static_cast<Rotation>(around), 1), member->elevation);
+                }
+            }
+            bool ok = member != nullptr && blocker == nullptr && member->elevation == gDude->elevation;
+            devAutotestLog("  map %d: the dude at tile %d, the multihex party member at tile %d (%d tiles from him), around it %s: %s\n",
+                static_cast<int>(gMapHeader.index), gDude->tile, member != nullptr ? member->tile : -1,
+                member != nullptr ? tileDistanceBetween(member->tile, gDude->tile) : -1,
+                blocker == nullptr ? "free" : (blocker == gDude ? "the dude" : "another object"), ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
             }
             break;
         }
