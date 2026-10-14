@@ -287,6 +287,10 @@ enum DevAutotestAction {
     // down or loses a turn; 6 - knocked out, the map left (FAIL unless
     // knocked down and its wake up event removed).
     DEV_AUTOTEST_ACTION_KNOCKOUT,
+    // A party member's corpse (sfall's fix in partyFixMultipleMembers): `a`
+    // 1 - kills the party member (ADD_PARTY_MEMBER's, else the first one of
+    // a loaded game); 2 - FAIL unless its corpse is on the map.
+    DEV_AUTOTEST_ACTION_PARTY_CORPSE,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2144,6 +2148,18 @@ static const DevAutotestStep kDevAutotestKnockoutsSteps[] = {
     { DEV_AUTOTEST_ACTION_KNOCKOUT, 6, 0, 0, 10, "k10_map_left" },
 };
 
+// A party member's corpse (sfall's fix in partyFixMultipleMembers, party_member.cc):
+// Sulik joins and dies; after a quick save and load his corpse is still on
+// the map.
+static const DevAutotestStep kDevAutotestPartyCorpseSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "pc00_start" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 3, ROTATION_SW, 30, "pc01_sulik_joins", "Kcsulik.int" },
+    { DEV_AUTOTEST_ACTION_PARTY_CORPSE, 1, 0, 0, 30, "pc02_killed" },
+    { DEV_AUTOTEST_ACTION_QUICK_SAVE, 0, 0, 0, 30, "pc03_saved" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "pc04_loaded" },
+    { DEV_AUTOTEST_ACTION_PARTY_CORPSE, 2, 0, 0, 10, "pc05_corpse" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2511,6 +2527,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "partycorpse") == 0) {
+        gDevAutotestSteps = kDevAutotestPartyCorpseSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestPartyCorpseSteps) / sizeof(kDevAutotestPartyCorpseSteps[0]);
     } else if (strcmp(name, "knockouts") == 0) {
         gDevAutotestSteps = kDevAutotestKnockoutsSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestKnockoutsSteps) / sizeof(kDevAutotestKnockoutsSteps[0]);
@@ -3919,6 +3938,34 @@ void devAutotestTick()
             }
             if (!ok) {
                 exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_PARTY_CORPSE: {
+            static int corpsePid = -1;
+            if (step->a == 1) {
+                Object* member = devAutotestPartyMember();
+                if (member == nullptr) {
+                    devAutotestLog("FAIL: no party member\n");
+                    exit(EXIT_FAILURE);
+                }
+                corpsePid = member->pid;
+                critterKill(member, ANIM_INVALID, true);
+                gDevAutotestPartyMember = nullptr;
+                devAutotestLog("  killed party member pid %d: script %d, in the party %d\n", corpsePid, member->sid, objectIsPartyMember(member) ? 1 : 0);
+            } else {
+                Object* corpse = nullptr;
+                for (Object* obj = objectFindFirst(); obj != nullptr; obj = objectFindNext()) {
+                    if (obj->pid == corpsePid && critterIsDead(obj)) {
+                        corpse = obj;
+                        break;
+                    }
+                }
+                bool ok = corpse != nullptr;
+                devAutotestLog("  party member's corpse (pid %d) after loading: %s: %s\n", corpsePid, ok ? "on the map" : "gone", ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
             }
             break;
         }
