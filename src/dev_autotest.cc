@@ -291,6 +291,12 @@ enum DevAutotestAction {
     // 1 - kills the party member (ADD_PARTY_MEMBER's, else the first one of
     // a loaded game); 2 - FAIL unless its corpse is on the map.
     DEV_AUTOTEST_ACTION_PARTY_CORPSE,
+    // Critters healing while the dude is away from a map (sfall's fix in
+    // _map_age_dead_critters): `a` 1 - the nearest living critter not in
+    // the party that heals (not a robot, no NO_HEAL flag) loses its script
+    // and is put at 1 hit point; 2 - [b] hours pass; 3 - FAIL unless that
+    // critter has more than 1 hit point.
+    DEV_AUTOTEST_ACTION_MAP_AGE,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2160,6 +2166,19 @@ static const DevAutotestStep kDevAutotestPartyCorpseSteps[] = {
     { DEV_AUTOTEST_ACTION_PARTY_CORPSE, 2, 0, 0, 10, "pc05_corpse" },
 };
 
+// Critters heal while the dude is away from a map with dead_bodies_age=No in
+// maps.txt (sfall's fix in _map_age_dead_critters, map.cc): a critter of
+// Broken Hills' second map at 1 hit point heals in a day away.
+static const DevAutotestStep kDevAutotestMapAgeHealSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "a00_start" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "a01_broken_hills_2", "broken2.map" },
+    { DEV_AUTOTEST_ACTION_MAP_AGE, 1, 0, 0, 10, "a02_wounded" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "a03_away", "broken1.map" },
+    { DEV_AUTOTEST_ACTION_MAP_AGE, 2, 24, 0, 10, "a04_a_day" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "a05_back", "broken2.map" },
+    { DEV_AUTOTEST_ACTION_MAP_AGE, 3, 0, 0, 10, "a06_healed" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2527,6 +2546,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "mapageheal") == 0) {
+        gDevAutotestSteps = kDevAutotestMapAgeHealSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMapAgeHealSteps) / sizeof(kDevAutotestMapAgeHealSteps[0]);
     } else if (strcmp(name, "partycorpse") == 0) {
         gDevAutotestSteps = kDevAutotestPartyCorpseSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartyCorpseSteps) / sizeof(kDevAutotestPartyCorpseSteps[0]);
@@ -3938,6 +3960,62 @@ void devAutotestTick()
             }
             if (!ok) {
                 exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MAP_AGE: {
+            static int critterId = -1;
+            static int critterPid = -1;
+            if (step->a == 1) {
+                Object* critter = nullptr;
+                int bestDistance = 0;
+                for (Object* object = objectFindFirstAtElevation(gElevation); object != nullptr; object = objectFindNextAtElevation()) {
+                    if (object == gDude || FrmId(object).objectType() != OBJ_TYPE_CRITTER || critterIsDead(object) || objectIsPartyMember(object)
+                        || critterGetKillType(object) == KILL_TYPE_ROBOT || critterFlagCheck(ProtoId(object), CRITTER_NO_HEAL)) {
+                        continue;
+                    }
+                    int distance = objectGetDistanceBetween(gDude, object);
+                    if (critter == nullptr || distance < bestDistance) {
+                        critter = object;
+                        bestDistance = distance;
+                    }
+                }
+                if (critter == nullptr) {
+                    devAutotestLog("FAIL: no critter\n");
+                    exit(EXIT_FAILURE);
+                }
+                // Without its script: critter scripts may heal it themselves
+                // (critter_heal).
+                if (critter->sid != -1) {
+                    scriptRemove(critter->sid);
+                    critter->sid = -1;
+                }
+                critterId = critter->id;
+                critterPid = critter->pid;
+                int hp = critter->data.critter.hp;
+                critter->data.critter.hp = 1;
+                devAutotestLog("  critter pid %d (id %d, script removed) from %d to 1/%d hit points, map %d, dead bodies age %d\n", critter->pid, critterId,
+                    hp, critterGetStat(critter, STAT_MAXIMUM_HIT_POINTS), static_cast<int>(gMapHeader.index), wmMapDeadBodiesAge() ? 1 : 0);
+            } else if (step->a == 2) {
+                gameTimeAddTicks(static_cast<int>(step->b) * GAME_TIME_TICKS_PER_HOUR);
+                devAutotestLog("  %d hours passed\n", static_cast<int>(step->b));
+            } else {
+                Object* critter = nullptr;
+                for (Object* object = objectFindFirst(); object != nullptr; object = objectFindNext()) {
+                    if (object->pid == critterPid) {
+                        devAutotestLog("  pid %d: id %d, hp %d, tile %d, script %d\n", object->pid, object->id, object->data.critter.hp, object->tile, object->sid);
+                    }
+                    if (object->id == critterId && object->pid == critterPid) {
+                        critter = object;
+                    }
+                }
+                bool ok = critter != nullptr && critter->data.critter.hp > 1;
+                devAutotestLog("  critter id %d back on map %d: %d/%d hit points (pid %d, tile %d): %s\n", critterId, static_cast<int>(gMapHeader.index),
+                    critter != nullptr ? critter->data.critter.hp : -1, critter != nullptr ? critterGetStat(critter, STAT_MAXIMUM_HIT_POINTS) : -1,
+                    critter != nullptr ? critter->pid : -1, critter != nullptr ? critter->tile : -1, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
             }
             break;
         }
