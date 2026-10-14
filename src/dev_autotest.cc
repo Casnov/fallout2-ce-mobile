@@ -46,6 +46,8 @@
 #include "platform_compat.h"
 #include "player_commands.h"
 #include "preferences.h"
+#include "proto.h"
+#include "proto_instance.h"
 #include "queue.h"
 #include "save_storage.h"
 #include "scripts.h"
@@ -297,6 +299,13 @@ enum DevAutotestAction {
     // and is put at 1 hit point; 2 - [b] hours pass; 3 - FAIL unless that
     // critter has more than 1 hit point.
     DEV_AUTOTEST_ACTION_MAP_AGE,
+    // Where the original differs from fallout2-ce#675 (map.cc, proto.cc,
+    // proto_instance.cc): `a` 1 - FAIL unless a new critter proto's team is
+    // 1; 2 - the party member placed at the dude's tile: FAIL unless it's
+    // the tile east of the dude (the first direction tried); 3 - kills the
+    // nearest critter whose body ages; 4 - FAIL unless its body became a
+    // blood stain; 5 - FAIL unless that blood stain is gone.
+    DEV_AUTOTEST_ACTION_ORIGINAL_675,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2179,6 +2188,27 @@ static const DevAutotestStep kDevAutotestMapAgeHealSteps[] = {
     { DEV_AUTOTEST_ACTION_MAP_AGE, 3, 0, 0, 10, "a06_healed" },
 };
 
+// Where the original differs from fallout2-ce#675: a new critter proto's
+// team, the first direction tried to place a party member, the days after
+// which bodies become blood stains (6) and blood stains are removed (14) -
+// Broken Hills (dead_bodies_age=Yes), a body, 7 and then 15 days away.
+static const DevAutotestStep kDevAutotestOriginal675Steps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "o00_start" },
+    { DEV_AUTOTEST_ACTION_ORIGINAL_675, 1, 0, 0, 1, "o01_proto_team" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 3, ROTATION_SW, 30, "o02_sulik_joins", "Kcsulik.int" },
+    { DEV_AUTOTEST_ACTION_ORIGINAL_675, 2, 0, 0, 10, "o03_placed" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "o04_broken_hills", "broken1.map" },
+    { DEV_AUTOTEST_ACTION_ORIGINAL_675, 3, 0, 0, 10, "o05_body" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "o06_away", "broken2.map" },
+    { DEV_AUTOTEST_ACTION_MAP_AGE, 2, 7 * 24, 0, 10, "o07_a_week" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "o08_back", "broken1.map" },
+    { DEV_AUTOTEST_ACTION_ORIGINAL_675, 4, 0, 0, 10, "o09_blood" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "o10_away_again", "broken2.map" },
+    { DEV_AUTOTEST_ACTION_MAP_AGE, 2, 15 * 24, 0, 10, "o11_fifteen_days" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "o12_back_again", "broken1.map" },
+    { DEV_AUTOTEST_ACTION_ORIGINAL_675, 5, 0, 0, 10, "o13_no_blood" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2546,6 +2576,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "orig675") == 0) {
+        gDevAutotestSteps = kDevAutotestOriginal675Steps;
+        gDevAutotestStepCount = sizeof(kDevAutotestOriginal675Steps) / sizeof(kDevAutotestOriginal675Steps[0]);
     } else if (strcmp(name, "mapageheal") == 0) {
         gDevAutotestSteps = kDevAutotestMapAgeHealSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMapAgeHealSteps) / sizeof(kDevAutotestMapAgeHealSteps[0]);
@@ -3955,6 +3988,79 @@ void devAutotestTick()
                 devAutotestLog("  knocked out, map left: results 0x%x, wake up event %d -> %d: %s\n", static_cast<unsigned>(results), eventAdded ? 1 : 0, eventLeft ? 1 : 0, ok ? "PASS" : "FAIL");
                 results &= ~(DAM_KNOCKED_OUT | DAM_KNOCKED_DOWN);
                 queueRemoveEventsByType(critter, EVENT_TYPE_KNOCKOUT);
+                break;
+            }
+            }
+            if (!ok) {
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_ORIGINAL_675: {
+            static int bodyId = -1;
+            static int bodyPid = -1;
+            static int bodyTile = -1;
+            bool ok = true;
+            switch (static_cast<int>(step->a)) {
+            case 1: {
+                Proto proto;
+                memset(&proto, 0, sizeof(proto));
+                proto_critter_init(&proto, ProtoId(0x1000000 | 1));
+                ok = proto.critter.team == 1;
+                devAutotestLog("  new critter proto: team %d: %s\n", proto.critter.team, ok ? "PASS" : "FAIL");
+                break;
+            }
+            case 2: {
+                Object* member = devAutotestPartyMember();
+                int east = tileGetTileInDirection(gDude->tile, ROTATION_E, 1);
+                int northEast = tileGetTileInDirection(gDude->tile, ROTATION_NE, 1);
+                if (member == nullptr || !wmEvalTileNumForPlacement(east) || !wmEvalTileNumForPlacement(northEast)) {
+                    devAutotestLog("FAIL: no party member or the tiles east/north-east of the dude aren't free\n");
+                    exit(EXIT_FAILURE);
+                }
+                objectAttemptPlacementPartyMember(member, gDude->tile, gElevation);
+                ok = member->tile == east;
+                devAutotestLog("  party member placed at the dude's tile %d: tile %d (east %d, north-east %d): %s\n", gDude->tile, member->tile, east, northEast, ok ? "PASS" : "FAIL");
+                break;
+            }
+            case 3: {
+                Object* critter = nullptr;
+                int bestDistance = 0;
+                for (Object* object = objectFindFirstAtElevation(gElevation); object != nullptr; object = objectFindNextAtElevation()) {
+                    if (object == gDude || FrmId(object).objectType() != OBJ_TYPE_CRITTER || critterIsDead(object) || objectIsPartyMember(object)
+                        || critterGetKillType(object) == KILL_TYPE_ROBOT || critterFlagCheck(ProtoId(object), CRITTER_NO_AGE)) {
+                        continue;
+                    }
+                    int distance = objectGetDistanceBetween(gDude, object);
+                    if (critter == nullptr || distance < bestDistance) {
+                        critter = object;
+                        bestDistance = distance;
+                    }
+                }
+                if (critter == nullptr) {
+                    devAutotestLog("FAIL: no critter\n");
+                    exit(EXIT_FAILURE);
+                }
+                bodyId = critter->id;
+                bodyPid = critter->pid;
+                bodyTile = critter->tile;
+                critterKill(critter, ANIM_INVALID, true);
+                devAutotestLog("  killed critter pid %d (id %d) at tile %d, map %d, dead bodies age %d\n", bodyPid, bodyId, bodyTile, static_cast<int>(gMapHeader.index), wmMapDeadBodiesAge() ? 1 : 0);
+                break;
+            }
+            default: {
+                bool body = false;
+                bool blood = false;
+                for (Object* object = objectFindFirst(); object != nullptr; object = objectFindNext()) {
+                    if (object->id == bodyId && object->pid == bodyPid) {
+                        body = true;
+                    }
+                    if (object->tile == bodyTile && FrmId(object).objectType() == OBJ_TYPE_MISC && FrmId(object) == MiscFrameId::BloodPool) {
+                        blood = true;
+                    }
+                }
+                ok = step->a == 4 ? !body && blood : !body && !blood;
+                devAutotestLog("  back on map %d: body %d, blood stain %d: %s\n", static_cast<int>(gMapHeader.index), body ? 1 : 0, blood ? 1 : 0, ok ? "PASS" : "FAIL");
                 break;
             }
             }
