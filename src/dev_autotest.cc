@@ -2302,9 +2302,9 @@ static const DevAutotestStep kDevAutotestMoveAwaySteps[] = {
 // The AI picking up a weapon (sfall's fix in combat_ai.cc): an unarmed
 // critter with a Stimpak of the same id as a knife on the ground next to it
 // attacks the dude (a spear in hand) and wields the knife. Without the fix the
-// pickup returns the Stimpak and its hand stays empty. Run on a game without
-// mods' hook scripts (suite.sh: testgame-plain): RPU's HOOK_INVENWIELD script
-// wields the knife itself when the AI tries the Stimpak.
+// pickup returns the Stimpak, which it wields (RPU) or not (the unmodded
+// game). Not a party member's pid: the NPC armor mod (RPU) swaps a party
+// member's unanimated item in hand for another weapon, hiding the bug.
 static const DevAutotestStep kDevAutotestRetrieveObjectSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "j00_start" },
     { DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT, 1, 3, 4, 10, "j01_unarmed" },
@@ -4119,6 +4119,8 @@ void devAutotestTick()
         }
         case DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT: {
             static int critterId = -1;
+            // A critter the NPC armor mod doesn't handle (npcarmor.ini).
+            constexpr int RETRIEVE_CRITTER = 67;
             int weaponPid = static_cast<int>(step->c);
             if (step->a == 1) {
                 int distance = static_cast<int>(step->b);
@@ -4138,7 +4140,7 @@ void devAutotestTick()
                 Object* critter = nullptr;
                 Object* weapon = nullptr;
                 Object* decoy = nullptr;
-                if (rotation == -1 || objectCreateWithProtoId(&critter, ProtoId(0x1000000 | 97)) != 0
+                if (rotation == -1 || objectCreateWithProtoId(&critter, ProtoId(0x1000000 | RETRIEVE_CRITTER)) != 0
                     || objectCreateWithProtoId(&weapon, ProtoId(weaponPid)) != 0
                     || objectCreateWithProtoId(&decoy, ProtoId(ItemProtoTypeId::Stimpak)) != 0) {
                     devAutotestLog("FAIL: no free line or no objects\n");
