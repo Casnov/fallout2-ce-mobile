@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 22 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **16** (9 gameplay, 7 scripts) + 6 likely + 1 partly |
+| Ported by the port, offered to CE | 23 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **15** (8 gameplay, 7 scripts) + 6 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,7 +41,7 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. AI: **#45** (and likely **#124**) multihex critters, **#114** an NPC stuck picking up an item in combat.
+1. AI: **#45** (and likely **#124**) multihex critters.
 2. **#53** destroy_p_proc not run for critters killed by explosives when
    leaving the map; **#70** damage_p_proc of non-critters on misses;
    **#33** dropping worn armor (drop_obj) keeps its AC.
@@ -172,7 +172,7 @@ amount, **#147** create_object_sid with no script.
 | 111 | Fix for a duplicate obj_dude script being created when loading a saved game | `BugFixes.cpp:4530` | unclear | game | duplicate obj_dude script on load: CE's _obj_load_dude clears/sets the dude script; map_load_file part not compared |
 | 112 | Fix for the start procedure not being called correctly if the required standard script procedure is missing | `BugFixes.cpp:4537` | yes | scripts | CE note in scriptExecProc |
 | 113 | Fix the argument value of dialogue_reaction function | `BugFixes.cpp:4541` | **no** | scripts | opGameDialogReaction passes the raw value (sfall maps fidget 1-3/4/5+ to good/neutral/bad) |
-| 114 | Fix for NPC stuck in a loop of picking up items in combat and the incorrect message being displayed when the NPC cannot pick up an item due to not enough space in the inventory | `BugFixes.cpp:4544` | **no** | game | objectPickup: an NPC in combat over its weight fails (pickup loop) and gets the player's "you cannot pick up" message |
+| 114 | Fix for NPC stuck in a loop of picking up items in combat and the incorrect message being displayed when the NPC cannot pick up an item due to not enough space in the inventory | `BugFixes.cpp:4544` | port | game | objectPickup: an NPC in combat picks up regardless of weight, its own message when it can't (fallout2-ce#860) |
 | 115 | Fix for anim_move_to_tile_ engine function ignoring the distance argument for the player | `BugFixes.cpp:4550` | port | game | the player's walk to a free tile stops at its distance (fallout2-ce#852) |
 | 116 | Fix for the player's movement in combat being interrupted when trying to use objects with Bonus Move APs available | `BugFixes.cpp:4554` | port | game | walks to use objects and ladders count the free move points (fallout2-ce#852) |
 | 117 | Fix for Scout perk being taken into account when setting the visibility of locations with mark_area_known function also fix the incorrect coordinates for small/medium location circles that the engine uses to highlight their sub-tiles and fix visited tiles on the world map being darkened again when a location is added next to them | `BugFixes.cpp:4564` | not checked | game | mark_area_known and the Scout perk / location circle coordinates |
