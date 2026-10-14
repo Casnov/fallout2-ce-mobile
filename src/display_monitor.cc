@@ -94,6 +94,8 @@ static int gDisplayMonitorLinesCapacity;
 // 0x56FB54 disp_start
 static int _disp_start;
 
+static std::string gDisplayMonitorLastMessage;
+
 // 0x56FB58 lastTime
 static unsigned int gDisplayMonitorLastBeepTimestamp;
 
@@ -239,6 +241,12 @@ void displayMonitorExit()
 }
 
 // 0x43186C display_print
+// The last message added, whole (lines split it): for the autotests.
+const char* displayMonitorGetLastMessage()
+{
+    return gDisplayMonitorLastMessage.c_str();
+}
+
 void displayMonitorAddMessage(const char* str)
 {
     if (!gDisplayMonitorInitialized || str == nullptr) {
@@ -247,6 +255,8 @@ void displayMonitorAddMessage(const char* str)
 
     // SFALL
     consoleFileAddMessage(str);
+
+    gDisplayMonitorLastMessage = str;
 
     touchHudAddMessage(str);
     muiNotify(str, MuiNoticeKind::Log);

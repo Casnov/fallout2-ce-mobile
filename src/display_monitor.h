@@ -7,6 +7,7 @@ int displayMonitorInit();
 int displayMonitorReset();
 void displayMonitorExit();
 void displayMonitorAddMessage(const char* string);
+const char* displayMonitorGetLastMessage();
 void displayMonitorDisable();
 void displayMonitorEnable();
 

@@ -21,6 +21,7 @@
 #include "combat_ai.h"
 #include "critter.h"
 #include "db.h"
+#include "display_monitor.h"
 #include "elevator.h"
 #include "game.h"
 #include "game_commands.h"
@@ -336,6 +337,7 @@ enum DevAutotestAction {
     // the weapon's id, the dude armed; 2 - FAIL unless the weapon is in its
     // hand.
     DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT,
+    DEV_AUTOTEST_ACTION_NPC_PICKUP,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2312,6 +2314,19 @@ static const DevAutotestStep kDevAutotestRetrieveObjectSteps[] = {
     { DEV_AUTOTEST_ACTION_RETRIEVE_OBJECT, 2, 3, 4, 10, "j03_wielded" },
 };
 
+// An NPC over its weight picking up an item (sfall's fix in
+// proto_instance.cc): out of combat its failed pickup shows the NPC's
+// message, not the player's; in combat an unarmed critter loaded with armor
+// attacks the dude (a spear in hand) and picks up the knife next to it.
+// Without the fix the knife stays on the ground (the pickup fails until its
+// action points run out).
+static const DevAutotestStep kDevAutotestNpcPickupSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "k00_start" },
+    { DEV_AUTOTEST_ACTION_NPC_PICKUP, 1, 3, 4, 10, "k01_overloaded" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT_ATTACKED, 0, 0, 0, 60, "k02_attacked" },
+    { DEV_AUTOTEST_ACTION_NPC_PICKUP, 2, 3, 4, 10, "k03_picked_up" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2679,6 +2694,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "npcpickup") == 0) {
+        gDevAutotestSteps = kDevAutotestNpcPickupSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestNpcPickupSteps) / sizeof(kDevAutotestNpcPickupSteps[0]);
     } else if (strcmp(name, "retrieveobj") == 0) {
         gDevAutotestSteps = kDevAutotestRetrieveObjectSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestRetrieveObjectSteps) / sizeof(kDevAutotestRetrieveObjectSteps[0]);
@@ -4186,6 +4204,99 @@ void devAutotestTick()
                 bool ok = inHand != nullptr && inHand->pid == weaponPid;
                 devAutotestLog("  after its turn: in hand pid %d: %s\n", inHand != nullptr ? inHand->pid : -1, ok ? "PASS" : "FAIL");
                 if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_NPC_PICKUP: {
+            static int critterId = -1;
+            static int weaponId = -1;
+            static bool messageOk = false;
+            // A critter the NPC armor mod doesn't handle (npcarmor.ini).
+            constexpr int PICKUP_CRITTER = 67;
+            int weaponPid = static_cast<int>(step->c);
+            if (step->a == 1) {
+                int distance = static_cast<int>(step->b);
+                int rotation = -1;
+                for (int candidate = 0; candidate < ROTATION_COUNT && rotation == -1; candidate++) {
+                    bool free = true;
+                    for (int hex = 1; hex <= distance + 1; hex++) {
+                        int tile = tileGetTileInDirection(gDude->tile, static_cast<Rotation>(candidate), hex);
+                        if (_obj_blocking_at(nullptr, tile, gDude->elevation) != nullptr) {
+                            free = false;
+                        }
+                    }
+                    if (free) {
+                        rotation = candidate;
+                    }
+                }
+                Object* critter = nullptr;
+                Object* weapon = nullptr;
+                Object* load = nullptr;
+                if (rotation == -1 || objectCreateWithProtoId(&critter, ProtoId(0x1000000 | PICKUP_CRITTER)) != 0
+                    || objectCreateWithProtoId(&weapon, ProtoId(weaponPid)) != 0
+                    || objectCreateWithProtoId(&load, ProtoId(ItemProtoTypeId::PowerArmor)) != 0) {
+                    devAutotestLog("FAIL: no free line or no objects\n");
+                    exit(EXIT_FAILURE);
+                }
+                critter->sid = -1;
+                critter->data.critter.combat.team = 77;
+                // Nothing to fight with in its inventory.
+                while (critter->data.inventory.length > 0) {
+                    Object* item = critter->data.inventory.items[0].item;
+                    itemRemove(critter, item, critter->data.inventory.items[0].quantity);
+                }
+                objectSetLocation(critter, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance), gDude->elevation, nullptr);
+                objectSetLocation(weapon, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance + 1), gDude->elevation, nullptr);
+                // Armor past its carry weight.
+                int carryWeight = critterGetStat(critter, STAT_CARRY_WEIGHT);
+                int loadQuantity = carryWeight / std::max(itemGetWeight(load), 1) + 1;
+                itemAdd(critter, load, loadQuantity);
+                _obj_disconnect(load, nullptr);
+                critterId = critter->id;
+                weaponId = weapon->id;
+
+                // Out of combat the pickup fails: whose message.
+                objectPickup(critter, weapon);
+                char expected[160];
+                snprintf(expected, sizeof(expected), muiText(375, "%s cannot pick up the item."), critterGetName(critter));
+                const char* message = displayMonitorGetLastMessage();
+                messageOk = strcmp(message, expected) == 0 && weapon->owner == nullptr;
+                devAutotestLog("  out of combat: weight %d of %d, the knife %s, message \"%s\": %s\n", objectGetInventoryWeight(critter), carryWeight,
+                    weapon->owner == nullptr ? "on the ground" : "picked up", message, messageOk ? "PASS" : "FAIL");
+
+                // The AI looks for a weapon (_ai_switch_weapons) when its target
+                // holds one: the dude wields a spear (the starting dude of the
+                // unmodded game has no knife animations).
+                Object* dudeWeapon = nullptr;
+                if (objectCreateWithProtoId(&dudeWeapon, ProtoId(7)) == 0) {
+                    itemAdd(gDude, dudeWeapon, 1);
+                    _obj_disconnect(dudeWeapon, nullptr);
+                    inventoryEquipFunc(gDude, dudeWeapon, interfaceGetCurrentHand(), false);
+                }
+                devAutotestLog("  unarmed critter at tile %d, weapon pid %d on tile %d\n", critter->tile, weaponPid, weapon->tile);
+            } else {
+                Object* critter = nullptr;
+                for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                    if (object->id == critterId && FrmId(object).objectType() == OBJ_TYPE_CRITTER) {
+                        critter = object;
+                    }
+                }
+                Object* picked = nullptr;
+                if (critter != nullptr) {
+                    for (int index = 0; index < critter->data.inventory.length; index++) {
+                        Object* item = critter->data.inventory.items[index].item;
+                        if (item->id == weaponId && item->pid == weaponPid) {
+                            picked = item;
+                        }
+                    }
+                }
+                bool ok = picked != nullptr;
+                devAutotestLog("  after its turn: weight %d of %d, the knife %s: %s\n",
+                    critter != nullptr ? objectGetInventoryWeight(critter) : -1, critter != nullptr ? critterGetStat(critter, STAT_CARRY_WEIGHT) : -1,
+                    ok ? "in its inventory" : "not in its inventory", ok ? "PASS" : "FAIL");
+                if (!ok || !messageOk) {
                     exit(EXIT_FAILURE);
                 }
             }
