@@ -340,6 +340,7 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_NPC_PICKUP,
     DEV_AUTOTEST_ACTION_MULTIHEX_MOVE,
     DEV_AUTOTEST_ACTION_CHECK_MULTIHEX_PARTY,
+    DEV_AUTOTEST_ACTION_EXPLODE_ON_LEAVE,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2372,6 +2373,21 @@ static const DevAutotestStep kDevAutotestMultihexPartySteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_MULTIHEX_PARTY, 0, 0, 0, 10, "p02_placed" },
 };
 
+// Explosives going off as the dude leaves the map kill a critter with a
+// script (sfall's fix in actions.cc): its destroy_p_proc runs. An Arroyo
+// warrior's (ACWarior.int, the same with RPU and without) sets global var 7
+// whoever the killer (sfall passes none; Klint's, for one, does nothing
+// then); without the fix the critter dies with its script removed first and
+// the var stays 0. Lit dynamite on its tile, 1 HP, then to an empty desert
+// map (desert1 is map 0, the world map) and back: the critter lies dead.
+static const DevAutotestStep kDevAutotestExplodeOnLeaveSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "e00_start" },
+    { DEV_AUTOTEST_ACTION_EXPLODE_ON_LEAVE, 1, 0, 0, 10, "e01_dynamite" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "e02_desert", "desert2.map" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "e03_back", "artemple.map" },
+    { DEV_AUTOTEST_ACTION_EXPLODE_ON_LEAVE, 2, 0, 0, 10, "e04_destroy_p_proc" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2739,6 +2755,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "explodeleave") == 0) {
+        gDevAutotestSteps = kDevAutotestExplodeOnLeaveSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestExplodeOnLeaveSteps) / sizeof(kDevAutotestExplodeOnLeaveSteps[0]);
     } else if (strcmp(name, "multihexparty") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexPartySteps) / sizeof(kDevAutotestMultihexPartySteps[0]);
@@ -4257,6 +4276,56 @@ void devAutotestTick()
                 }
                 bool ok = inHand != nullptr && inHand->pid == weaponPid;
                 devAutotestLog("  after its turn: in hand pid %d: %s\n", inHand != nullptr ? inHand->pid : -1, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_EXPLODE_ON_LEAVE: {
+            // The global var the warrior's destroy_p_proc sets to 1.
+            constexpr int kWarriorDestroyVar = 7;
+            static int warriorId = -1;
+            if (step->a == 1) {
+                // A free tile near the dude, away from Klint and the others.
+                int tile = -1;
+                for (int candidate = 0; candidate < ROTATION_COUNT && tile == -1; candidate++) {
+                    int candidateTile = tileGetTileInDirection(gDude->tile, static_cast<Rotation>(candidate), 4);
+                    if (_obj_blocking_at(nullptr, candidateTile, gDude->elevation) == nullptr) {
+                        tile = candidateTile;
+                    }
+                }
+                Object* warrior = nullptr;
+                Object* dynamite = nullptr;
+                if (tile == -1 || objectCreateWithProtoId(&warrior, ProtoId(0x1000000 | 67)) != 0
+                    || objectCreateWithProtoId(&dynamite, ProtoId(ItemProtoTypeId::Dynamite)) != 0) {
+                    devAutotestLog("FAIL: no free tile or no objects\n");
+                    exit(EXIT_FAILURE);
+                }
+                warrior->sid = -1;
+                objectSetLocation(warrior, tile, gDude->elevation, nullptr);
+                devAutotestAttachScript(warrior, "ACWarior.int");
+                warrior->data.critter.hp = 1;
+                objectSetLocation(dynamite, warrior->tile, warrior->elevation, nullptr);
+                // Lit, going off long after the dude has left.
+                queueAddEvent(10000, dynamite, nullptr, EVENT_TYPE_EXPLOSION);
+                warriorId = warrior->id;
+                devAutotestLog("  a critter with ACWarior.int (sid %d) at tile %d with 1 HP, lit dynamite on its tile; global var %d: %d\n", warrior->sid, warrior->tile,
+                    kWarriorDestroyVar, gameGetGlobalVar(static_cast<GameGlobalVar>(kWarriorDestroyVar)));
+                if (warrior->sid == -1) {
+                    exit(EXIT_FAILURE);
+                }
+            } else {
+                int value = gameGetGlobalVar(static_cast<GameGlobalVar>(kWarriorDestroyVar));
+                bool dead = false;
+                for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                    if (object->id == warriorId && FrmId(object).objectType() == OBJ_TYPE_CRITTER && critterIsDead(object)) {
+                        dead = true;
+                    }
+                }
+                bool ok = dead && value == 1;
+                devAutotestLog("  back on map %d: the critter %s, global var %d: %d (its destroy_p_proc ran): %s\n", static_cast<int>(gMapHeader.index),
+                    dead ? "dead" : "NOT DEAD", kWarriorDestroyVar, value, ok ? "PASS" : "FAIL");
                 if (!ok) {
                     exit(EXIT_FAILURE);
                 }
