@@ -2282,12 +2282,13 @@ static const DevAutotestStep kDevAutotestDrugSaveSteps[] = {
 };
 
 // "Unlimited Ammo" (sfall's fix in inventoryEquipFunc): a stack of two
-// knives wielded puts one in the hand, the other stays in the inventory (the
-// starting dude has no pistol animations to wield a gun).
+// spears wielded puts one in the hand, the other stays in the inventory (the
+// starting dude has no pistol animations to wield a gun, and without RPU no
+// knife ones either).
 static const DevAutotestStep kDevAutotestWieldStackSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "u00_start" },
-    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 4, 2, 0, 1, "u01_two_knives" },
-    { DEV_AUTOTEST_ACTION_WIELD_STACK, 4, 2, 0, 30, "u02_wielded" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 7, 2, 0, 1, "u01_two_spears" },
+    { DEV_AUTOTEST_ACTION_WIELD_STACK, 7, 2, 0, 30, "u02_wielded" },
 };
 
 // Burst friendly fire (sfall's fix in combat.cc): an attacker with a 10mm SMG
@@ -4928,6 +4929,13 @@ void devAutotestTick()
                 devAutotestLog("FAIL: no item pid %d\n", pid);
                 exit(EXIT_FAILURE);
             }
+            // The dude may have some already (the starting dude's spear).
+            int totalBefore = 0;
+            for (int index = 0; index < gDude->data.inventory.length; index++) {
+                if (gDude->data.inventory.items[index].item->pid == pid) {
+                    totalBefore += gDude->data.inventory.items[index].quantity;
+                }
+            }
             int rc = inventoryEquipFunc(gDude, stack, HAND_RIGHT, false);
             Object* inHand = critterGetItem2(gDude);
 
@@ -4944,8 +4952,8 @@ void devAutotestTick()
                     }
                 }
             }
-            bool ok = rc == 0 && inHand != nullptr && inHand->pid == pid && inHandQuantity == 1 && total == static_cast<int>(step->b);
-            devAutotestLog("  stack of pid %d wielded (rc %d): in hand x%d, %d in %d entries: %s\n", pid, rc, inHandQuantity, total, entries, ok ? "PASS" : "FAIL");
+            bool ok = rc == 0 && inHand != nullptr && inHand->pid == pid && inHandQuantity == 1 && totalBefore >= static_cast<int>(step->b) && total == totalBefore;
+            devAutotestLog("  stack of pid %d wielded (rc %d): in hand x%d, %d (were %d) in %d entries: %s\n", pid, rc, inHandQuantity, total, totalBefore, entries, ok ? "PASS" : "FAIL");
             if (!ok) {
                 exit(EXIT_FAILURE);
             }
