@@ -341,6 +341,8 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_MULTIHEX_MOVE,
     DEV_AUTOTEST_ACTION_CHECK_MULTIHEX_PARTY,
     DEV_AUTOTEST_ACTION_EXPLODE_ON_LEAVE,
+    DEV_AUTOTEST_ACTION_STEAL_PARTY_MEMBER,
+    DEV_AUTOTEST_ACTION_CHECK_PARTY_WEIGHT,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2388,6 +2390,46 @@ static const DevAutotestStep kDevAutotestExplodeOnLeaveSteps[] = {
     { DEV_AUTOTEST_ACTION_EXPLODE_ON_LEAVE, 2, 0, 0, 10, "e04_destroy_p_proc" },
 };
 
+// A party member's equipped items count in its weight on the barter and
+// steal screens (sfall's fix in item.cc/inventory.cc): Sulik in metal armor
+// with a sledgehammer, loaded up to what he can carry with them, is offered
+// the dude's sledgehammer in barter (or it is planted on him). Without the
+// fix the screens count only his inventory without what they took off him,
+// he takes it and is overloaded after.
+static const DevAutotestStep kDevAutotestPartyWeightSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "w00_start" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 2, ROTATION_SE, 10, "w01_sulik", "Kcsulik.int" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 2, 0, 0, 1, "w02_metal_armor" },
+    { DEV_AUTOTEST_ACTION_WIELD_PARTY_ITEM, 2, 0, 0, 1, "w03_wears_it" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 6, 0, 0, 1, "w04_sledgehammer" },
+    { DEV_AUTOTEST_ACTION_WIELD_PARTY_ITEM, 6, 0, 0, 1, "w05_wields_it" },
+    { DEV_AUTOTEST_ACTION_FILL_PARTY_WEIGHT, 19, 0, 0, 1, "w06_full" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 6, 0, 0, 1, "w07_dude_sledgehammer" },
+    { DEV_AUTOTEST_ACTION_CENTER_CRITTER, 0, 0, 0, 10, "w08_center" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 0, 0, 300, "w09_talk" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "w10_barter", "dialog.tab.barter" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 40, "w11_offer_sledgehammer", "barter.player.pid.6", "barter.offer" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 60, "w12_offered", "barter.offer.button" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "w13_talk", "dialog.tab.talk" },
+    { DEV_AUTOTEST_ACTION_CHECK_PARTY_WEIGHT, 0, 0, 0, 1, "w14_not_overloaded" },
+};
+
+static const DevAutotestStep kDevAutotestPartyWeightStealSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "v00_start" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 2, ROTATION_SE, 10, "v01_sulik", "Kcsulik.int" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 2, 0, 0, 1, "v02_metal_armor" },
+    { DEV_AUTOTEST_ACTION_WIELD_PARTY_ITEM, 2, 0, 0, 1, "v03_wears_it" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 6, 0, 0, 1, "v04_sledgehammer" },
+    { DEV_AUTOTEST_ACTION_WIELD_PARTY_ITEM, 6, 0, 0, 1, "v05_wields_it" },
+    { DEV_AUTOTEST_ACTION_FILL_PARTY_WEIGHT, 19, 0, 0, 1, "v06_full" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 6, 0, 0, 1, "v07_dude_sledgehammer" },
+    { DEV_AUTOTEST_ACTION_STEAL_PARTY_MEMBER, 0, 0, 0, 1, "v08_steal" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "v08b_shown" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 40, "v09_plant_sledgehammer", "loot.left.pid.6", "loot.right" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 60, "v10_closed", "loot.back" },
+    { DEV_AUTOTEST_ACTION_CHECK_PARTY_WEIGHT, 0, 0, 0, 1, "v11_not_overloaded" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2755,6 +2797,12 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "partyweight") == 0) {
+        gDevAutotestSteps = kDevAutotestPartyWeightSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestPartyWeightSteps) / sizeof(kDevAutotestPartyWeightSteps[0]);
+    } else if (strcmp(name, "partyweightsteal") == 0) {
+        gDevAutotestSteps = kDevAutotestPartyWeightStealSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestPartyWeightStealSteps) / sizeof(kDevAutotestPartyWeightStealSteps[0]);
     } else if (strcmp(name, "explodeleave") == 0) {
         gDevAutotestSteps = kDevAutotestExplodeOnLeaveSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestExplodeOnLeaveSteps) / sizeof(kDevAutotestExplodeOnLeaveSteps[0]);
@@ -4279,6 +4327,39 @@ void devAutotestTick()
                 if (!ok) {
                     exit(EXIT_FAILURE);
                 }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_STEAL_PARTY_MEMBER: {
+            Object* member = devAutotestPartyMember();
+            if (member == nullptr) {
+                devAutotestLog("FAIL: no party member\n");
+                exit(EXIT_FAILURE);
+            }
+            devAutotestLog("  stealing from the party member: weight %d of %d\n", objectGetInventoryWeight(member), critterGetStat(member, STAT_CARRY_WEIGHT));
+            // The screen's loop runs the next steps.
+            gDevAutotestPendingCapture = step->name;
+            gDevAutotestStep++;
+            gDevAutotestStepStarted = false;
+            inventoryOpenStealing(gDude, member);
+            return;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_PARTY_WEIGHT: {
+            Object* member = devAutotestPartyMember();
+            int weight = member != nullptr ? objectGetInventoryWeight(member) : -1;
+            int carryWeight = member != nullptr ? critterGetStat(member, STAT_CARRY_WEIGHT) : -1;
+            int sledgehammers = 0;
+            if (member != nullptr) {
+                for (int index = 0; index < member->data.inventory.length; index++) {
+                    if (member->data.inventory.items[index].item->pid == 6) {
+                        sledgehammers += member->data.inventory.items[index].quantity;
+                    }
+                }
+            }
+            bool ok = member != nullptr && weight <= carryWeight;
+            devAutotestLog("  the party member: weight %d of %d, sledgehammers %d: %s\n", weight, carryWeight, sledgehammers, ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
             }
             break;
         }
