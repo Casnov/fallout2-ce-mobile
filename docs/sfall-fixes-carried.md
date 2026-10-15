@@ -43,6 +43,7 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for multihex critters moving too close and overlapping their targets in combat (`Modules/BugFixes.cpp`) | 28d0b87e | [fallout2-ce#861](https://github.com/fallout2-ce/fallout2-ce/pull/861) | `multihexmove`, `multihexretarget` | open |
 | Fix the placement of multihex critters in the player's party when entering a map or elevation (`Modules/BugFixes.cpp`) | e67d3b60 | [fallout2-ce#862](https://github.com/fallout2-ce/fallout2-ce/pull/862) | `multihexparty` | open |
 | Fix for destroy_p_proc not being called if the critter is killed by explosives when you leave the map (`Modules/BugFixes.cpp`) | a9939729 | [fallout2-ce#863](https://github.com/fallout2-ce/fallout2-ce/pull/863) | `explodeleave` | open |
+| Fix for not counting in the weight/size of equipped items on NPC when stealing or bartering (`Modules/BugFixes.cpp`; CE counted them only in the loot screen's weight label) | 2533b1ac | [fallout2-ce#864](https://github.com/fallout2-ce/fallout2-ce/pull/864) | `partyweight`, `partyweightsteal` | open |
 
 ## Other fixes offered to CE
 

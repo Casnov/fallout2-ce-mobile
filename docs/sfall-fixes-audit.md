@@ -31,8 +31,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 | | Count |
 |---|---|
-| CE has it | 96 (3 of them likely) |
-| Ported by the port, offered to CE | 26 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| CE has it | 95 (3 of them likely) |
+| Ported by the port, offered to CE | 27 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
 | **Missing in CE** | **13** (6 gameplay, 7 scripts) + 5 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
@@ -95,7 +95,7 @@ amount, **#147** create_object_sid with no script.
 | 36 | Fix for "Unlimited Ammo" exploit | `BugFixes.cpp:4051` | port | game | inventoryEquipFunc wields one item of a stack (fallout2-ce#856) |
 | 37 | Fix for negative values in Skilldex window ("S") | `BugFixes.cpp:4055` | yes | original screens | SFALL note in skilldexWindowInit |
 | 38 | Fix for negative SPECIAL values in character creation | `BugFixes.cpp:4059` | **no** | game | _is_supper_bonus / stat buttons: no lower bound for SPECIAL in character creation |
-| 39 | Fix for not counting in the weight/size of equipped items on NPC when stealing or bartering | `BugFixes.cpp:4066` | yes | game | objectGetInventoryWeight counts equipped items (barter/loot screen parts not checked) |
+| 39 | Fix for not counting in the weight/size of equipped items on NPC when stealing or bartering | `BugFixes.cpp:4066` | port | game | was partly: CE counted the stripped equipment only in the loot screen's label, the barter and steal checks didn't (a party member could be overloaded; found in play 2026-10-15, reproduced in clean CE); fallout2-ce#864 |
 | 40 | Fix for minor visual glitch when picking up solo item from the top of inventory and there is multiple item stack at the bottom of inventory | `BugFixes.cpp:4077` | not checked | original screens | inventory pickup visual glitch |
 | 41 | Fix for error in player's inventory, related to IFACE_BAR_MODE=1 in f2_res.ini, and also for reverse order error | `BugFixes.cpp:4080` | not checked | original screens | inventory IFACE_BAR_MODE / reverse order error |
 | 42 | Fix for using only one box of ammo when a weapon is above the ammo in the inventory list | `BugFixes.cpp:4083` | not checked | original screens | dropping ammo on a weapon above it in the list uses one box |
