@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 95 (3 of them likely) |
-| Ported by the port, offered to CE | 27 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **13** (6 gameplay, 7 scripts) + 5 likely + 1 partly |
+| Ported by the port, offered to CE | 28 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **12** (5 gameplay, 7 scripts) + 5 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,8 +41,7 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#70** damage_p_proc of non-critters on misses;
-   **#33** dropping worn armor (drop_obj) keeps its AC.
+1. **#33** dropping worn armor (drop_obj) keeps its AC.
 2. **#75** exit grids while loading or entering a map; **#109** the
    automap reveals unexplored areas when entering a map; **#160**
    misc items' charges not fixed on load; **#152** knocked-down team
@@ -126,7 +125,7 @@ amount, **#147** create_object_sid with no script.
 | 67 | Fix for the incorrect object type search when loading a game saved in combat mode | `BugFixes.cpp:4263` | yes | game | SFALL notes in combatLoad |
 | 68 | Fix for Bonus Move APs being replenished when you save and load the game in combat | `BugFixes.cpp:4267` | port | game | the turn resumed after loading keeps the saved free move points (fallout2-ce#851) |
 | 69 | Fix for the displayed message when the attack randomly hits a target that is not a critter and has a script attached Tweak: if the main target has Flat flag set, display the "You missed" message instead of the message of hitting another object | `BugFixes.cpp:4274` | no? | game | _combat_display: no special message for a scripted non-critter main target |
-| 70 | Fix for damage_p_proc being called for misses if the target is not a critter | `BugFixes.cpp:4278` | **no** | game | _apply_damage runs damage_p_proc of a non-critter target on misses too |
+| 70 | Fix for damage_p_proc being called for misses if the target is not a critter | `BugFixes.cpp:4278` | port | game | _apply_damage runs damage_p_proc of a non-critter target only on hits (fallout2-ce#865) |
 | 71 | Fix for the double damage effect of Silent Death perk not being applied to critical hits | `BugFixes.cpp:4281` | yes | game | SFALL note in attackCompute (Silent Death) |
 | 72 | Fix crash when calling partyMemberGetCurLevel_ on a critter that has no data in party.txt | `BugFixes.cpp:4288` | yes | game | partyMemberGetCurrentLevel returns 0 for unknown critters |
 | 73 | Fix for player's base EMP DR not being properly initialized when creating a new character and then starting the game | `BugFixes.cpp:4291` | yes | game | SFALL note in _ResetPlayer |
