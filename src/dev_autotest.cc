@@ -343,6 +343,7 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_EXPLODE_ON_LEAVE,
     DEV_AUTOTEST_ACTION_STEAL_PARTY_MEMBER,
     DEV_AUTOTEST_ACTION_CHECK_PARTY_WEIGHT,
+    DEV_AUTOTEST_ACTION_MISS_OBJECT,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2430,6 +2431,17 @@ static const DevAutotestStep kDevAutotestPartyWeightStealSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_PARTY_WEIGHT, 0, 0, 0, 1, "v11_not_overloaded" },
 };
 
+// A miss on an object that isn't a critter (sfall's fix in combat.cc):
+// its damage_p_proc doesn't run. An item on the ground with the Arroyo
+// Elder's script (AHElder.int, whose damage_p_proc sets global var 7, the
+// same with RPU and without) gets the dude's miss, then a hit: the var
+// stays 0 after the miss and is 1 after the hit. Without the fix the miss
+// already sets it.
+static const DevAutotestStep kDevAutotestMissObjectSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "o00_start" },
+    { DEV_AUTOTEST_ACTION_MISS_OBJECT, 0, 0, 0, 10, "o01_miss_then_hit" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2797,6 +2809,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "missobject") == 0) {
+        gDevAutotestSteps = kDevAutotestMissObjectSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMissObjectSteps) / sizeof(kDevAutotestMissObjectSteps[0]);
     } else if (strcmp(name, "partyweight") == 0) {
         gDevAutotestSteps = kDevAutotestPartyWeightSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartyWeightSteps) / sizeof(kDevAutotestPartyWeightSteps[0]);
@@ -4327,6 +4342,40 @@ void devAutotestTick()
                 if (!ok) {
                     exit(EXIT_FAILURE);
                 }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MISS_OBJECT: {
+            // The global var the Elder's damage_p_proc sets to 1.
+            constexpr int kElderDamageVar = 7;
+            Object* object = nullptr;
+            if (objectCreateWithProtoId(&object, ProtoId(ItemProtoTypeId::Dynamite)) != 0) {
+                devAutotestLog("FAIL: no object\n");
+                exit(EXIT_FAILURE);
+            }
+            object->sid = -1;
+            objectSetLocation(object, tileGetTileInDirection(gDude->tile, ROTATION_SE, 1), gDude->elevation, nullptr);
+            devAutotestAttachScript(object, "AHElder.int");
+            if (object->sid == -1) {
+                exit(EXIT_FAILURE);
+            }
+
+            int before = gameGetGlobalVar(static_cast<GameGlobalVar>(kElderDamageVar));
+            Attack attack;
+            attackInit(&attack, gDude, object, HIT_MODE_PUNCH, HIT_LOCATION_TORSO);
+            attack.attackerFlags = DAM_NONE;
+            _apply_damage(&attack, false);
+            int afterMiss = gameGetGlobalVar(static_cast<GameGlobalVar>(kElderDamageVar));
+
+            attackInit(&attack, gDude, object, HIT_MODE_PUNCH, HIT_LOCATION_TORSO);
+            attack.attackerFlags = DAM_HIT;
+            _apply_damage(&attack, false);
+            int afterHit = gameGetGlobalVar(static_cast<GameGlobalVar>(kElderDamageVar));
+
+            bool ok = before == 0 && afterMiss == 0 && afterHit == 1;
+            devAutotestLog("  an item with AHElder.int: global var %d %d, after a miss %d, after a hit %d: %s\n", kElderDamageVar, before, afterMiss, afterHit, ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
             }
             break;
         }
