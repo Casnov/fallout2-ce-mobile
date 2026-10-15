@@ -344,6 +344,7 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_STEAL_PARTY_MEMBER,
     DEV_AUTOTEST_ACTION_CHECK_PARTY_WEIGHT,
     DEV_AUTOTEST_ACTION_MISS_OBJECT,
+    DEV_AUTOTEST_ACTION_DROP_WORN_ARMOR,
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
@@ -2442,6 +2443,18 @@ static const DevAutotestStep kDevAutotestMissObjectSteps[] = {
     { DEV_AUTOTEST_ACTION_MISS_OBJECT, 0, 0, 0, 10, "o01_miss_then_hit" },
 };
 
+// A script drops the armor the dude or a party member wears (drop_obj,
+// objectDrop; sfall's fix in proto_instance.cc): its stats go with it.
+// Leather armor on (the dude's as the inventory screen puts it on), then
+// dropped: the armor class is back to what it was. Without the fix they
+// keep the armor's.
+static const DevAutotestStep kDevAutotestDropArmorSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "a00_start" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 2, ROTATION_SE, 10, "a01_sulik", "Kcsulik.int" },
+    { DEV_AUTOTEST_ACTION_DROP_WORN_ARMOR, 1, 0, 0, 10, "a02_dude_drops" },
+    { DEV_AUTOTEST_ACTION_DROP_WORN_ARMOR, 1, 1, 0, 10, "a03_sulik_drops" },
+};
+
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
 static const DevAutotestStep kDevAutotestStateSteps[] = {
@@ -2809,6 +2822,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "party") == 0) {
         gDevAutotestSteps = kDevAutotestPartySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPartySteps) / sizeof(kDevAutotestPartySteps[0]);
+    } else if (strcmp(name, "droparmor") == 0) {
+        gDevAutotestSteps = kDevAutotestDropArmorSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestDropArmorSteps) / sizeof(kDevAutotestDropArmorSteps[0]);
     } else if (strcmp(name, "missobject") == 0) {
         gDevAutotestSteps = kDevAutotestMissObjectSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMissObjectSteps) / sizeof(kDevAutotestMissObjectSteps[0]);
@@ -4342,6 +4358,37 @@ void devAutotestTick()
                 if (!ok) {
                     exit(EXIT_FAILURE);
                 }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_DROP_WORN_ARMOR: {
+            int armorPid = static_cast<int>(step->a);
+            // `b` - 1: the party member, else the dude.
+            Object* critter = step->b == 1 ? devAutotestPartyMember() : gDude;
+            Object* armor = nullptr;
+            if (critter == nullptr || critterGetArmor(critter) != nullptr || objectCreateWithProtoId(&armor, ProtoId(armorPid)) != 0) {
+                devAutotestLog("FAIL: no critter, it wears armor already or no armor\n");
+                exit(EXIT_FAILURE);
+            }
+            int baseArmorClass = critterGetStat(critter, STAT_ARMOR_CLASS);
+            itemAdd(critter, armor, 1);
+            _obj_disconnect(armor, nullptr);
+            inventoryEquip(critter, armor, HAND_RIGHT);
+            if (critter == gDude) {
+                // inven_wield leaves the dude's stats to the inventory screen.
+                adjustCritterStatsOnArmorChange(critter, nullptr, armor);
+            }
+            int wornArmorClass = critterGetStat(critter, STAT_ARMOR_CLASS);
+            bool worn = critterGetArmor(critter) == armor;
+            // What a script's drop_obj does.
+            objectDrop(critter, armor);
+            int droppedArmorClass = critterGetStat(critter, STAT_ARMOR_CLASS);
+            bool dropped = armor->owner == nullptr && critterGetArmor(critter) == nullptr;
+            bool ok = worn && dropped && wornArmorClass > baseArmorClass && droppedArmorClass == baseArmorClass;
+            devAutotestLog("  %s, armor pid %d: armor class %d, worn %d (%s), dropped %d (%s): %s\n", critter == gDude ? "the dude" : "the party member", armorPid,
+                baseArmorClass, wornArmorClass, worn ? "worn" : "NOT WORN", droppedArmorClass, dropped ? "on the ground" : "NOT DROPPED", ok ? "PASS" : "FAIL");
+            if (!ok) {
+                exit(EXIT_FAILURE);
             }
             break;
         }
