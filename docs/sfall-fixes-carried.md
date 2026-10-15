@@ -45,6 +45,7 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for destroy_p_proc not being called if the critter is killed by explosives when you leave the map (`Modules/BugFixes.cpp`) | a9939729 | [fallout2-ce#863](https://github.com/fallout2-ce/fallout2-ce/pull/863) | `explodeleave` | open |
 | Fix for not counting in the weight/size of equipped items on NPC when stealing or bartering (`Modules/BugFixes.cpp`; CE counted them only in the loot screen's weight label) | 2533b1ac | [fallout2-ce#864](https://github.com/fallout2-ce/fallout2-ce/pull/864) | `partyweight`, `partyweightsteal` | open |
 | Fix for damage_p_proc being called for misses if the target is not a critter (`Modules/BugFixes.cpp`) | f5952641 | [fallout2-ce#865](https://github.com/fallout2-ce/fallout2-ce/pull/865) | `missobject` | open |
+| Fix for drop_obj function (`Modules/BugFixes.cpp`; the worn armor's stats, CE already ran HOOK_INVENWIELD) | c4aaffc9 | [fallout2-ce#866](https://github.com/fallout2-ce/fallout2-ce/pull/866) | `droparmor` | open |
 
 ## Other fixes offered to CE
 

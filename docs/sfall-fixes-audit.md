@@ -32,8 +32,8 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 | | Count |
 |---|---|
 | CE has it | 95 (3 of them likely) |
-| Ported by the port, offered to CE | 28 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
-| **Missing in CE** | **12** (5 gameplay, 7 scripts) + 5 likely + 1 partly |
+| Ported by the port, offered to CE | 29 (see [sfall-fixes-carried.md](sfall-fixes-carried.md)) |
+| **Missing in CE** | **11** (5 gameplay, 6 scripts) + 5 likely + 1 partly |
 | Unclear | 4 |
 | Not checked | 45 (27 original screens, 16 gameplay, 2 other) |
 | sfall option, off by default | 8 |
@@ -41,8 +41,7 @@ Checked 2026-10-14: sfall `master` 6c65e673 (after 4.5.1), CE `main`
 
 ## Missing gameplay fixes, by how much players notice them
 
-1. **#33** dropping worn armor (drop_obj) keeps its AC.
-2. **#75** exit grids while loading or entering a map; **#109** the
+1. **#75** exit grids while loading or entering a map; **#109** the
    automap reveals unexplored areas when entering a map; **#160**
    misc items' charges not fixed on load; **#152** knocked-down team
    members can be pushed in combat.
@@ -88,7 +87,7 @@ amount, **#147** create_object_sid with no script.
 | 30 | Fix for gaining stats from more than two doses of a specific chem after save-load | `BugFixes.cpp:4014` | port | game | drug effect pids saved in sfallgv.sav in queue order and restored after loading (fallout2-ce#855) |
 | 31 | Fix crash when leaving the map while waiting for someone to die of a super stimpak overdose | `BugFixes.cpp:4019` | yes | game | SFALL note in queueClearByEventType |
 | 32 | Fix for move_obj_inven_to_obj function | `BugFixes.cpp:4030` | yes | scripts | opMoveObjectInventoryToObject runs InvenWield hooks and adjusts the dude's armor |
-| 33 | Fix for drop_obj function | `BugFixes.cpp:4034` | **no** | scripts | objectDrop: no InvenWield hook and no AC adjustment when a worn armor is dropped (drop_obj) |
+| 33 | Fix for drop_obj function | `BugFixes.cpp:4034` | port | scripts | objectDrop takes the worn armor's stats off (InvenWield hook CE already had in _obj_remove_from_inven; fallout2-ce#866) |
 | 34 | Fix of invalid stats when party member gains a level while being on drugs | `BugFixes.cpp:4038` | yes | game | SFALL note in _partyMemberIncLevels |
 | 35 | Fix for display issues when highlighting a multiline dialogue option | `BugFixes.cpp:4048` | yes | original screens | SFALL notes in _gdProcessUpdate (multiline option highlight) |
 | 36 | Fix for "Unlimited Ammo" exploit | `BugFixes.cpp:4051` | port | game | inventoryEquipFunc wields one item of a stack (fallout2-ce#856) |
