@@ -2324,7 +2324,8 @@ static const DevAutotestStep kDevAutotestRetrieveObjectSteps[] = {
 
 // An NPC over its weight picking up an item (sfall's fix in
 // proto_instance.cc): out of combat its failed pickup shows the NPC's
-// message, not the player's; in combat an unarmed critter loaded with armor
+// message in the game's language, not the player's (the player over its
+// weight still gets its own); in combat an unarmed critter loaded with armor
 // attacks the dude (a spear in hand) and picks up the knife next to it.
 // Without the fix the knife stays on the ground (the pickup fails until its
 // action points run out).
@@ -4761,14 +4762,45 @@ void devAutotestTick()
                 critterId = critter->id;
                 weaponId = weapon->id;
 
-                // Out of combat the pickup fails: whose message.
+                // Out of combat the pickup fails: whose message, in the game's
+                // language (sfall's NPCPickupFail translation in ce.msg; the
+                // test copies are Russian and English).
                 objectPickup(critter, weapon);
+                bool russian = compat_stricmp(settings.system.language.c_str(), "russian") == 0;
+                // "%s не может подобрать предмет." in cp1251.
+                const char* expectedFormat = russian
+                    ? "%s \xed\xe5 \xec\xee\xe6\xe5\xf2 \xef\xee\xe4\xee\xe1\xf0\xe0\xf2\xfc \xef\xf0\xe5\xe4\xec\xe5\xf2."
+                    : "%s cannot pick up the item.";
                 char expected[160];
-                snprintf(expected, sizeof(expected), muiText(375, "%s cannot pick up the item."), critterGetName(critter));
+                snprintf(expected, sizeof(expected), expectedFormat, critterGetName(critter));
                 const char* message = displayMonitorGetLastMessage();
                 messageOk = strcmp(message, expected) == 0 && weapon->owner == nullptr;
-                devAutotestLog("  out of combat: weight %d of %d, the knife %s, message \"%s\": %s\n", objectGetInventoryWeight(critter), carryWeight,
+                devAutotestLog("  out of combat (%s): weight %d of %d, the knife %s, message \"%s\": %s\n", settings.system.language.c_str(),
+                    objectGetInventoryWeight(critter), carryWeight,
                     weapon->owner == nullptr ? "on the ground" : "picked up", message, messageOk ? "PASS" : "FAIL");
+
+                // The player over its weight: the player's message (905 in
+                // proto.msg), not the NPC's.
+                Object* dudeLoad = nullptr;
+                if (objectCreateWithProtoId(&dudeLoad, ProtoId(ItemProtoTypeId::PowerArmor)) == 0) {
+                    int dudeCarryWeight = critterGetStat(gDude, STAT_CARRY_WEIGHT);
+                    int dudeLoadQuantity = dudeCarryWeight / std::max(itemGetWeight(dudeLoad), 1) + 1;
+                    itemAdd(gDude, dudeLoad, dudeLoadQuantity);
+                    _obj_disconnect(dudeLoad, nullptr);
+                    objectPickup(gDude, weapon);
+                    MessageListItem item905;
+                    item905.num = 905;
+                    const char* expectedDude = messageListGetItem(&gProtoMessageList, &item905) ? item905.text : "";
+                    const char* dudeMessage = displayMonitorGetLastMessage();
+                    bool dudeOk = expectedDude[0] != '\0' && strcmp(dudeMessage, expectedDude) == 0 && weapon->owner == nullptr;
+                    devAutotestLog("  the player over its weight: the knife %s, message \"%s\": %s\n",
+                        weapon->owner == nullptr ? "on the ground" : "picked up", dudeMessage, dudeOk ? "PASS" : "FAIL");
+                    messageOk = messageOk && dudeOk;
+                    itemRemove(gDude, dudeLoad, dudeLoadQuantity);
+                    objectDestroy(dudeLoad, nullptr);
+                } else {
+                    messageOk = false;
+                }
 
                 // The AI looks for a weapon (_ai_switch_weapons) when its target
                 // holds one: the dude wields a spear (the starting dude of the

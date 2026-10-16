@@ -282,4 +282,7 @@
 {372}{}{Лицензии}
 {373}{}{Тактический вид}
 {374}{}{Кнопка в бою: полупрозрачные фигуры, клетки и граница хода}
-{375}{}{%s не может подобрать предмет.}
+
+# The message when a party member or another critter cannot pick up an item
+# (the player's message is 905 in proto.msg).
+{1000}{}{%s не может подобрать предмет.}
