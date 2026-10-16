@@ -320,6 +320,7 @@ enum DevAutotestAction {
     // effects): `a` 1 - the dude takes `b` doses; 2 - FAIL unless the dude
     // has `b` drug effects of that drug, or one more dose changes Strength.
     DEV_AUTOTEST_ACTION_DRUG_DOSES,
+    DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE,
     // The dude's stack of item pid `a` wielded in the right hand (sfall's
     // "Unlimited Ammo" fix): FAIL unless one item is in the hand and the
     // rest (`b` in all) stays in the inventory.
@@ -2303,6 +2304,35 @@ static const DevAutotestStep kDevAutotestDrugSaveSteps[] = {
     { DEV_AUTOTEST_ACTION_DRUG_DOSES, 2, 4, 87, 10, "d04_third_dose" },
 };
 
+// The drug pids in sfallgv.sav as sfall has them (sfall_ext.cc): the count
+// and the pids little-endian (sfall's raw 4-byte writes), loaded back. Then
+// the save's list is changed and loaded again. Without a list (an older
+// save) the pids are what sfall finds by the effects (item_d_load_subfix);
+// a list cut short (its first pid Jet's), one with pids that aren't a drug's
+// and one big-endian (as CE wrote it before) give the same: the list is
+// dropped or the pid ignored, nothing of it goes to the events.
+static const DevAutotestStep kDevAutotestDrugPidsFileSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "e00_start" },
+    { DEV_AUTOTEST_ACTION_DRUG_DOSES, 1, 2, 87, 10, "e01_two_doses" },
+    { DEV_AUTOTEST_ACTION_QUICK_SAVE, 0, 0, 0, 30, "e02_saved" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 1, 0, 0, 1, "e03_little_endian" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "e04_loaded" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 6, 1, 0, 1, "e05_saved_pids" },
+    { DEV_AUTOTEST_ACTION_DRUG_DOSES, 2, 4, 87, 10, "e06_third_dose" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 4, 0, 0, 1, "e07_no_list" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "e08_loaded" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 6, 0, 0, 1, "e09_found_pids" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 2, 0, 0, 1, "e10_cut_short" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "e11_loaded" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 6, 2, 0, 1, "e12_as_no_list" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 3, 0, 0, 1, "e13_not_drugs" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "e14_loaded" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 6, 2, 0, 1, "e15_as_no_list" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 5, 0, 0, 1, "e16_big_endian" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "e17_loaded" },
+    { DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE, 6, 2, 0, 1, "e18_as_no_list" },
+};
+
 // "Unlimited Ammo" (sfall's fix in inventoryEquipFunc): a stack of two
 // spears wielded puts one in the hand, the other stays in the inventory (the
 // starting dude has no pistol animations to wield a gun, and without RPU no
@@ -2886,6 +2916,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "wieldstack") == 0) {
         gDevAutotestSteps = kDevAutotestWieldStackSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestWieldStackSteps) / sizeof(kDevAutotestWieldStackSteps[0]);
+    } else if (strcmp(name, "drugpidsfile") == 0) {
+        gDevAutotestSteps = kDevAutotestDrugPidsFileSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestDrugPidsFileSteps) / sizeof(kDevAutotestDrugPidsFileSteps[0]);
     } else if (strcmp(name, "drugsave") == 0) {
         gDevAutotestSteps = kDevAutotestDrugSaveSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestDrugSaveSteps) / sizeof(kDevAutotestDrugSaveSteps[0]);
@@ -5070,6 +5103,118 @@ void devAutotestTick()
                 bool ok = effects == static_cast<int>(step->b) && strengthAfter == strength;
                 devAutotestLog("  after loading: effects of pid %d %d; one more dose: Strength %d -> %d: %s\n", drugPid, effects, strength, strengthAfter, ok ? "PASS" : "FAIL");
                 if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE: {
+            // The quick save's sfallgv.sav and its part before the list.
+            static std::string path;
+            static std::vector<unsigned char> head;
+            static std::vector<int> pids;
+            auto le = [](std::vector<unsigned char>& bytes, uint32_t value) {
+                for (int shift = 0; shift < 32; shift += 8) {
+                    bytes.push_back(static_cast<unsigned char>((value >> shift) & 0xFF));
+                }
+            };
+            auto be = [](std::vector<unsigned char>& bytes, uint32_t value) {
+                for (int shift = 24; shift >= 0; shift -= 8) {
+                    bytes.push_back(static_cast<unsigned char>((value >> shift) & 0xFF));
+                }
+            };
+            if (step->a == 1) {
+                int slot = lsgSessionLoadSlot();
+                std::string saveDat = slot != -1 ? lsgMobileSaveDatPath(slot) : std::string();
+                size_t separator = saveDat.find_last_of("/\\");
+                path = separator != std::string::npos ? saveDat.substr(0, separator + 1) + "sfallgv.sav" : std::string();
+                std::vector<unsigned char> bytes;
+                FILE* stream = path.empty() ? nullptr : compat_fopen(path.c_str(), "rb");
+                if (stream != nullptr) {
+                    int ch;
+                    while ((ch = fgetc(stream)) != EOF) {
+                        bytes.push_back(static_cast<unsigned char>(ch));
+                    }
+                    fclose(stream);
+                }
+                pids = drugEffectEventsGetPids();
+                size_t listSize = 4 * (pids.size() + 1);
+                std::vector<unsigned char> expected;
+                le(expected, static_cast<uint32_t>(pids.size()));
+                for (int pid : pids) {
+                    le(expected, static_cast<uint32_t>(pid));
+                }
+                bool ok = !pids.empty() && bytes.size() >= listSize
+                    && std::equal(expected.begin(), expected.end(), bytes.end() - listSize);
+                std::string hex;
+                for (size_t index = bytes.size() >= listSize ? bytes.size() - listSize : 0; index < bytes.size(); index++) {
+                    char byte[4];
+                    snprintf(byte, sizeof(byte), "%02x ", bytes[index]);
+                    hex += byte;
+                }
+                devAutotestLog("  sfallgv.sav of slot %d: %d drug effects, the list's bytes: %s: %s\n", slot, static_cast<int>(pids.size()), hex.c_str(), ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
+                head.assign(bytes.begin(), bytes.end() - listSize);
+            } else if (step->a == 6) {
+                // The loaded events' pids: `b` 1 - the saved ones, 0 - found
+                // by the effects (kept), 2 - the same as found.
+                static std::vector<int> foundPids;
+                std::vector<int> loaded = drugEffectEventsGetPids();
+                std::string list;
+                for (int pid : loaded) {
+                    list += std::to_string(pid) + " ";
+                }
+                bool ok = true;
+                if (step->b == 1) {
+                    ok = loaded == pids;
+                } else if (step->b == 0) {
+                    foundPids = loaded;
+                } else {
+                    ok = loaded == foundPids;
+                }
+                devAutotestLog("  loaded drug effects' pids: %s%s\n", list.c_str(), step->b == 0 ? "(found by the effects)" : (ok ? ": PASS" : ": FAIL"));
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
+            } else {
+                std::vector<unsigned char> bytes = head;
+                const char* what = "";
+                switch (static_cast<int>(step->a)) {
+                case 2:
+                    what = "cut short, its first pid Jet's";
+                    le(bytes, static_cast<uint32_t>(pids.size()));
+                    for (size_t index = 0; index + 1 < pids.size(); index++) {
+                        le(bytes, index == 0 ? 259 : static_cast<uint32_t>(pids[index]));
+                    }
+                    break;
+                case 3:
+                    what = "pids that aren't a drug's";
+                    le(bytes, static_cast<uint32_t>(pids.size()));
+                    for (size_t index = 0; index < pids.size(); index++) {
+                        le(bytes, index % 2 == 0 ? 0x30000000 : 0x01000001);
+                    }
+                    break;
+                case 4:
+                    what = "no list";
+                    break;
+                case 5:
+                    what = "big-endian";
+                    be(bytes, static_cast<uint32_t>(pids.size()));
+                    for (int pid : pids) {
+                        be(bytes, static_cast<uint32_t>(pid));
+                    }
+                    break;
+                }
+                FILE* stream = compat_fopen(path.c_str(), "wb");
+                bool ok = stream != nullptr && fwrite(bytes.data(), 1, bytes.size(), stream) == bytes.size();
+                if (stream != nullptr) {
+                    fclose(stream);
+                }
+                devAutotestLog("  sfallgv.sav's list %s (%d bytes)\n", what, static_cast<int>(bytes.size()));
+                if (!ok) {
+                    devAutotestLog("FAIL: writing %s\n", path.c_str());
                     exit(EXIT_FAILURE);
                 }
             }
