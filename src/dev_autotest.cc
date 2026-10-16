@@ -19,6 +19,7 @@
 #include "character_editor.h"
 #include "combat.h"
 #include "combat_ai.h"
+#include "content_config.h"
 #include "critter.h"
 #include "db.h"
 #include "display_monitor.h"
@@ -2270,6 +2271,25 @@ static const DevAutotestStep kDevAutotestBarterFixesSteps[] = {
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "f15_back_to_talk", "dialog.tab.talk" },
 };
 
+// The same with sfall's fix turned off (game.cfg [items]
+// can_sell_used_geiger=0, sfall's CanSellUsedGeiger=0): the used Geiger
+// counter stays queued, and the offer of it and an active Stealth Boy is
+// refused, as in the original.
+static const DevAutotestStep kDevAutotestBarterFixesOffSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "g00_map" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 4, 0, 0, 1, "g01_setting_off" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 1, 52, 2, 1, "g02_used_geiger" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 1, 54, 1, 1, "g03_active_stealth_boy" },
+    { DEV_AUTOTEST_ACTION_CENTER_CRITTER, 0, 0, 0, 10, "g04_center_critter" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 0, 0, 300, "g05_talk" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "g06_barter", "dialog.tab.barter" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 40, "g07_offer_geiger", "barter.player.pid.52", "barter.offer" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 40, "g08_offer_stealth_boy", "barter.player.pid.210", "barter.offer" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "g09_offer", "barter.offer.button" },
+    { DEV_AUTOTEST_ACTION_BARTER_SALE, 5, 52, 210, 1, "g10_refused" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "g11_back_to_talk", "dialog.tab.talk" },
+};
+
 // Drug doses after save/load (sfall's fix, item.cc, sfall_ext.cc): two
 // doses of Buffout (its limit), a quick save and load; the loaded effects
 // still count, so a third dose doesn't raise Strength.
@@ -2869,6 +2889,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "barterfixes") == 0) {
         gDevAutotestSteps = kDevAutotestBarterFixesSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestBarterFixesSteps) / sizeof(kDevAutotestBarterFixesSteps[0]);
+    } else if (strcmp(name, "barterfixesoff") == 0) {
+        gDevAutotestSteps = kDevAutotestBarterFixesOffSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestBarterFixesOffSteps) / sizeof(kDevAutotestBarterFixesOffSteps[0]);
     } else if (strcmp(name, "orig675") == 0) {
         gDevAutotestSteps = kDevAutotestOriginal675Steps;
         gDevAutotestStepCount = sizeof(kDevAutotestOriginal675Steps) / sizeof(kDevAutotestOriginal675Steps[0]);
@@ -5068,6 +5091,25 @@ void devAutotestTick()
                     added++;
                 }
                 devAutotestLog("  dude overloaded with %d x pid %d: weight %d of %d\n", added, pidB, objectGetInventoryWeight(gDude), critterGetStat(gDude, STAT_CARRY_WEIGHT));
+            } else if (step->a == 4) {
+                configSetBool(&gContentConfig, CONTENT_CONFIG_ITEMS_SECTION, "can_sell_used_geiger", step->b != 0);
+                devAutotestLog("  can_sell_used_geiger=%d\n", itemCanSellUsedGeiger() ? 1 : 0);
+            } else if (step->a == 5) {
+                // Refused: both items are still the dude's (in the offer
+                // table or back in the inventory), none the partner's.
+                Object* partner = gGameDialogSpeaker;
+                BarterView view;
+                Object* playerTable = barterGetView(&view) ? view.playerTable : nullptr;
+                Object* bartererTable = barterGetView(&view) ? view.bartererTable : nullptr;
+                int dudeB = countPid(gDude, pidB) + countPid(playerTable, pidB);
+                int dudeC = countPid(gDude, pidC) + countPid(playerTable, pidC);
+                int partnerB = countPid(partner, pidB) + countPid(bartererTable, pidB);
+                int partnerC = countPid(partner, pidC) + countPid(bartererTable, pidC);
+                bool ok = partner != nullptr && dudeB == 1 && dudeC == 1 && partnerB == 0 && partnerC == 0;
+                devAutotestLog("  refused: dude pid %d x%d, pid %d x%d; partner x%d, x%d: %s\n", pidB, dudeB, pidC, dudeC, partnerB, partnerC, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
             } else {
                 Object* partner = gGameDialogSpeaker;
                 int partnerB = countPid(partner, pidB);
