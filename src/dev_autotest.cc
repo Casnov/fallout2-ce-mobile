@@ -71,6 +71,8 @@
 
 namespace fallout {
 
+void (*gDevAutotestInvenWieldObserver)(Object* critter, Object* item, int isWield, int isRemove) = nullptr;
+
 enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_NONE,
     DEV_AUTOTEST_ACTION_ZOOM,
@@ -2469,7 +2471,8 @@ static const DevAutotestStep kDevAutotestMissObjectSteps[] = {
 // objectDrop; sfall's fix in proto_instance.cc): its stats go with it.
 // Leather armor on (the dude's as the inventory screen puts it on), then
 // dropped: the armor class is back to what it was. Without the fix they
-// keep the armor's.
+// keep the armor's. HOOK_INVENWIELD (its removal) runs once, before that, as
+// in sfall: a hook script sees the armor worn with its stats.
 static const DevAutotestStep kDevAutotestDropArmorSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "a00_start" },
     { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 2, ROTATION_SE, 10, "a01_sulik", "Kcsulik.int" },
@@ -4405,13 +4408,34 @@ void devAutotestTick()
             }
             int wornArmorClass = critterGetStat(critter, STAT_ARMOR_CLASS);
             bool worn = critterGetArmor(critter) == armor;
+            // What a HOOK_INVENWIELD script sees on the removal: the armor
+            // still worn, with its stats on (sfall runs the hook first), and
+            // the hook runs once.
+            static Object* hookArmor;
+            static int hookCalls;
+            static int hookArmorClass;
+            static bool hookWorn;
+            hookArmor = armor;
+            hookCalls = 0;
+            hookArmorClass = -1;
+            hookWorn = false;
+            gDevAutotestInvenWieldObserver = [](Object* owner, Object* item, int isWield, int isRemove) {
+                if (item == hookArmor && isWield == 0 && isRemove == 1) {
+                    hookCalls++;
+                    hookArmorClass = critterGetStat(owner, STAT_ARMOR_CLASS);
+                    hookWorn = critterGetArmor(owner) == item;
+                }
+            };
             // What a script's drop_obj does.
             objectDrop(critter, armor);
+            gDevAutotestInvenWieldObserver = nullptr;
             int droppedArmorClass = critterGetStat(critter, STAT_ARMOR_CLASS);
             bool dropped = armor->owner == nullptr && critterGetArmor(critter) == nullptr;
-            bool ok = worn && dropped && wornArmorClass > baseArmorClass && droppedArmorClass == baseArmorClass;
-            devAutotestLog("  %s, armor pid %d: armor class %d, worn %d (%s), dropped %d (%s): %s\n", critter == gDude ? "the dude" : "the party member", armorPid,
-                baseArmorClass, wornArmorClass, worn ? "worn" : "NOT WORN", droppedArmorClass, dropped ? "on the ground" : "NOT DROPPED", ok ? "PASS" : "FAIL");
+            bool hookOk = hookCalls == 1 && hookWorn && hookArmorClass == wornArmorClass;
+            bool ok = worn && dropped && wornArmorClass > baseArmorClass && droppedArmorClass == baseArmorClass && hookOk;
+            devAutotestLog("  %s, armor pid %d: armor class %d, worn %d (%s), dropped %d (%s); HOOK_INVENWIELD x%d: armor class %d (%s): %s\n", critter == gDude ? "the dude" : "the party member", armorPid,
+                baseArmorClass, wornArmorClass, worn ? "worn" : "NOT WORN", droppedArmorClass, dropped ? "on the ground" : "NOT DROPPED",
+                hookCalls, hookArmorClass, hookWorn ? "worn" : "NOT WORN", ok ? "PASS" : "FAIL");
             if (!ok) {
                 exit(EXIT_FAILURE);
             }

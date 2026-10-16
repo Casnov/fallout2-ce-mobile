@@ -3,6 +3,8 @@
 
 #include <SDL.h>
 
+#include "obj_types.h"
+
 namespace fallout {
 
 // CE: Scripted developer checks of the world view (zoom and pan), enabled
@@ -11,6 +13,10 @@ namespace fallout {
 // output directory and quits the game.
 
 void devAutotestInit(const char* outputPath);
+
+// Called where HOOK_INVENWIELD's scripts run (sfall_script_hooks.cc), for the
+// tests of what a hook script sees then. Null outside them.
+extern void (*gDevAutotestInvenWieldObserver)(Object* critter, Object* item, int isWield, int isRemove);
 
 // Selects script: "worldmap" checks world map touch controls, default script
 // checks the map, inventory and combat.

@@ -9,6 +9,7 @@
 
 #include "animation_defs.h"
 #include "db.h"
+#include "dev_autotest.h"
 #include "debug.h"
 #include "game.h"
 #include "interface.h"
@@ -1206,6 +1207,10 @@ bool scriptHooks_InvenWield(Object* critter, Object* item, InvenSlot slot, int i
                 return true;
             }
         }
+    }
+
+    if (gDevAutotestInvenWieldObserver != nullptr) {
+        gDevAutotestInvenWieldObserver(critter, item, isWield, isRemove);
     }
 
     ScriptHookCall hook(HOOK_INVENWIELD, 1, { critter, item, static_cast<int>(slot), isWield, isRemove });
