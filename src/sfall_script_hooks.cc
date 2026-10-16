@@ -9,8 +9,8 @@
 
 #include "animation_defs.h"
 #include "db.h"
-#include "dev_autotest.h"
 #include "debug.h"
+#include "dev_autotest.h"
 #include "game.h"
 #include "interface.h"
 #include "interpreter_extra.h"
