@@ -321,6 +321,7 @@ enum DevAutotestAction {
     // has `b` drug effects of that drug, or one more dose changes Strength.
     DEV_AUTOTEST_ACTION_DRUG_DOSES,
     DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE,
+    DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD,
     // The dude's stack of item pid `a` wielded in the right hand (sfall's
     // "Unlimited Ammo" fix): FAIL unless one item is in the hand and the
     // rest (`b` in all) stays in the inventory.
@@ -2512,6 +2513,23 @@ static const DevAutotestStep kDevAutotestDropArmorSteps[] = {
 
 // Logs the state (items, the dude's look, the HUD) of a loaded game
 // (--dev-load-game=<slot>): for checking a player's save.
+// Dead multihex critters on a map left for a week (map.cc,
+// replaceDeadCritter): their bodies become blood stains and the saved map
+// loads (found in the player's game: the Wanamingo mine was new again). A multihex body's stain frame is random(0..3) + 6 while the stain
+// art has 9 frames, so frame 9 is a quarter of them; the original ignores
+// obj_set_frame's result, CE failed the aging on it, and the saved map's load
+// fell back to the .MAP (the map as new: the player's Wanamingo mine). With
+// 24 bodies that's all but certain without the fix.
+static const DevAutotestStep kDevAutotestMultihexBloodSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "b00_start" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "b01_broken_hills", "broken1.map" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD, 1, 24, 0, 10, "b02_bodies" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "b03_away", "broken2.map" },
+    { DEV_AUTOTEST_ACTION_MAP_AGE, 2, 7 * 24, 0, 10, "b04_a_week" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "b05_back", "broken1.map" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD, 2, 24, 0, 10, "b06_blood" },
+};
+
 static const DevAutotestStep kDevAutotestStateSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "t00_state" },
     { DEV_AUTOTEST_ACTION_LOG_PARTY, 0, 0, 0, 1, "t00b_party" },
@@ -2846,6 +2864,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "floattext") == 0) {
         gDevAutotestSteps = kDevAutotestFloatTextSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestFloatTextSteps) / sizeof(kDevAutotestFloatTextSteps[0]);
+    } else if (strcmp(name, "multihexblood") == 0) {
+        gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
     } else if (strcmp(name, "state") == 0) {
         gDevAutotestSteps = kDevAutotestStateSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestStateSteps) / sizeof(kDevAutotestStateSteps[0]);
@@ -5102,6 +5123,67 @@ void devAutotestTick()
                 int strengthAfter = critterGetStat(gDude, STAT_STRENGTH);
                 bool ok = effects == static_cast<int>(step->b) && strengthAfter == strength;
                 devAutotestLog("  after loading: effects of pid %d %d; one more dose: Strength %d -> %d: %s\n", drugPid, effects, strength, strengthAfter, ok ? "PASS" : "FAIL");
+                if (!ok) {
+                    exit(EXIT_FAILURE);
+                }
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD: {
+            // A Wanamingo: a multihex critter that ages (no CRITTER_NO_AGE).
+            constexpr int kWanamingoPid = 0x10000F2;
+            int count = static_cast<int>(step->b);
+            auto countHere = [](int* bodies, int* stains) {
+                *bodies = 0;
+                *stains = 0;
+                for (Object* object = objectFindFirst(); object != nullptr; object = objectFindNext()) {
+                    if (object->pid == kWanamingoPid && critterIsDead(object)) {
+                        (*bodies)++;
+                    } else if (FrmId(object).objectType() == OBJ_TYPE_MISC && FrmId(object) == MiscFrameId::BloodPool) {
+                        (*stains)++;
+                    }
+                }
+            };
+            if (step->a == 1) {
+                for (int index = 0; index < count; index++) {
+                    Object* critter;
+                    if (objectCreateWithProtoId(&critter, ProtoId(kWanamingoPid)) != 0) {
+                        devAutotestLog("FAIL: no critter\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    if (critter->sid != -1) {
+                        scriptRemove(critter->sid);
+                        critter->sid = -1;
+                    }
+                    int tile = tileGetTileInDirection(gDude->tile, static_cast<Rotation>(index % ROTATION_COUNT), 4 + 3 * (index / ROTATION_COUNT));
+                    // Multihex as the mine's are on their map (the flag is
+                    // the object's, not the proto's).
+                    critter->flags |= OBJECT_MULTIHEX;
+                    objectSetLocation(critter, tile, gDude->elevation, nullptr);
+                    critterKill(critter, ANIM_FALL_BACK_SF, false);
+                }
+                int bodies;
+                int stains;
+                countHere(&bodies, &stains);
+                int multihex = 0;
+                for (Object* object = objectFindFirst(); object != nullptr; object = objectFindNext()) {
+                    if (object->pid == kWanamingoPid && (object->flags & OBJECT_MULTIHEX) != OBJECT_NONE) {
+                        multihex++;
+                    }
+                }
+                devAutotestLog("  dead critters %d (multihex %d), blood stains %d\n", bodies, multihex, stains);
+                if (bodies != count) {
+                    devAutotestLog("FAIL: bodies\n");
+                    exit(EXIT_FAILURE);
+                }
+            } else {
+                int bodies;
+                int stains;
+                countHere(&bodies, &stains);
+                bool savedMap = gMapHeader.lastVisitTime != 0;
+                bool ok = savedMap && bodies == 0 && stains >= count;
+                devAutotestLog("  back after a week: the saved map %d (last visit %u), dead multihex critters %d, blood stains %d: %s\n",
+                    savedMap ? 1 : 0, gMapHeader.lastVisitTime, bodies, stains, ok ? "PASS" : "FAIL");
                 if (!ok) {
                     exit(EXIT_FAILURE);
                 }
