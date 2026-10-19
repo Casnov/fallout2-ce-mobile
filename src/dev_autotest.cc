@@ -322,6 +322,7 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_DRUG_DOSES,
     DEV_AUTOTEST_ACTION_DRUG_PIDS_FILE,
     DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD,
+    DEV_AUTOTEST_ACTION_BLOOD_PROTO,
     // The dude's stack of item pid `a` wielded in the right hand (sfall's
     // "Unlimited Ammo" fix): FAIL unless one item is in the hand and the
     // rest (`b` in all) stays in the inventory.
@@ -2530,6 +2531,24 @@ static const DevAutotestStep kDevAutotestMultihexBloodSteps[] = {
     { DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD, 2, 24, 0, 10, "b06_blood" },
 };
 
+// A failed critter aging (map.cc, mapLoadSaved): the blood stain's proto
+// can't be read (an empty proto/misc/00000004.pro in the game's patches, as a
+// broken mod would have it), so no body can become a stain. The saved map
+// still loads, its bodies stay. Without the fix the load fell back to the
+// .MAP: the map as new.
+static const DevAutotestStep kDevAutotestAgingFailSteps[] = {
+    { DEV_AUTOTEST_ACTION_BLOOD_PROTO, 2, 0, 0, 1, "f00_no_leftover" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "f01_start" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "f02_broken_hills", "broken1.map" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD, 1, 8, 0, 10, "f03_bodies" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "f04_away", "broken2.map" },
+    { DEV_AUTOTEST_ACTION_MAP_AGE, 2, 7 * 24, 0, 10, "f05_a_week" },
+    { DEV_AUTOTEST_ACTION_BLOOD_PROTO, 1, 0, 0, 1, "f06_broken_proto" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 120, "f07_back", "broken1.map" },
+    { DEV_AUTOTEST_ACTION_BLOOD_PROTO, 2, 0, 0, 1, "f08_proto_back" },
+    { DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD, 3, 8, 0, 10, "f09_bodies_stay" },
+};
+
 static const DevAutotestStep kDevAutotestStateSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "t00_state" },
     { DEV_AUTOTEST_ACTION_LOG_PARTY, 0, 0, 0, 1, "t00b_party" },
@@ -2864,6 +2883,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "floattext") == 0) {
         gDevAutotestSteps = kDevAutotestFloatTextSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestFloatTextSteps) / sizeof(kDevAutotestFloatTextSteps[0]);
+    } else if (strcmp(name, "agingfail") == 0) {
+        gDevAutotestSteps = kDevAutotestAgingFailSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestAgingFailSteps) / sizeof(kDevAutotestAgingFailSteps[0]);
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
@@ -5129,6 +5151,26 @@ void devAutotestTick()
             }
             break;
         }
+        case DEV_AUTOTEST_ACTION_BLOOD_PROTO: {
+            // 1 - an empty blood stain proto in the game's patches, 2 - none.
+            std::string path = settings.system.master_patches_path + "\\proto\\misc\\00000004.pro";
+            char nativePath[COMPAT_MAX_PATH];
+            strncpy(nativePath, path.c_str(), sizeof(nativePath) - 1);
+            nativePath[sizeof(nativePath) - 1] = '\0';
+            if (step->a == 1) {
+                compat_mkdir((settings.system.master_patches_path + "\\proto").c_str());
+                compat_mkdir((settings.system.master_patches_path + "\\proto\\misc").c_str());
+                FILE* stream = compat_fopen(nativePath, "wb");
+                if (stream != nullptr) {
+                    fclose(stream);
+                }
+                devAutotestLog("  empty blood stain proto: %s\n", stream != nullptr ? "written" : "NOT WRITTEN");
+            } else {
+                compat_remove(nativePath);
+                compatDirectoryEntryCacheClear();
+            }
+            break;
+        }
         case DEV_AUTOTEST_ACTION_MULTIHEX_BLOOD: {
             // A Wanamingo: a multihex critter that ages (no CRITTER_NO_AGE).
             constexpr int kWanamingoPid = 0x10000F2;
@@ -5174,6 +5216,18 @@ void devAutotestTick()
                 devAutotestLog("  dead critters %d (multihex %d), blood stains %d\n", bodies, multihex, stains);
                 if (bodies != count) {
                     devAutotestLog("FAIL: bodies\n");
+                    exit(EXIT_FAILURE);
+                }
+            } else if (step->a == 3) {
+                // The aging failed: the saved map, its bodies as they were.
+                int bodies;
+                int stains;
+                countHere(&bodies, &stains);
+                bool savedMap = gMapHeader.lastVisitTime != 0;
+                bool ok = savedMap && bodies == count && stains == 0;
+                devAutotestLog("  back after a week, no stain could be made: the saved map %d (last visit %u), dead multihex critters %d, blood stains %d: %s\n",
+                    savedMap ? 1 : 0, gMapHeader.lastVisitTime, bodies, stains, ok ? "PASS" : "FAIL");
+                if (!ok) {
                     exit(EXIT_FAILURE);
                 }
             } else {
