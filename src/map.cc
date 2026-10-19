@@ -55,7 +55,7 @@ namespace fallout {
 
 const char* mapBuildPath(const char* name);
 static int mapLoad(File* stream);
-static int _map_age_dead_critters();
+static void _map_age_dead_critters();
 static void _map_fix_critter_combat_data();
 static int _map_save_file(File* stream);
 int _map_save(bool isInGame);
@@ -1245,10 +1245,12 @@ int mapLoadSaved(char* fileName)
             objectUnjamAll();
         }
 
-        if (_map_age_dead_critters() == -1) {
-            debugPrint("\nError: Critter aging failed on map load!");
-            return -1;
-        }
+        // NOTE: The original fails the saved map's load when the critter
+        // aging fails (out of memory, the stain can't be created), and
+        // `mapLoadByName` loads the .MAP instead: the map as new, saved so on
+        // leaving. The aging is upkeep, it doesn't fail the load: a body it
+        // can't replace stays.
+        _map_age_dead_critters();
     }
 
     if (!wmMapIsSaveable()) {
@@ -1268,7 +1270,7 @@ int mapLoadSaved(char* fileName)
 }
 
 // 0x48328C
-static int _map_age_dead_critters()
+static void _map_age_dead_critters()
 {
     // SFALL: Fix for critters not being healed over time when entering a map
     // with 'dead_bodies_age=No' set in maps.txt: the setting keeps the dead
@@ -1277,7 +1279,7 @@ static int _map_age_dead_critters()
 
     int hoursSinceLastVisit = (gameTimeGetTime() - gMapHeader.lastVisitTime) / GAME_TIME_TICKS_PER_HOUR;
     if (hoursSinceLastVisit == 0) {
-        return 0;
+        return;
     }
 
     Object* obj = objectFindFirst();
@@ -1296,7 +1298,7 @@ static int _map_age_dead_critters()
     }
 
     if (!deadBodiesAge) {
-        return 0;
+        return;
     }
 
     // NOTE: The original (0x483334) replaces dead bodies by blood stains
@@ -1307,12 +1309,10 @@ static int _map_age_dead_critters()
     } else if (hoursSinceLastVisit > 6 * 24) {
         agingType = 1;
     } else {
-        return 0;
+        return;
     }
 
-    int capacity = 100;
-    int count = 0;
-    Object** objects = (Object**)internal_malloc(sizeof(*objects) * capacity);
+    std::vector<Object*> objects;
 
     obj = objectFindFirst();
     while (obj != nullptr) {
@@ -1320,42 +1320,23 @@ static int _map_age_dead_critters()
         if (protoId.objectType() == OBJ_TYPE_CRITTER) {
             if (obj != gDude && critterIsDead(obj)) {
                 if (critterGetKillType(obj) != KILL_TYPE_ROBOT && !critterFlagCheck(protoId, CRITTER_NO_AGE)) {
-                    objects[count++] = obj;
-
-                    if (count >= capacity) {
-                        capacity *= 2;
-                        objects = (Object**)internal_realloc(objects, sizeof(*objects) * capacity);
-                        if (objects == nullptr) {
-                            debugPrint("\nError: Out of Memory!");
-                            return -1;
-                        }
-                    }
+                    objects.push_back(obj);
                 }
             }
         } else if (agingType == 2 && protoId.objectType() == OBJ_TYPE_MISC && FrmId(obj) == MiscFrameId::BloodPool) {
-            objects[count++] = obj;
-            if (count >= capacity) {
-                capacity *= 2;
-                objects = (Object**)internal_realloc(objects, sizeof(*objects) * capacity);
-                if (objects == nullptr) {
-                    debugPrint("\nError: Out of Memory!");
-                    return -1;
-                }
-            }
+            objects.push_back(obj);
         }
         obj = objectFindNext();
     }
 
-    int rc = 0;
-    for (int index = 0; index < count; index++) {
-        Object* obj = objects[index];
+    for (Object* obj : objects) {
         const ProtoId protoId = obj;
         if (protoId.objectType() == OBJ_TYPE_CRITTER) {
             // replace the dead critter bodies by the blood pool stain
             if (replaceDeadCritter(obj) == -1) {
+                // The body stays (with its items) for the next visit.
                 debugPrint("\n%s: Could not replace dead body by the blood stain for the critter %d with pid %d.", __func__, obj->id, obj->pid);
-                rc = -1;
-                break;
+                continue;
             }
 
             // drop the critter owned items on top of the blood stain only when successfully replaced
@@ -1367,10 +1348,6 @@ static int _map_age_dead_critters()
         reg_anim_clear(obj);
         objectDestroy(obj, nullptr);
     }
-
-    internal_free(objects);
-
-    return rc;
 }
 
 static int replaceDeadCritter(Object* critter)
@@ -1385,6 +1362,7 @@ static int replaceDeadCritter(Object* critter)
     }
 
     if (objectSetLocation(blood, critter->tile, critter->elevation, nullptr) == -1) {
+        objectDestroy(blood, nullptr);
         return -1;
     }
 
