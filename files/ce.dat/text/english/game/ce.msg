@@ -284,6 +284,8 @@
 {374}{}{Combat button: see-through figures, tiles and where you can walk}
 {375}{}{Windows on tablets}
 {376}{}{Screens open as a window over the game world}
+{377}{}{Close windows by tapping outside}
+{378}{}{A tap on the world past a window closes it}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

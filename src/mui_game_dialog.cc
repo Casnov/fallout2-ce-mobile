@@ -19,6 +19,7 @@
 #include "mui_notify.h"
 #include "object.h"
 #include "pipboy.h"
+#include "settings.h"
 #include "skill.h"
 
 namespace fallout {
@@ -850,7 +851,7 @@ MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitl
     // finger missing a tab sideways doesn't.
     MuiRect around = { frame.window.x, frame.window.y, frame.tabs.right() + ui.dp(kWindowTabsSlopDp) - frame.window.x, frame.window.h };
     ui.mark(kMuiWindowTapArea, around);
-    frame.tappedOutside = ui.tappedOutside(around);
+    frame.tappedOutside = settings.touch.tablet_tap_outside && ui.tappedOutside(around);
     return frame;
 }
 

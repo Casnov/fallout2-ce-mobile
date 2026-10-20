@@ -351,6 +351,9 @@ struct TouchSettings {
     // Tablets: mobile UI's game screens open as windows over the world
     // instead of covering the screen (`muiUsesWindows`).
     bool tablet_windows = true;
+    // Tablets: a tap on the world outside a window closes it (the game
+    // screens' windows; small panels always close so).
+    bool tablet_tap_outside = true;
 };
 
 struct MapperSettings {
