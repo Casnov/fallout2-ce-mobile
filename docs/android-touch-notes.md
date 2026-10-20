@@ -459,12 +459,16 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
   after talk / barter / review): the game's combat control and
   customization panels in one (`gameDialogGetPartyControlView`,
   `gameDialogQueuePartyControlAction` -> the talk loop,
-  `GAME_DIALOG_PARTY_CONTROL_EVENT`). Stats under the head (hit points,
-  best skill, carrying, melee damage, AP; level / AC / addict with sfall's
-  PartyMemberExtraInfo), weapon and armor with "use best" (the panel's own
-  code, `partyMemberUseBestWeapon/Armor`), five dispositions (0 custom ..
-  4 berserk as the game's buttons: CE's `Disposition` names are shifted by
-  one), six settings with their values (game\custom.msg). A disposition
+  `GAME_DIALOG_PARTY_CONTROL_EVENT`). Under the head the stats (hit
+  points, best skill, carrying, melee damage, AP; level / AC / addict with
+  sfall's PartyMemberExtraInfo) and the weapon and armor cards with "use
+  best" (the panel's own code, `partyMemberUseBestWeapon/Armor`; phones:
+  the stats at the left, the cards over each other at the right); the
+  right column only the combat settings: five dispositions in a row (0
+  custom .. 4 berserk as the game's buttons: CE's `Disposition` names are
+  shifted by one), each as wide as its name, then six settings one per
+  row with their values (game\custom.msg), a tap opens the values; they
+  fit without scrolling. A disposition
   switches to its AI packet (the companion's preset from data\AI.txt);
   changing a setting switches to the custom disposition first, as the
   game's customization panel is only reached through it. Options a
@@ -601,19 +605,22 @@ every screen on the new scalable UI, visual style/textures later via theme).
   closed under them). Creation and talk take no tap outside (Back would
   cancel the character; talk has none).
   Screens pick their layout by the content area, not the device
-  (`muiIsTallContent`: windows of 680x440 dp and more - every tablet's;
-  screens covering the screen keep the phone's layouts): the roomy sizes of the windows' mockups (bigger rows, buttons,
+  (`muiIsTallContent`, `[touch] layout`, the "Screen layouts" row: 0 Auto
+  - windows of 680x440 dp and more, every tablet's, screens covering the
+  screen keep the phone's layouts; 1 Phone - never; 2 Tablet - always,
+  even where they don't fit, the player's choice; any of them with any
+  frame): the roomy sizes of the windows' mockups (bigger rows, buttons,
   text; settings' sections 56 dp, save rows with thumbnails, character's
   stats tab as SPECIAL rows over conditions and derived stats in two
-  columns, talk's speaker on top of one list of the reply and the answers,
-  the party member panel with the speaker kept there, its stats at its
-  left, weapon and armor cards at its right, under them the dispositions in
-  a column beside the six settings as a 2x3 grid of cards, the selector's
+  columns, talk's speaker and reply in a wider left column (460 dp, the
+  picture about 1.2 times the game's), the party member's stats there in
+  two columns over its weapon and armor cards side by side, the selector's
   stats in one column). The inventory's tall one has the
   items on the left and the character, armor and hands over the summary on
   the right in the mockup's proportions, the summary in two columns
   (SPECIAL with `statGetName`'s full names next to hit points, armor class
-  and resistances; each hand's weapon under its slot), its rows as spaced
+  and resistances; each hand's weapon under its slot, damage, range and
+  ammo each on its line), its rows as spaced
   out as fits (22, 20 dp or the font's line); phones get the three columns.
 - Done: dialog boxes (`showDialogBox` -> `muiShowDialogBox`, texts from
   DBOX.MSG), radial action menu drawing (54 dp circles, own line icons,
@@ -647,7 +654,8 @@ every screen on the new scalable UI, visual style/textures later via theme).
 - Talk screen (`mui_game_dialog.cc`, `TalkScreen`, active while
   `gameDialogIsTalking`): talking head / map around the speaker copied every
   frame from the game's display buffer (388 x 200, keeps animation and
-  lips), reply with the speaker name under it, options on the right (any
+  lips), reply with the speaker name under it, options on the right, each
+  scrolling on its own so the reply stays in sight (any
   option via `GAME_DIALOG_OPTION_EVENT_BASE + index`, not only the first
   nine). No exit button (the vanilla `0` exit is a bug CE disables with
   `no_exit_hotkey=1`). Autotest: `--dev-autotest-scenario=talk`.
@@ -656,7 +664,11 @@ every screen on the new scalable UI, visual style/textures later via theme).
   screen queues `BarterAction`s and posts `BARTER_ACTION_EVENT`, the loop
   performs them with the game's own moves (`itemMoveForce`, weight-checked
   `itemMove` for giving to party members) and redisplays. Columns 3 / 1 / 1 / 3
-  (player, offer, request, trader) of square cells of one size, no head. The
+  (player, offer, request, trader) of square cells of one size, no head.
+  One layout on phones and in windows: the tables' titles in the header row
+  between the sides' headers, their prices under them in the filters' row,
+  all four lists down to the offer button under the tables, the sides'
+  weight and money beside it. The
   game's dialog panel slide (`_gdialog_scroll_subwin`) is instant with mobile
   UI, so the tabs switch at once; the one frame between the talk loop and the
   barter loop keeps the last shown frame (`MuiScreen::holdsFrame`,
@@ -704,7 +716,8 @@ every screen on the new scalable UI, visual style/textures later via theme).
   two-way arrow under the feet, one scale for all directions, stays inside
   open containers) with armor slot,
   HP / AC / weight and hand slots, right panel with the game's summary
-  (`inventoryGetSummary`) or the chosen item (`inventoryGetItemInfo`: what
+  (`inventoryGetSummary`; the hands' lines also as inventry.msg labels and
+  values, `handParts`, drawn dim and bright) or the chosen item (`inventoryGetItemInfo`: what
   looking tells, weight, weapon damage/range/AP as if held, armor class and
   thresholds; no price). Back button in the tab column closes an open
   container first. No party tabs here (Inventory Filter has them only in
