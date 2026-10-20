@@ -189,7 +189,6 @@ namespace {
             lastOptionCount = optionCount;
             ui.setScroll("talk.reply", 0.0f);
             ui.setScroll("talk.options", 0.0f);
-            ui.setScroll("talk.feed", 0.0f);
         }
 
         // Tablet windows (the window's mockup): the speaker at the top in
@@ -434,8 +433,10 @@ namespace {
             total += gap + heights.back();
         }
 
-        float offset = ui.scroll("talk.feed", rect, total);
-        bool scrolling = ui.isScrolling("talk.feed");
+        // The answers' ids ("talk.options.<n>") are the list's children: a
+        // finger moving along it scrolls instead of pressing them.
+        float offset = ui.scroll("talk.options", rect, total);
+        bool scrolling = ui.isScrolling("talk.options");
 
         muiPushClip(rect);
         float y = rect.y - offset;
