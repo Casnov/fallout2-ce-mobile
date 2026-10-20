@@ -353,11 +353,11 @@ namespace {
         muiFillRoundRect(rect, ui.dp(6.0f), kListBackground);
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(target ? 2.0f : 1.0f), target ? theme.accent : theme.panelBorder);
 
-        constexpr int kColumns = 4;
         float gap = ui.dp(tall ? 6.0f : 4.0f);
         MuiRect area = rect.inset(gap);
-        float cell = (area.w - gap * (kColumns - 1)) / kColumns;
-        int rows = (static_cast<int>(items.size()) + kColumns - 1) / kColumns;
+        int columns = muiItemColumns(ui, area.w, gap, tall);
+        float cell = (area.w - gap * (columns - 1)) / columns;
+        int rows = (static_cast<int>(items.size()) + columns - 1) / columns;
         float contentHeight = rows * (cell + gap);
 
         float offset = ui.scroll("inventory.list", area, contentHeight);
@@ -367,7 +367,7 @@ namespace {
 
         muiPushClip(area);
         for (int index = 0; index < static_cast<int>(items.size()); index++) {
-            MuiRect cellRect = { area.x + (index % kColumns) * (cell + gap), area.y - offset + (index / kColumns) * (cell + gap), cell, cell };
+            MuiRect cellRect = { area.x + (index % columns) * (cell + gap), area.y - offset + (index / columns) * (cell + gap), cell, cell };
             if (cellRect.bottom() < area.y || cellRect.y > area.bottom()) {
                 continue;
             }

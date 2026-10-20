@@ -205,6 +205,14 @@ std::vector<MuiListItem> muiInventoryItems(Object* owner, const MuiItemFilterSta
 // Total weight of the listed items.
 int muiItemsWeight(const std::vector<MuiListItem>& items);
 
+// The one item cell size of every screen's grid, px ([roomy] - the tablet
+// windows' tall layouts): grids take the column count keeping their cells
+// nearest it (`muiItemColumns`).
+float muiItemCellSize(MuiContext& ui, bool roomy);
+
+// Columns of [gap]-spaced cells across [width] nearest that size.
+int muiItemColumns(MuiContext& ui, float width, float gap, bool roomy);
+
 // What [owner] carries as the game's inventory tells it: critters - weight
 // / carry weight ([over] when above it), containers - their items' size /
 // capacity (`containerGetMaxSize`), the rest - weight.

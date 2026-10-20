@@ -163,15 +163,25 @@ namespace {
             barterRequest(BarterRequest::Talk);
         }
 
-        // Item columns: player 3, offer 1, request 1, trader 3. A list is its
-        // cells with gaps between them and around.
-        constexpr int kSideColumns = 3;
+        // Item columns: player's, offer 1, request 1, trader's as many as
+        // the player's - as many as keep the cells nearest every screen's
+        // size. A list is its cells with gaps between them and around.
         tall = muiIsTallContent(ui, content);
         float cellGap = ui.dp(tall ? 5.0f : 4.0f);
         float groupGap = ui.dp(tall ? 10.0f : 8.0f);
-        int listGaps = (kSideColumns + 1) * 2 + 2 * 2;
-        cellSize = (content.w - groupGap * 3.0f - cellGap * listGaps) / (kSideColumns * 2 + 2);
-        float sideWidth = cellSize * kSideColumns + cellGap * (kSideColumns + 1);
+        auto cellFor = [&](int sideColumns) {
+            int listGaps = (sideColumns + 1) * 2 + 2 * 2;
+            return (content.w - groupGap * 3.0f - cellGap * listGaps) / (sideColumns * 2 + 2);
+        };
+        float target = muiItemCellSize(ui, tall);
+        int sideColumns = 2;
+        for (int columns = 3; columns <= 6; columns++) {
+            if (std::fabs(cellFor(columns) - target) < std::fabs(cellFor(sideColumns) - target)) {
+                sideColumns = columns;
+            }
+        }
+        cellSize = cellFor(sideColumns);
+        float sideWidth = cellSize * sideColumns + cellGap * (sideColumns + 1);
         float unit = cellSize + cellGap * 2.0f;
         float playerX = content.x;
         float offerX = playerX + sideWidth + groupGap;
@@ -220,10 +230,10 @@ namespace {
         lists[LIST_BARTERER_TABLE] = muiInventoryItems(view.bartererTable, all);
         lists[LIST_BARTERER] = muiInventoryItems(view.barterer, bartererFilter);
 
-        buildList(ui, LIST_PLAYER, kSideColumns, { playerX, listY, sideWidth, sideListHeight });
+        buildList(ui, LIST_PLAYER, sideColumns, { playerX, listY, sideWidth, sideListHeight });
         buildList(ui, LIST_PLAYER_TABLE, 1, { offerX, listY, unit, tableListHeight });
         buildList(ui, LIST_BARTERER_TABLE, 1, { requestX, listY, unit, tableListHeight });
-        buildList(ui, LIST_BARTERER, kSideColumns, { bartererX, listY, sideWidth, sideListHeight });
+        buildList(ui, LIST_BARTERER, sideColumns, { bartererX, listY, sideWidth, sideListHeight });
 
         // Totals: player's weight and money (and of the shown category), table
         // prices (weights when bartering with a party member).

@@ -129,6 +129,17 @@ int muiItemsWeight(const std::vector<MuiListItem>& items)
     return weight;
 }
 
+float muiItemCellSize(MuiContext& ui, bool roomy)
+{
+    return ui.dp(roomy ? 88.0f : 68.0f);
+}
+
+int muiItemColumns(MuiContext& ui, float width, float gap, bool roomy)
+{
+    float cell = muiItemCellSize(ui, roomy);
+    return std::max(1, static_cast<int>(std::lround((width + gap) / (cell + gap))));
+}
+
 std::u32string muiCarriedText(Object* owner, bool* over)
 {
     *over = false;

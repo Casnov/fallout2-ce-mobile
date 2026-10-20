@@ -283,10 +283,9 @@ namespace {
         muiFillRoundRect(rect, ui.dp(6.0f), kListBackground);
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(target ? 2.0f : 1.0f), target ? theme.accent : theme.panelBorder);
 
-        // Tall: the inventory window's cells.
-        int columns = tall ? 4 : 5;
         float gap = ui.dp(tall ? 6.0f : 4.0f);
         MuiRect area = rect.inset(gap);
+        int columns = muiItemColumns(ui, area.w, gap, tall);
         float cell = (area.w - gap * (columns - 1)) / columns;
         const std::vector<MuiListItem>& items = lists[side];
         int rows = (static_cast<int>(items.size()) + columns - 1) / columns;
