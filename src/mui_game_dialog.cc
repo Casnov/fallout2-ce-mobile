@@ -102,7 +102,8 @@ namespace {
         bool partyOpen = false;
         bool partyPending = false;
 
-        bool coversScreen() override { return true; }
+        bool coversScreen() override { return !muiUsesWindows(); }
+        bool isGameScreen() override { return true; }
 
         // Closes the review or party panel (the game's talk has no back:
         // answers end it).
@@ -151,6 +152,7 @@ namespace {
         void buildIconButtons(MuiContext& ui, const MuiRect& column);
         void buildReply(MuiContext& ui, const MuiRect& rect);
         void buildOptions(MuiContext& ui, const MuiRect& rect);
+        void buildFeed(MuiContext& ui, const MuiRect& rect);
         void buildReview(MuiContext& ui, const MuiRect& rect);
         void buildPartyStats(MuiContext& ui, const MuiRect& rect, const PartyControlView& view);
         void buildParty(MuiContext& ui, const MuiRect& rect, const PartyControlView& view);
@@ -161,16 +163,12 @@ namespace {
 
     void TalkScreen::build(MuiContext& ui)
     {
-        // Opaque over the map.
-        muiFillRect(ui.screenRect(), kBackground);
-
-        MuiRect content;
-        MuiRect iconColumn;
-        muiDialogLayout(ui, &content, &iconColumn);
+        // Opaque over the map, or a window over it. No tap outside: the
+        // game's talk has no back, answers end it.
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground);
+        const MuiRect& content = frame.content;
+        const MuiRect& iconColumn = frame.tabs;
         float gap = ui.dp(10.0f);
-
-        MuiRect left = { content.x, content.y, (iconColumn.right() - content.x) * 0.46f, content.h };
-        MuiRect right = { left.right() + gap, content.y, content.right() - left.right() - gap, content.h };
 
         // New reply: show it from the top.
         const char* reply = gameDialogGetReplyText();
@@ -180,7 +178,35 @@ namespace {
             lastOptionCount = optionCount;
             ui.setScroll("talk.reply", 0.0f);
             ui.setScroll("talk.options", 0.0f);
+            ui.setScroll("talk.feed", 0.0f);
         }
+
+        // Tablet windows (the window's mockup): the speaker at the top in
+        // the middle, under it the reply and the answers as one list; the
+        // review and the party member panel there too.
+        if (muiIsTallContent(ui, content)) {
+            float headHeight = std::floor(std::min(content.h * 0.42f, ui.dp(246.0f)));
+            float headWidth = std::min(content.w, headHeight * 388.0f / 200.0f);
+            buildHead(ui, { content.centerX() - headWidth / 2.0f, content.y, headWidth, headHeight });
+            MuiRect below = { content.x, content.y + headHeight + gap, content.w, content.h - headHeight - gap };
+
+            PartyControlView partyView;
+            if (partyOpen && gameDialogGetPartyControlView(&partyView)) {
+                MuiRect stats = { below.x, below.y, std::floor(below.w * 0.4f), below.h };
+                buildPartyStats(ui, stats, partyView);
+                buildParty(ui, { stats.right() + gap, below.y, below.right() - stats.right() - gap, below.h }, partyView);
+            } else if (reviewOpen) {
+                buildReview(ui, below);
+            } else {
+                buildFeed(ui, below);
+            }
+
+            buildIconButtons(ui, iconColumn);
+            return;
+        }
+
+        MuiRect left = { content.x, content.y, (iconColumn.right() - content.x) * 0.46f, content.h };
+        MuiRect right = { left.right() + gap, content.y, content.right() - left.right() - gap, content.h };
 
         // Speaker picture keeps the game's aspect (388 x 200) across the
         // left column, the reply takes the rest below it.
@@ -353,6 +379,104 @@ namespace {
             for (const std::u32string& line : texts[index]) {
                 muiDrawText(line, optionRect.x + padding, textY, size, color);
                 textY += lineHeight;
+            }
+
+            if (tapped && !scrolling) {
+                _gsound_red_butt_press(-1, 0);
+                gameDialogChooseOption(index);
+            }
+        }
+        muiPopClip();
+    }
+
+    // The reply in its panel sized to its text, the answers under it (the
+    // game's reaction colors), scrolling as one.
+    void TalkScreen::buildFeed(MuiContext& ui, const MuiRect& rect)
+    {
+        const MuiTheme& theme = muiTheme();
+        float replySize = ui.dp(18.0f);
+        float replyLine = std::max(muiLineHeight(replySize), ui.dp(27.0f));
+        float nameSize = ui.dp(16.0f);
+        float nameLine = std::max(muiLineHeight(nameSize), ui.dp(24.0f));
+        float optionSize = ui.dp(17.0f);
+        float optionLine = std::max(muiLineHeight(optionSize), ui.dp(26.0f));
+        float gap = ui.dp(8.0f);
+        float replyPaddingX = ui.dp(20.0f);
+        float optionPaddingX = ui.dp(18.0f);
+        float optionPaddingY = ui.dp(12.0f);
+        float minOptionHeight = ui.dp(52.0f);
+
+        std::u32string speaker = gGameDialogSpeaker != nullptr ? muiDecodeGameText(objectGetName(gGameDialogSpeaker)) : U"";
+        std::vector<std::u32string> replyLines = muiWrapText(muiDecodeGameText(gameDialogGetReplyText()), rect.w - replyPaddingX * 2.0f, replySize);
+        float replyHeight = ui.dp(12.0f) + (speaker.empty() ? 0.0f : nameLine + ui.dp(2.0f)) + replyLines.size() * replyLine + ui.dp(14.0f);
+
+        int count = gameDialogGetOptionCount();
+        float textWidth = rect.w - optionPaddingX * 2.0f;
+        std::vector<std::vector<std::u32string>> texts;
+        std::vector<float> heights;
+        float total = replyHeight;
+        for (int index = 0; index < count; index++) {
+            texts.push_back(muiWrapText(muiDecodeGameText(gameDialogGetOptionText(index)), textWidth, optionSize));
+            heights.push_back(std::max(texts.back().size() * optionLine + optionPaddingY * 2.0f, minOptionHeight));
+            total += gap + heights.back();
+        }
+
+        float offset = ui.scroll("talk.feed", rect, total);
+        bool scrolling = ui.isScrolling("talk.feed");
+
+        muiPushClip(rect);
+        float y = rect.y - offset;
+
+        MuiRect replyRect = { rect.x, y, rect.w, replyHeight };
+        ui.panel(replyRect);
+        float textY = y + ui.dp(12.0f);
+        if (!speaker.empty()) {
+            muiDrawTextAligned(speaker, { rect.x + replyPaddingX, textY, rect.w - replyPaddingX * 2.0f, nameLine }, nameSize, theme.accent, MuiAlign::Start, MuiAlign::Center);
+            textY += nameLine + ui.dp(2.0f);
+        }
+        for (const std::u32string& line : replyLines) {
+            if (textY + replyLine >= rect.y && textY <= rect.bottom()) {
+                muiDrawTextAligned(line, { rect.x + replyPaddingX, textY, rect.w - replyPaddingX * 2.0f, replyLine }, replySize, theme.text, MuiAlign::Start, MuiAlign::Center);
+            }
+            textY += replyLine;
+        }
+        y += replyHeight;
+
+        for (int index = 0; index < count; index++) {
+            y += gap;
+            MuiRect optionRect = { rect.x, y, rect.w, heights[index] };
+            y += heights[index];
+            if (optionRect.bottom() < rect.y || optionRect.y > rect.bottom()) {
+                continue;
+            }
+
+            // Visible part only, so a half hidden answer can't be tapped
+            // outside the area.
+            MuiRect touchRect = optionRect;
+            touchRect.y = std::max(optionRect.y, rect.y);
+            touchRect.h = std::min(optionRect.bottom(), rect.bottom()) - touchRect.y;
+
+            bool pressed;
+            bool tapped = ui.touchable("talk.options." + std::to_string(index), touchRect, &pressed);
+            muiFillRoundRect(optionRect, ui.dp(8.0f), pressed ? theme.buttonPressed : theme.button);
+            muiStrokeRoundRect(optionRect, ui.dp(8.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
+
+            MuiColor color = theme.text;
+            switch (gameDialogGetOptionReaction(index)) {
+            case 0:
+                color = kReactionGood;
+                break;
+            case 2:
+                color = kReactionBad;
+                break;
+            default:
+                break;
+            }
+
+            float lineY = optionRect.y + (optionRect.h - texts[index].size() * optionLine) / 2.0f;
+            for (const std::u32string& line : texts[index]) {
+                muiDrawTextAligned(line, { optionRect.x + optionPaddingX, lineY, textWidth, optionLine }, optionSize, color, MuiAlign::Start, MuiAlign::Center);
+                lineY += optionLine;
             }
 
             if (tapped && !scrolling) {
