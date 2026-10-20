@@ -878,8 +878,17 @@ MuiScreenFrame muiScreenFrameLayout(MuiContext& ui)
 
 bool muiIsTallContent(MuiContext& ui, const MuiRect& content)
 {
-    // Only windows: screens covering the screen keep the phone's layouts.
-    return muiUsesWindows() && content.w >= ui.dp(kTallMinWidthDp) && content.h >= ui.dp(kTallMinHeightDp);
+    switch (settings.touch.layout) {
+    case kMuiLayoutPhone:
+        return false;
+    case kMuiLayoutTablet:
+        // Even where they don't fit: the player sees it and chooses again.
+        return true;
+    default:
+        // Only windows: screens covering the screen keep the phone's
+        // layouts.
+        return muiUsesWindows() && content.w >= ui.dp(kTallMinWidthDp) && content.h >= ui.dp(kTallMinHeightDp);
+    }
 }
 
 MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitle)

@@ -43,6 +43,12 @@ constexpr int kMuiWindowsAuto = 0;
 constexpr int kMuiWindowsNever = 1;
 constexpr int kMuiWindowsAlways = 2;
 
+// `[touch] layout`: game screens' layouts by the room (the roomy ones in
+// windows where they fit), the phone's, the roomy ones.
+constexpr int kMuiLayoutAuto = 0;
+constexpr int kMuiLayoutPhone = 1;
+constexpr int kMuiLayoutTablet = 2;
+
 // Game screens open as windows over the world instead of covering the
 // screen (`[touch] windows`).
 bool muiUsesWindows();

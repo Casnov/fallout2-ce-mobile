@@ -353,6 +353,10 @@ struct TouchSettings {
     // covering the screen (`muiUsesWindows`): 0 - on tablets (by the
     // screen's size), 1 - never, 2 - always.
     int windows = 0;
+    // Game screens' layouts: 0 - the roomy ones in windows where they fit
+    // (`muiIsTallContent`), 1 - the phone's, 2 - the roomy ones always
+    // (even where they don't fit: the player's choice).
+    int layout = 0;
     // A tap on the world outside a window closes it (the game screens'
     // windows; small panels always close so).
     bool windows_tap_outside = true;

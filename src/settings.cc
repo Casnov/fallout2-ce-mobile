@@ -408,6 +408,7 @@ void initSettingsRegistry(bool isMapper)
     SETTING_P(hud_density, clamp(0.0, 8.0));
     SETTING(tactical_view);
     SETTING_P(windows, clamp(0, 2));
+    SETTING_P(layout, clamp(0, 2));
     SETTING(windows_tap_outside);
 #undef SECT
 

@@ -103,6 +103,10 @@ namespace {
     constexpr int kTextWindowsAuto = 379;
     constexpr int kTextWindowsNever = 380;
     constexpr int kTextWindowsAlways = 381;
+    constexpr int kTextLayout = 386;
+    constexpr int kTextLayoutNote = 387;
+    constexpr int kTextLayoutPhone = 388;
+    constexpr int kTextLayoutTablet = 389;
     constexpr int kTextSaveCompatibility = 327;
     constexpr int kTextSaveCompatibilityNote = 328;
     constexpr int kTextSectionFiles = 336;
@@ -207,6 +211,7 @@ namespace {
         bool saveCompatibility;
         int interfaceSize;
         int windows;
+        int layout;
         bool windowsTapOutside;
         int mapFilter;
         bool autoOpenDoors;
@@ -232,6 +237,7 @@ namespace {
         values.saveCompatibility = settings.enhancements.save_compatibility;
         values.interfaceSize = settings.touch.hud_scale;
         values.windows = settings.touch.windows;
+        values.layout = settings.touch.layout;
         values.windowsTapOutside = settings.touch.windows_tap_outside;
         values.mapFilter = settings.world_view.filter;
         values.autoOpenDoors = settings.qol.auto_open_doors;
@@ -258,6 +264,7 @@ namespace {
         values.saveCompatibility = EnhancementSettings().save_compatibility;
         values.interfaceSize = TouchSettings().hud_scale;
         values.windows = TouchSettings().windows;
+        values.layout = TouchSettings().layout;
         values.windowsTapOutside = TouchSettings().windows_tap_outside;
         values.mapFilter = WorldViewSettings().filter;
         QolSettings qol;
@@ -334,6 +341,7 @@ namespace {
         settings.enhancements.save_compatibility = values.saveCompatibility;
         settings.touch.hud_scale = values.interfaceSize;
         settings.touch.windows = values.windows;
+        settings.touch.layout = values.layout;
         settings.touch.windows_tap_outside = values.windowsTapOutside;
         settings.world_view.filter = values.mapFilter;
         worldViewSetFilter(values.mapFilter);
@@ -652,6 +660,16 @@ namespace {
                 // Auto: by the screen in the UI size being chosen.
                 return values.windows == kMuiWindowsAlways || (values.windows == kMuiWindowsAuto && hudIsTabletScreen(values.interfaceSize / 100.0f));
             };
+            rows.push_back(row);
+        }
+        {
+            // Separate from the frame: any of them in any (both Auto: the
+            // phone's in full screen, the roomy ones in windows).
+            Row row { Section::Display, RowKind::Choice, kTextLayout, "Screen layouts", Origin::Port, kTextLayoutNote, "Auto: tablet layouts in windows where they fit" };
+            row.options = { kTextWindowsAuto, kTextLayoutPhone, kTextLayoutTablet };
+            row.optionsFromCe = true;
+            row.get = [](const Values& values) { return static_cast<float>(values.layout); };
+            row.set = [](Values& values, float value) { values.layout = static_cast<int>(value); };
             rows.push_back(row);
         }
         {

@@ -293,6 +293,10 @@
 {383}{}{No armor}
 {384}{}{Wears no armor}
 {385}{}{Best}
+{386}{}{Screen layouts}
+{387}{}{Auto: tablet layouts in windows where they fit}
+{388}{}{Phone}
+{389}{}{Tablet}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).
