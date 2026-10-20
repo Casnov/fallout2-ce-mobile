@@ -55,7 +55,8 @@ MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitl
 MuiScreenFrame muiScreenFrameLayout(MuiContext& ui);
 
 // Room for the screens' tall layouts (the tablet windows' mockups, 7"
-// tablets too); smaller areas (phones) keep the compact ones.
+// tablets too) - in windows only; smaller areas and screens covering the
+// screen (phones) keep the compact ones.
 bool muiIsTallContent(MuiContext& ui, const MuiRect& content);
 
 // Tab column outside [rect] at its top right (screens with a card of their

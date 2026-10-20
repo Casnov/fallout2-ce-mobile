@@ -407,8 +407,8 @@ void initSettingsRegistry(bool isMapper)
     SETTING_P(hud_scale, clamp(50, 200));
     SETTING_P(hud_density, clamp(0.0, 8.0));
     SETTING(tactical_view);
-    SETTING(tablet_windows);
-    SETTING(tablet_tap_outside);
+    SETTING_P(windows, clamp(0, 2));
+    SETTING(windows_tap_outside);
 #undef SECT
 
 #define SECT world_view

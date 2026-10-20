@@ -809,16 +809,15 @@ MuiScreenFrame muiScreenFrameLayout(MuiContext& ui)
     }
 
     // The window: at most the size the screens are laid out for, the
-    // screen's margins and the tab column outside it kept. Its size is in
-    // the screen's dp, the UI size scales what's inside: the world around
-    // it stays as much as designed.
+    // screen's margins and the tab column outside it kept. In the UI's dp
+    // like everything inside: a UI size works as a screen of that many dp
+    // (at 100% a 10" tablet shows the windows' mockups as they are).
     MuiRect safe = ui.safeRect();
     float margin = ui.dp(kWindowMarginDp);
     float tabsWidth = ui.dp(kTabColumnWidthDp);
     float tabsGap = ui.dp(kWindowTabsGapDp);
-    float uiScale = hudGetInterfaceScale();
-    float width = std::min(ui.dp(kWindowWidthDp) / uiScale, safe.w - margin * 2.0f - tabsGap - tabsWidth);
-    float height = std::min(ui.dp(kWindowHeightDp) / uiScale, safe.h - margin * 2.0f);
+    float width = std::min(ui.dp(kWindowWidthDp), safe.w - margin * 2.0f - tabsGap - tabsWidth);
+    float height = std::min(ui.dp(kWindowHeightDp), safe.h - margin * 2.0f);
     float x = safe.centerX() - width / 2.0f;
     x = std::min(x, safe.right() - margin - tabsWidth - tabsGap - width);
     x = std::max(x, safe.x + margin);
@@ -833,7 +832,8 @@ MuiScreenFrame muiScreenFrameLayout(MuiContext& ui)
 
 bool muiIsTallContent(MuiContext& ui, const MuiRect& content)
 {
-    return content.w >= ui.dp(kTallMinWidthDp) && content.h >= ui.dp(kTallMinHeightDp);
+    // Only windows: screens covering the screen keep the phone's layouts.
+    return muiUsesWindows() && content.w >= ui.dp(kTallMinWidthDp) && content.h >= ui.dp(kTallMinHeightDp);
 }
 
 MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitle)
@@ -869,7 +869,7 @@ MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitl
     // finger missing a tab sideways doesn't.
     MuiRect around = { frame.window.x, frame.window.y, frame.tabs.right() + ui.dp(kWindowTabsSlopDp) - frame.window.x, frame.window.h };
     ui.mark(kMuiWindowTapArea, around);
-    frame.tappedOutside = settings.touch.tablet_tap_outside && ui.tappedOutside(around);
+    frame.tappedOutside = settings.touch.windows_tap_outside && ui.tappedOutside(around);
     return frame;
 }
 

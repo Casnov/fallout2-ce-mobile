@@ -96,10 +96,13 @@ namespace {
     constexpr int kTextWorldmapFollowNote = 323;
     constexpr int kTextTacticalView = 373;
     constexpr int kTextTacticalViewNote = 374;
-    constexpr int kTextTabletWindows = 375;
-    constexpr int kTextTabletWindowsNote = 376;
-    constexpr int kTextTabletTapOutside = 377;
-    constexpr int kTextTabletTapOutsideNote = 378;
+    constexpr int kTextWindows = 375;
+    constexpr int kTextWindowsNote = 376;
+    constexpr int kTextWindowsTapOutside = 377;
+    constexpr int kTextWindowsTapOutsideNote = 378;
+    constexpr int kTextWindowsAuto = 379;
+    constexpr int kTextWindowsNever = 380;
+    constexpr int kTextWindowsAlways = 381;
     constexpr int kTextSaveCompatibility = 327;
     constexpr int kTextSaveCompatibilityNote = 328;
     constexpr int kTextSectionFiles = 336;
@@ -202,10 +205,9 @@ namespace {
         bool worldmapFollow;
         bool tacticalView;
         bool saveCompatibility;
-        // The size seen, percent (the screen's default times `hud_scale`).
         int interfaceSize;
-        bool tabletWindows;
-        bool tabletTapOutside;
+        int windows;
+        bool windowsTapOutside;
         int mapFilter;
         bool autoOpenDoors;
         bool walkWhenSneaking;
@@ -228,9 +230,9 @@ namespace {
         values.worldmapFollow = settings.enhancements.worldmap_follow_party;
         values.tacticalView = settings.enhancements.tactical_view;
         values.saveCompatibility = settings.enhancements.save_compatibility;
-        values.interfaceSize = static_cast<int>(std::lround(hudGetInterfaceScale() * 20.0f)) * 5;
-        values.tabletWindows = settings.touch.tablet_windows;
-        values.tabletTapOutside = settings.touch.tablet_tap_outside;
+        values.interfaceSize = settings.touch.hud_scale;
+        values.windows = settings.touch.windows;
+        values.windowsTapOutside = settings.touch.windows_tap_outside;
         values.mapFilter = settings.world_view.filter;
         values.autoOpenDoors = settings.qol.auto_open_doors;
         values.walkWhenSneaking = settings.qol.walk_when_sneaking;
@@ -254,9 +256,9 @@ namespace {
         values.worldmapFollow = EnhancementSettings().worldmap_follow_party;
         values.tacticalView = EnhancementSettings().tactical_view;
         values.saveCompatibility = EnhancementSettings().save_compatibility;
-        values.interfaceSize = hudGetDefaultInterfaceScale() * TouchSettings().hud_scale / 100;
-        values.tabletWindows = TouchSettings().tablet_windows;
-        values.tabletTapOutside = TouchSettings().tablet_tap_outside;
+        values.interfaceSize = TouchSettings().hud_scale;
+        values.windows = TouchSettings().windows;
+        values.windowsTapOutside = TouchSettings().windows_tap_outside;
         values.mapFilter = WorldViewSettings().filter;
         QolSettings qol;
         values.autoOpenDoors = qol.auto_open_doors;
@@ -330,9 +332,9 @@ namespace {
         settings.enhancements.worldmap_follow_party = values.worldmapFollow;
         settings.enhancements.tactical_view = values.tacticalView;
         settings.enhancements.save_compatibility = values.saveCompatibility;
-        settings.touch.hud_scale = static_cast<int>(std::lround(values.interfaceSize * 100.0f / hudGetDefaultInterfaceScale()));
-        settings.touch.tablet_windows = values.tabletWindows;
-        settings.touch.tablet_tap_outside = values.tabletTapOutside;
+        settings.touch.hud_scale = values.interfaceSize;
+        settings.touch.windows = values.windows;
+        settings.touch.windows_tap_outside = values.windowsTapOutside;
         settings.world_view.filter = values.mapFilter;
         worldViewSetFilter(values.mapFilter);
         settings.qol.auto_open_doors = values.autoOpenDoors;
@@ -631,19 +633,25 @@ namespace {
             row.set = [](Values& values, float value) { values.interfaceSize = static_cast<int>(std::lround(value / 5.0f) * 5); };
             rows.push_back(row);
         }
-        // Only where screens can be windows.
-        if (hudIsTabletScreen()) {
-            Row row { Section::Display, RowKind::Toggle, kTextTabletWindows, "Windows on tablets", Origin::Port, kTextTabletWindowsNote, "Screens open as a window over the game world" };
-            row.get = [](const Values& values) { return values.tabletWindows ? 1.0f : 0.0f; };
-            row.set = [](Values& values, float value) { values.tabletWindows = value != 0.0f; };
+        {
+            // Every screen: phones can have windows too (a small UI size
+            // gives the windows' roomy layouts room).
+            Row row { Section::Display, RowKind::Choice, kTextWindows, "Game screens", Origin::Port, kTextWindowsNote, "Auto: windows over the world on tablets" };
+            row.options = { kTextWindowsAuto, kTextWindowsNever, kTextWindowsAlways };
+            row.optionsFromCe = true;
+            row.get = [](const Values& values) { return static_cast<float>(values.windows); };
+            row.set = [](Values& values, float value) { values.windows = static_cast<int>(value); };
             rows.push_back(row);
         }
-        // Only while screens are windows.
-        if (hudIsTabletScreen()) {
-            Row row { Section::Display, RowKind::Toggle, kTextTabletTapOutside, "Close windows by tapping outside", Origin::Port, kTextTabletTapOutsideNote, "A tap on the world past a window closes it" };
-            row.get = [](const Values& values) { return values.tabletTapOutside ? 1.0f : 0.0f; };
-            row.set = [](Values& values, float value) { values.tabletTapOutside = value != 0.0f; };
-            row.shown = [](const Values& values) { return values.tabletWindows; };
+        {
+            // Only while screens are windows.
+            Row row { Section::Display, RowKind::Toggle, kTextWindowsTapOutside, "Close windows by tapping outside", Origin::Port, kTextWindowsTapOutsideNote, "A tap on the world past a window closes it" };
+            row.get = [](const Values& values) { return values.windowsTapOutside ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.windowsTapOutside = value != 0.0f; };
+            row.shown = [](const Values& values) {
+                // Auto: by the screen in the UI size being chosen.
+                return values.windows == kMuiWindowsAlways || (values.windows == kMuiWindowsAuto && hudIsTabletScreen(values.interfaceSize / 100.0f));
+            };
             rows.push_back(row);
         }
         {

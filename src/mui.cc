@@ -307,7 +307,18 @@ bool muiIsEnabled()
 
 bool muiUsesWindows()
 {
-    return muiIsEnabled() && settings.touch.tablet_windows && hudIsTabletScreen();
+    if (!muiIsEnabled()) {
+        return false;
+    }
+
+    switch (settings.touch.windows) {
+    case kMuiWindowsNever:
+        return false;
+    case kMuiWindowsAlways:
+        return true;
+    default:
+        return hudIsTabletScreen();
+    }
 }
 
 const MuiTheme& muiTheme()

@@ -37,8 +37,14 @@ constexpr bool muiIsEnabled() { return true; }
 bool muiIsEnabled();
 #endif
 
-// Game screens open as windows over the world (tablets, `[touch]
-// tablet_windows`) instead of covering the screen.
+// `[touch] windows`: game screens as windows on tablets (by the screen's
+// size), never, always.
+constexpr int kMuiWindowsAuto = 0;
+constexpr int kMuiWindowsNever = 1;
+constexpr int kMuiWindowsAlways = 2;
+
+// Game screens open as windows over the world instead of covering the
+// screen (`[touch] windows`).
 bool muiUsesWindows();
 
 struct MuiTheme {

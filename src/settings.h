@@ -341,19 +341,21 @@ struct TouchSettings {
     bool hud = false;
     bool mobile_ui = false;
 #endif
-    // HUD and mobile UI size in percent of the screen's default (buttons are
-    // sized in dp; big tablets start bigger, `hudGetDefaultInterfaceScale`).
+    // HUD and mobile UI size in percent: buttons, text and the game screens'
+    // windows are sized in dp times it (a smaller size works as a screen of
+    // more dp, `hudIsTabletScreen`).
     int hud_scale = 100;
     // Screen density (Android dp scale). 0 - detect (Android), 1.0 elsewhere.
     double hud_density = 0.0;
     // Combat's tactical view (its HUD button), kept until switched again.
     bool tactical_view = false;
-    // Tablets: mobile UI's game screens open as windows over the world
-    // instead of covering the screen (`muiUsesWindows`).
-    bool tablet_windows = true;
-    // Tablets: a tap on the world outside a window closes it (the game
-    // screens' windows; small panels always close so).
-    bool tablet_tap_outside = true;
+    // Mobile UI's game screens as windows over the world instead of
+    // covering the screen (`muiUsesWindows`): 0 - on tablets (by the
+    // screen's size), 1 - never, 2 - always.
+    int windows = 0;
+    // A tap on the world outside a window closes it (the game screens'
+    // windows; small panels always close so).
+    bool windows_tap_outside = true;
 };
 
 struct MapperSettings {

@@ -282,10 +282,13 @@
 {372}{}{Licenses}
 {373}{}{Tactical view}
 {374}{}{Combat button: see-through figures, tiles and where you can walk}
-{375}{}{Windows on tablets}
-{376}{}{Screens open as a window over the game world}
+{375}{}{Game screens}
+{376}{}{Auto: windows over the world on tablets}
 {377}{}{Close windows by tapping outside}
 {378}{}{A tap on the world past a window closes it}
+{379}{}{Auto}
+{380}{}{Full screen}
+{381}{}{Windows}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

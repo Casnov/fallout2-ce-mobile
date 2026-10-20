@@ -80,11 +80,13 @@ float hudGetScreenDensity()
 #endif
 }
 
-// Shorter side of tablet screens, dp: phones in landscape have up to ~430,
-// 7"-8" tablets from ~530, 10"-11" ones ~800.
-constexpr float kTabletShortSideDp = 500.0f;
-constexpr float kBigTabletShortSideDp = 720.0f;
-constexpr int kBigTabletInterfaceScale = 110;
+// A tablet's screen, dp: room for a game screen's window with the tall
+// layouts - their content (680x440, `muiIsTallContent`), the window's
+// padding and the screen's margins (14 + 24 each side), the tab column
+// beside it (12 + 52). Phones in landscape have up to ~430 on the shorter
+// side, 7"-8" tablets from ~530, 10"-11" ones ~800.
+constexpr float kTabletShortSideDp = 520.0f;
+constexpr float kTabletLongSideDp = 820.0f;
 
 float hudGetScreenShortSideDp()
 {
@@ -96,19 +98,26 @@ float hudGetScreenShortSideDp()
     return static_cast<float>(std::min(width, height)) / hudGetScreenDensity();
 }
 
-bool hudIsTabletScreen()
+bool hudIsTabletScreen(float interfaceScale)
 {
-    return hudGetScreenShortSideDp() >= kTabletShortSideDp;
+    int width = 0;
+    int height = 0;
+    if (interfaceScale <= 0.0f || gSdlRenderer == nullptr || SDL_GetRendererOutputSize(gSdlRenderer, &width, &height) != 0 || width <= 0 || height <= 0) {
+        return false;
+    }
+
+    float dp = hudGetScreenDensity() * interfaceScale;
+    return std::min(width, height) / dp >= kTabletShortSideDp && std::max(width, height) / dp >= kTabletLongSideDp;
 }
 
-int hudGetDefaultInterfaceScale()
+bool hudIsTabletScreen()
 {
-    return hudGetScreenShortSideDp() >= kBigTabletShortSideDp ? kBigTabletInterfaceScale : 100;
+    return hudIsTabletScreen(hudGetInterfaceScale());
 }
 
 float hudGetInterfaceScale()
 {
-    return static_cast<float>(hudGetDefaultInterfaceScale()) * static_cast<float>(settings.touch.hud_scale) / 10000.0f;
+    return static_cast<float>(settings.touch.hud_scale) / 100.0f;
 }
 
 // Display cutout safe insets in physical pixels (left, top, right, bottom).
