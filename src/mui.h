@@ -163,9 +163,11 @@ public:
     // finger drag scrolls, a fling continues with inertia. Widgets inside
     // must use ids starting with "<id>." - they lose their press when the
     // finger starts scrolling. Returns scroll offset (0 - top of content).
-    float scroll(const std::string& id, const MuiRect& rect, float contentHeight);
+    // Content that doesn't fit gets the scroll marks (`drawScrollMarks`)
+    // unless [marks] is off (an area showing its own).
+    float scroll(const std::string& id, const MuiRect& rect, float contentHeight, bool marks = true);
     // The same sideways over content of [contentWidth] (0 - its left end).
-    float scrollHorizontal(const std::string& id, const MuiRect& rect, float contentWidth);
+    float scrollHorizontal(const std::string& id, const MuiRect& rect, float contentWidth, bool marks = true);
     void setScroll(const std::string& id, float offset);
     bool isScrolling(const std::string& id) const;
 
@@ -211,10 +213,11 @@ public:
     // "<id>.<index>"): a tap picks it. Returns true when [selected] changed.
     bool segmented(const std::string& id, const MuiRect& rect, const std::vector<std::u32string>& labels, int* selected);
 
-    float scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal);
+    float scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal, bool marks);
 
-    // Bars and edge fades of the areas scrolled since the last call, over
-    // their content: before `dim` and after each screen's build.
+    // Bars and edge fades of the areas scrolled since the last call: the
+    // bar beside the area (in its padding), the fades over its content;
+    // before `dim` and after each screen's build.
     void drawScrollMarks();
 
     // Internal state, filled by mui.cc.

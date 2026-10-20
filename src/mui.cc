@@ -420,17 +420,17 @@ bool MuiContext::button(const std::string& id, const MuiRect& rect, const std::u
     return clicked;
 }
 
-float MuiContext::scroll(const std::string& id, const MuiRect& rect, float contentHeight)
+float MuiContext::scroll(const std::string& id, const MuiRect& rect, float contentHeight, bool marks)
 {
-    return scrollAlong(id, rect, contentHeight, false);
+    return scrollAlong(id, rect, contentHeight, false, marks);
 }
 
-float MuiContext::scrollHorizontal(const std::string& id, const MuiRect& rect, float contentWidth)
+float MuiContext::scrollHorizontal(const std::string& id, const MuiRect& rect, float contentWidth, bool marks)
 {
-    return scrollAlong(id, rect, contentWidth, true);
+    return scrollAlong(id, rect, contentWidth, true, marks);
 }
 
-float MuiContext::scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal)
+float MuiContext::scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal, bool marks)
 {
     region(rect);
     gFrameWidgets[id] = rect;
@@ -501,16 +501,16 @@ float MuiContext::scrollAlong(const std::string& id, const MuiRect& rect, float 
         }
     }
 
-    if (maxOffset > 0.0f) {
+    if (marks && maxOffset > 0.0f) {
         gScrollMarks.push_back({ rect, contentSize, state.offset, horizontal });
     }
 
     return state.offset;
 }
 
-// Where the shown part is: a thin bar along the far edge (its track and
-// thumb), a light fade at each edge with more content beyond. Drawn only,
-// touches go to what is under them.
+// Where the shown part is: a thin bar just past the far edge (its track and
+// thumb, in the area's padding, off its content), a light fade at each edge
+// with more content beyond. Drawn only, touches go to what is under them.
 void MuiContext::drawScrollMarks()
 {
     for (const ScrollMark& mark : gScrollMarks) {
@@ -542,13 +542,14 @@ void MuiContext::drawScrollMarks()
             }
         }
 
-        float thickness = dp(3.0f);
+        float thickness = dp(2.5f);
         float inset = dp(3.0f);
+        float outside = dp(1.0f);
         float thumbLength = std::max(length * length / mark.contentSize, dp(24.0f));
         float position = (length - inset * 2.0f - thumbLength) * std::clamp(mark.offset / maxOffset, 0.0f, 1.0f);
         MuiRect track = mark.horizontal
-            ? MuiRect { rect.x + inset, rect.bottom() - inset - thickness, rect.w - inset * 2.0f, thickness }
-            : MuiRect { rect.right() - inset - thickness, rect.y + inset, thickness, rect.h - inset * 2.0f };
+            ? MuiRect { rect.x + inset, rect.bottom() + outside, rect.w - inset * 2.0f, thickness }
+            : MuiRect { rect.right() + outside, rect.y + inset, thickness, rect.h - inset * 2.0f };
         MuiRect thumb = mark.horizontal
             ? MuiRect { track.x + position, track.y, thumbLength, thickness }
             : MuiRect { track.x, track.y + position, thickness, thumbLength };

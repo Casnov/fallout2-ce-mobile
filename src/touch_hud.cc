@@ -805,7 +805,8 @@ namespace {
 
         // A finger moves the modes sideways; a mode chosen anew (the weapon
         // switched, a key) is brought into view once.
-        float offset = ui.scrollHorizontal("hud.mode", strip, total);
+        // Its own track and fades.
+        float offset = ui.scrollHorizontal("hud.mode", strip, total, false);
         int shownKey = static_cast<int>(current) * 64 + count;
         if (shownKey != gModeShownKey) {
             gModeShownKey = shownKey;
@@ -971,7 +972,7 @@ namespace {
             gLogScrollToEnd = false;
         }
 
-        float offset = ui.scroll("hud.log", content, height);
+        float offset = ui.scroll("hud.log", content, height, false);
 
         muiPushClip(content);
         float y = content.y - offset + std::max(content.h - height, 0.0f);

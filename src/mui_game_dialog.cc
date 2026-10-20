@@ -395,7 +395,7 @@ namespace {
     void TalkScreen::buildFeed(MuiContext& ui, const MuiRect& area)
     {
         const MuiTheme& theme = muiTheme();
-        // The panels leave the scroll bar its room at the right.
+        // The scroll bar's room at the right.
         MuiRect rect = { area.x, area.y, area.w - ui.dp(12.0f), area.h };
         float replySize = ui.dp(18.0f);
         float replyLine = std::max(muiLineHeight(replySize), ui.dp(27.0f));
@@ -424,7 +424,7 @@ namespace {
             total += gap + heights.back();
         }
 
-        float offset = ui.scroll("talk.feed", area, total);
+        float offset = ui.scroll("talk.feed", rect, total);
         bool scrolling = ui.isScrolling("talk.feed");
 
         muiPushClip(rect);
