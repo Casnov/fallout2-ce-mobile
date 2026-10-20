@@ -62,6 +62,8 @@ namespace {
         MuiRect listRects[LIST_COUNT];
         std::vector<MuiRect> partyTabRects;
         float cellSize = 0.0f;
+        // Tablet windows: the roomy sizes (`muiIsTallContent`).
+        bool tall = false;
 
         MessageList messageList;
         bool messageListLoaded = false;
@@ -71,7 +73,8 @@ namespace {
             modal = true;
         }
 
-        bool coversScreen() override { return true; }
+        bool coversScreen() override { return !muiUsesWindows(); }
+        bool isGameScreen() override { return true; }
 
         bool isActive() override
         {
@@ -144,15 +147,12 @@ namespace {
             return;
         }
 
-        // Opaque over the map.
-        muiFillRect(ui.screenRect(), kBackground);
+        // Opaque over the map, or a window over it.
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground);
+        const MuiRect& content = frame.content;
 
-        MuiRect content;
-        MuiRect tabs;
-        muiDialogLayout(ui, &content, &tabs);
-
-        int tab = muiDialogTabs(ui, tabs, MuiDialogTab::Barter, true, gameDialogSpeakerIsPartyMember());
-        if (tab == static_cast<int>(MuiDialogTab::Talk)) {
+        int tab = muiDialogTabs(ui, frame.tabs, MuiDialogTab::Barter, true, gameDialogSpeakerIsPartyMember());
+        if (tab == static_cast<int>(MuiDialogTab::Talk) || frame.tappedOutside) {
             // Back to talk, tables go back like with the game's talk button.
             barterRequest(BarterRequest::Talk);
         } else if (tab == static_cast<int>(MuiDialogTab::Review)) {
@@ -166,8 +166,9 @@ namespace {
         // Item columns: player 3, offer 1, request 1, trader 3. A list is its
         // cells with gaps between them and around.
         constexpr int kSideColumns = 3;
-        float cellGap = ui.dp(4.0f);
-        float groupGap = ui.dp(8.0f);
+        tall = muiIsTallContent(ui, content);
+        float cellGap = ui.dp(tall ? 5.0f : 4.0f);
+        float groupGap = ui.dp(tall ? 10.0f : 8.0f);
         int listGaps = (kSideColumns + 1) * 2 + 2 * 2;
         cellSize = (content.w - groupGap * 3.0f - cellGap * listGaps) / (kSideColumns * 2 + 2);
         float sideWidth = cellSize * kSideColumns + cellGap * (kSideColumns + 1);
@@ -178,24 +179,27 @@ namespace {
         float bartererX = requestX + unit + groupGap;
 
         // Sides: lists down to their totals at the bottom; tables: lists,
-        // totals, the offer button under both.
-        float rowHeight = ui.dp(30.0f);
-        float gap = ui.dp(6.0f);
-        float buttonHeight = ui.dp(40.0f);
-        float infoHeight = ui.dp(18.0f);
+        // totals, the offer button under both. Tall (the window's mockup):
+        // the sides end with the tables, their totals beside the button.
+        float rowHeight = ui.dp(tall ? 36.0f : 30.0f);
+        float filterHeight = ui.dp(tall ? 40.0f : 30.0f);
+        float gap = ui.dp(tall ? 8.0f : 6.0f);
+        float buttonHeight = ui.dp(tall ? 52.0f : 40.0f);
+        float infoHeight = ui.dp(tall ? 24.0f : 18.0f);
         float headerY = content.y;
         float filterY = headerY + rowHeight + gap;
-        float listY = filterY + rowHeight + gap;
-        float sideInfoY = content.bottom() - infoHeight;
-        float sideListHeight = sideInfoY - gap - listY;
+        float listY = filterY + filterHeight + gap;
         float buttonY = content.bottom() - buttonHeight;
         float tableInfoY = buttonY - gap - infoHeight;
         float tableListHeight = tableInfoY - gap - listY;
+        float sideInfoY = tall ? buttonY : content.bottom() - infoHeight;
+        float sideInfoHeight = tall ? buttonHeight : infoHeight;
+        float sideListHeight = tall ? tableListHeight : sideInfoY - gap - listY;
 
         // Headers: party tabs (or player name), trader name and money.
         buildPartyTabs(ui, view, { playerX, headerY, sideWidth, rowHeight });
 
-        float nameSize = ui.dp(14.0f);
+        float nameSize = ui.dp(tall ? 16.0f : 14.0f);
         std::u32string bartererName = muiDecodeGameText(objectGetName(view.barterer));
         if (!view.partyMemberBarter) {
             bartererName += U"  $" + number(itemGetTotalCaps(view.barterer));
@@ -203,11 +207,11 @@ namespace {
         muiDrawTextAligned(bartererName, { bartererX, headerY, sideWidth, rowHeight }, nameSize, theme.accent, MuiAlign::Start, MuiAlign::Center);
 
         // Filters and table titles.
-        muiItemFilterRow(ui, "barter.filter.player", { playerX, filterY, sideWidth, rowHeight }, &playerFilter);
-        muiItemFilterRow(ui, "barter.filter.barterer", { bartererX, filterY, sideWidth, rowHeight }, &bartererFilter);
-        float titleSize = ui.dp(12.0f);
-        muiDrawTextAligned(muiDecodeGameText(text(kTextYourOffer, "OFFER")), { offerX, filterY, unit, rowHeight }, titleSize, theme.textDim, MuiAlign::Center, MuiAlign::Center);
-        muiDrawTextAligned(muiDecodeGameText(text(kTextRequest, "REQUEST")), { requestX, filterY, unit, rowHeight }, titleSize, theme.textDim, MuiAlign::Center, MuiAlign::Center);
+        muiItemFilterRow(ui, "barter.filter.player", { playerX, filterY, sideWidth, filterHeight }, &playerFilter);
+        muiItemFilterRow(ui, "barter.filter.barterer", { bartererX, filterY, sideWidth, filterHeight }, &bartererFilter);
+        float titleSize = ui.dp(tall ? 13.0f : 12.0f);
+        muiDrawTextAligned(muiDecodeGameText(text(kTextYourOffer, "OFFER")), { offerX, filterY, unit, filterHeight }, titleSize, theme.textDim, MuiAlign::Center, MuiAlign::Center);
+        muiDrawTextAligned(muiDecodeGameText(text(kTextRequest, "REQUEST")), { requestX, filterY, unit, filterHeight }, titleSize, theme.textDim, MuiAlign::Center, MuiAlign::Center);
 
         // Lists.
         MuiItemFilterState all;
@@ -223,16 +227,16 @@ namespace {
 
         // Totals: player's weight and money (and of the shown category), table
         // prices (weights when bartering with a party member).
-        float infoSize = ui.dp(12.0f);
+        float infoSize = ui.dp(tall ? 15.0f : 12.0f);
         int weight = objectGetInventoryWeight(view.dude);
         int carry = critterGetStat(view.dude, STAT_CARRY_WEIGHT);
         std::u32string playerInfo = number(weight) + U"/" + number(carry) + U"  $" + number(itemGetTotalCaps(view.dude));
         if (playerFilter.filter != MuiItemFilter::All) {
             playerInfo += U"  (" + number(muiItemsWeight(lists[LIST_PLAYER])) + U")";
         }
-        drawWeight(ui, playerInfo, { playerX, sideInfoY, sideWidth, infoHeight }, infoSize, theme.textDim, MuiAlign::Start);
+        drawWeight(ui, playerInfo, { playerX, sideInfoY, sideWidth, sideInfoHeight }, infoSize, theme.textDim, MuiAlign::Start);
 
-        float tableInfoSize = ui.dp(13.0f);
+        float tableInfoSize = ui.dp(tall ? 16.0f : 13.0f);
         MuiRect offerInfo = { offerX, tableInfoY, unit, infoHeight };
         MuiRect requestInfo = { requestX, tableInfoY, unit, infoHeight };
         if (view.partyMemberBarter) {
@@ -244,7 +248,7 @@ namespace {
         }
 
         // The trader's shown items' weight, every filter ("All" too).
-        drawWeight(ui, number(muiItemsWeight(lists[LIST_BARTERER])), { bartererX, sideInfoY, sideWidth, infoHeight }, infoSize, theme.textDim, MuiAlign::Start);
+        drawWeight(ui, number(muiItemsWeight(lists[LIST_BARTERER])), { bartererX, sideInfoY, sideWidth, sideInfoHeight }, infoSize, theme.textDim, MuiAlign::Start);
 
         // Offer under both tables.
         MuiRect offerRect = { offerX, buttonY, requestX + unit - offerX, buttonHeight };
@@ -263,7 +267,7 @@ namespace {
 
         // Only the player: just the name.
         if (view.party.size() <= 1) {
-            muiDrawTextAligned(muiDecodeGameText(objectGetName(view.dude)), rect, ui.dp(14.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(muiDecodeGameText(objectGetName(view.dude)), rect, ui.dp(tall ? 16.0f : 14.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
             return;
         }
 
@@ -291,7 +295,7 @@ namespace {
 
             MuiRect label = tab.inset(ui.dp(4.0f), 0.0f);
             muiPushClip(label);
-            muiDrawTextAligned(muiDecodeGameText(objectGetName(view.party[index])), label, ui.dp(12.0f), color, MuiAlign::Center, MuiAlign::Center);
+            muiDrawTextAligned(muiDecodeGameText(objectGetName(view.party[index])), label, ui.dp(tall ? 14.0f : 12.0f), color, MuiAlign::Center, MuiAlign::Center);
             muiPopClip();
             if (!reachable) {
                 muiDrawUnavailableOverlay(ui, tab, 5.0f);
