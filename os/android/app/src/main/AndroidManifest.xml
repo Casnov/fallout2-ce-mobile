@@ -54,11 +54,22 @@
 
          An example Java class can be found in README-android.md
     -->
+    <!-- A game: large screens (tablets, foldables) keep its landscape
+         orientation (Android 16 doesn't override games'), as the user's
+         aspect ratio choices for apps don't (Android 14+). -->
     <application android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
+        android:appCategory="game"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
         android:hardwareAccelerated="true" >
+
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_OVERRIDE"
+            android:value="false" />
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_FULLSCREEN_OVERRIDE"
+            android:value="false" />
 
         <!-- Example of setting SDL hints from AndroidManifest.xml:
         <meta-data android:name="SDL_ENV.SDL_ACCELEROMETER_AS_JOYSTICK" android:value="0"/>
