@@ -457,6 +457,9 @@ int muiShowDialogBox(const char* title, const char** body, int bodyLength, const
 // screen coordinates.
 bool muiGetWidgetCenter(const char* id, float* x, float* y);
 
+// Automated tests: rect of widget [id] of the last frame, normalized.
+bool muiGetWidgetRect(const char* id, MuiRect* rect);
+
 // Mark of a game screen's window and its tabs: a tap outside closes it
 // (`muiScreenFrame`).
 constexpr const char* kMuiWindowTapArea = "window.tap_area";

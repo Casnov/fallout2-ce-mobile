@@ -1124,4 +1124,15 @@ bool muiGetWidgetCenter(const char* id, float* x, float* y)
     return true;
 }
 
+bool muiGetWidgetRect(const char* id, MuiRect* rect)
+{
+    auto it = gWidgets.find(id);
+    if (it == gWidgets.end() || gOutputWidth <= 0 || gOutputHeight <= 0) {
+        return false;
+    }
+
+    *rect = { it->second.x / gOutputWidth, it->second.y / gOutputHeight, it->second.w / gOutputWidth, it->second.h / gOutputHeight };
+    return true;
+}
+
 } // namespace fallout

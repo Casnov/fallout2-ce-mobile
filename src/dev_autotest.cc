@@ -453,6 +453,13 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_LOG_PREFERENCES,
     // Logs the saves (count, quick ones); FAIL when there aren't [a] of them.
     DEV_AUTOTEST_ACTION_LOG_SAVES,
+    // Mobile UI with windows (tablets): taps the world left of the game
+    // screen's window (`muiScreenFrame`). No window, or no room left of it
+    // (4:3): nothing is tapped.
+    DEV_AUTOTEST_ACTION_MUI_TAP_OUTSIDE_WINDOW,
+    // After `MUI_TAP_OUTSIDE_WINDOW`: FAIL when it tapped and widget `widget`
+    // is still shown; when it didn't, the screen is closed with Back.
+    DEV_AUTOTEST_ACTION_MUI_CHECK_CLOSED,
 };
 
 struct DevAutotestStep {
@@ -1036,6 +1043,9 @@ static int gDevAutotestTouchFrame = -1;
 // Frames to wait before the touch starts.
 static int gDevAutotestTouchDelay = 0;
 
+// `MUI_TAP_OUTSIDE_WINDOW` tapped the world next to a window.
+static bool gDevAutotestTappedOutside = false;
+
 static int gDevAutotestWalkTarget = -1;
 static int gDevAutotestTouchStartTile = -1;
 
@@ -1329,6 +1339,10 @@ static const DevAutotestStep kDevAutotestInventorySteps[] = {
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 30, "i21m_drag_knife_to_figure", "inventory.pid.4", "inventory.figure" },
     { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "i21n_after_rejected_drag" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "i22_back", "inventory.back" },
+    // Tablets: a tap on the world next to the window closes it.
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Inventory), 0, 0, 30, "i23_open_again" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP_OUTSIDE_WINDOW, 0, 0, 0, 30, "i24_tap_outside" },
+    { DEV_AUTOTEST_ACTION_MUI_CHECK_CLOSED, 0, 0, 0, 30, "i25_closed", "inventory.back" },
 };
 
 // The game's inventory and loot windows (run with [touch] mobile_ui=0,
@@ -5950,6 +5964,39 @@ void devAutotestTick()
                 devAutotestStartTouch(x + step->a, y + step->b, x + step->a, y + step->b, 1, 0);
             }
             break;
+        case DEV_AUTOTEST_ACTION_MUI_TAP_OUTSIDE_WINDOW: {
+            // The window's area where taps don't close it (a mark).
+            MuiRect area;
+            gDevAutotestTappedOutside = false;
+            if (!muiGetWidgetRect(kMuiWindowTapArea, &area)) {
+                devAutotestLog("  no window: the screen covers the screen\n");
+                break;
+            }
+            float x = area.x / 2.0f * screenGetWidth();
+            float y = area.centerY() * screenGetHeight();
+            if (x < 2.0f) {
+                devAutotestLog("  no room left of the window\n");
+                break;
+            }
+            devAutotestLog("  tap outside the window at (%.0f, %.0f)\n", x, y);
+            devAutotestStartTouch(x, y, x, y, 1, 0);
+            gDevAutotestTappedOutside = true;
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MUI_CHECK_CLOSED: {
+            float x;
+            float y;
+            bool shown = step->widget != nullptr && muiGetWidgetCenter(step->widget, &x, &y);
+            if (!gDevAutotestTappedOutside) {
+                devAutotestLog("  not tapped outside, %s %s: Back\n", step->widget != nullptr ? step->widget : "?", shown ? "shown" : "gone");
+                muiRequestBack();
+            } else if (shown) {
+                devAutotestLog("FAIL: %s still shown after a tap outside the window\n", step->widget);
+            } else {
+                devAutotestLog("  closed by the tap outside the window\n");
+            }
+            break;
+        }
         case DEV_AUTOTEST_ACTION_MUI_TAP: {
             float x;
             float y;
