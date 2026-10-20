@@ -43,7 +43,8 @@ namespace {
             modal = true;
         }
 
-        bool coversScreen() override { return true; }
+        bool coversScreen() override { return !muiUsesWindows(); }
+        bool isGameScreen() override { return true; }
 
         void reset();
         void build(MuiContext& ui) override;
@@ -52,6 +53,8 @@ namespace {
     private:
         MuiMapView mapView;
         bool opened = false;
+        // Tablet windows: the roomy sizes (`muiIsTallContent`).
+        bool tall = false;
 
         // What the automap shows, taken again when it changes (the game is
         // paused under the screen).
@@ -82,7 +85,7 @@ namespace {
         }
         muiFillRoundRect(rect, ui.dp(6.0f), fill);
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(1.0f), on || pressed ? theme.accent : theme.buttonBorder);
-        float size = muiFitTextSize(label, rect.w - ui.dp(12.0f), ui.dp(14.0f), ui.dp(10.0f));
+        float size = muiFitTextSize(label, rect.w - ui.dp(12.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
         muiDrawTextAligned(label, rect, size, text, MuiAlign::Center, MuiAlign::Center);
         return tapped;
     }
@@ -90,25 +93,25 @@ namespace {
     void AutomapScreen::build(MuiContext& ui)
     {
         const MuiTheme& theme = muiTheme();
-        muiFillRect(ui.screenRect(), kBackground);
+        // Opaque over the map, or a window over it.
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground);
+        const MuiRect& content = frame.content;
 
-        MuiRect content;
-        MuiRect tabs;
-        muiDialogLayout(ui, &content, &tabs);
-
-        MuiGameScreenTab tab = muiGameScreenTabs(ui, tabs, "automap", MuiGameScreenTab::Map, true);
-        if (tab == MuiGameScreenTab::Back) {
+        MuiGameScreenTab tab = muiGameScreenTabs(ui, frame.tabs, "automap", MuiGameScreenTab::Map, true);
+        if (tab == MuiGameScreenTab::Back || frame.tappedOutside) {
             back();
         } else if (tab != MuiGameScreenTab::None && muiSwitchGameScreen(ui, tab)) {
             finished = true;
         }
 
         // Header: where (the game's names), details and motion sensor at the
-        // right.
-        float headerHeight = ui.dp(32.0f);
+        // right. Tablet windows: the roomy sizes.
+        tall = muiIsTallContent(ui, content);
+        float headerHeight = ui.dp(tall ? 44.0f : 32.0f);
         MuiRect header = { content.x, content.y, content.w, headerHeight };
-        float size = ui.dp(14.0f);
-        float padding = ui.dp(9.0f);
+        float size = ui.dp(tall ? 16.0f : 14.0f);
+        float padding = ui.dp(tall ? 16.0f : 9.0f);
+        float gap = ui.dp(tall ? 8.0f : 6.0f);
 
         Map map = mapGetCurrentMap();
         float x = header.x;
@@ -124,13 +127,14 @@ namespace {
                 muiFillRoundRect(rect, ui.dp(6.0f), kListBackground);
                 muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(1.0f), theme.panelBorder);
                 muiDrawTextAligned(chip.first, rect, size, chip.second, MuiAlign::Center, MuiAlign::Center);
-                x += width + ui.dp(6.0f);
+                x += width + gap;
             }
         }
 
-        float buttonWidth = ui.dp(170.0f);
+        float buttonWidth = ui.dp(tall ? 200.0f : 170.0f);
+        float detailsWidth = ui.dp(tall ? 140.0f : 120.0f);
         MuiRect sensor = { header.right() - buttonWidth, header.y, buttonWidth, header.h };
-        MuiRect details = { sensor.x - ui.dp(6.0f) - ui.dp(120.0f), header.y, ui.dp(120.0f), header.h };
+        MuiRect details = { sensor.x - gap - detailsWidth, header.y, detailsWidth, header.h };
 
         // High details: scenery too (the game's switch, remembered).
         if (toggle(ui, "automap.details", details, muiDecodeGameText(muiText(kTextDetails, "Details")), automapGetHighDetails(), true)) {
@@ -152,7 +156,8 @@ namespace {
             }
         }
 
-        MuiRect body = { content.x, header.bottom() + ui.dp(8.0f), content.w, content.bottom() - header.bottom() - ui.dp(8.0f) };
+        float bodyGap = ui.dp(tall ? 10.0f : 8.0f);
+        MuiRect body = { content.x, header.bottom() + bodyGap, content.w, content.bottom() - header.bottom() - bodyGap };
         ui.panel(body);
 
         if (viewDirty) {
