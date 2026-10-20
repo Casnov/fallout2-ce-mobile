@@ -11,6 +11,7 @@
 #include "mui_notify.h"
 #include "object.h"
 #include "proto_types.h"
+#include "stat.h"
 
 namespace fallout {
 
@@ -126,6 +127,23 @@ int muiItemsWeight(const std::vector<MuiListItem>& items)
         weight += itemStackWeight(entry.item, entry.quantity);
     }
     return weight;
+}
+
+std::u32string muiCarriedText(Object* owner, bool* over)
+{
+    *over = false;
+    std::string text;
+    if (ProtoId(owner).objectType() == OBJ_TYPE_CRITTER) {
+        int weight = objectGetInventoryWeight(owner);
+        int carry = critterGetStat(owner, STAT_CARRY_WEIGHT);
+        *over = weight > carry;
+        text = std::to_string(weight) + "/" + std::to_string(carry);
+    } else if (ProtoId(owner).objectType() == OBJ_TYPE_ITEM && itemGetType(owner) == ITEM_TYPE_CONTAINER) {
+        text = std::to_string(containerGetTotalSize(owner)) + "/" + std::to_string(containerGetMaxSize(owner));
+    } else {
+        text = std::to_string(objectGetInventoryWeight(owner));
+    }
+    return muiDecodeUtf8(text.c_str());
 }
 
 void muiNotifyPartyMemberOutOfReach(Object* critter)

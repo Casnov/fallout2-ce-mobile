@@ -133,7 +133,7 @@ namespace {
         float iconSize = size;
         float gap = ui.dp(5.0f);
         float width = iconSize + gap + muiTextWidth(text, size);
-        float x = horizontal == MuiAlign::Center ? rect.centerX() - width / 2.0f : rect.x;
+        float x = horizontal == MuiAlign::Center ? rect.centerX() - width / 2.0f : (horizontal == MuiAlign::End ? rect.right() - width : rect.x);
         muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.3f), color);
         muiDrawTextAligned(text, { x + iconSize + gap, rect.y, width, rect.h }, size, color, MuiAlign::Start, MuiAlign::Center);
     }
@@ -247,8 +247,14 @@ namespace {
             muiDrawTextAligned(U"$" + number(view.requestValue), requestInfo, tableInfoSize, theme.text, MuiAlign::Center, MuiAlign::Center);
         }
 
-        // The trader's shown items' weight, every filter ("All" too).
-        drawWeight(ui, number(muiItemsWeight(lists[LIST_BARTERER])), { bartererX, sideInfoY, sideWidth, sideInfoHeight }, infoSize, theme.textDim, MuiAlign::Start);
+        // The trader as the player: weight / carry weight (and of the shown
+        // category), at the right.
+        bool over = false;
+        std::u32string bartererInfo = muiCarriedText(view.barterer, &over);
+        if (bartererFilter.filter != MuiItemFilter::All) {
+            bartererInfo += U"  (" + number(muiItemsWeight(lists[LIST_BARTERER])) + U")";
+        }
+        drawWeight(ui, bartererInfo, { bartererX, sideInfoY, sideWidth, sideInfoHeight }, infoSize, over ? kMuiOverLimit : theme.textDim, MuiAlign::End);
 
         // Offer under both tables.
         MuiRect offerRect = { offerX, buttonY, requestX + unit - offerX, buttonHeight };

@@ -32,7 +32,7 @@ namespace {
     const MuiColor kListBackground = muiRgb(0x0B120D);
     const MuiColor kDropZone = muiRgb(0x1A2A10);
     const MuiColor kWarning = muiRgb(0xFFB000);
-    const MuiColor kEncumbered = muiRgb(0xFF4A3A);
+    const MuiColor kEncumbered = kMuiOverLimit;
 
     // Glow over what an action changed, ms.
     constexpr unsigned int kFlashMs = 800;

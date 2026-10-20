@@ -205,6 +205,14 @@ std::vector<MuiListItem> muiInventoryItems(Object* owner, const MuiItemFilterSta
 // Total weight of the listed items.
 int muiItemsWeight(const std::vector<MuiListItem>& items);
 
+// What [owner] carries as the game's inventory tells it: critters - weight
+// / carry weight ([over] when above it), containers - their items' size /
+// capacity (`containerGetMaxSize`), the rest - weight.
+std::u32string muiCarriedText(Object* owner, bool* over);
+
+// Weight above what can be carried.
+constexpr MuiColor kMuiOverLimit = muiRgb(0xFF4A3A);
+
 // Item cell without the count: frame and inventory art (crisp pixels).
 void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pressed);
 

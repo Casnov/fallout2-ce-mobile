@@ -347,9 +347,12 @@ namespace {
     {
         const MuiTheme& theme = muiTheme();
 
+        // The right side as the left one: weight / carry weight of critters,
+        // size / capacity of containers.
+        bool over = false;
         std::u32string weight = side == SIDE_LEFT
             ? number(view.weight) + (view.carryWeight > 0 ? U"/" + number(view.carryWeight) : U"")
-            : number(objectGetInventoryWeight(view.rightOwner));
+            : muiCarriedText(view.rightOwner, &over);
         float iconSize = ui.dp(tall ? 20.0f : 15.0f);
         float textSize = ui.dp(tall ? 17.0f : 14.0f);
         float edge = ui.dp(2.0f);
@@ -357,7 +360,7 @@ namespace {
         float weightX = side == SIDE_LEFT ? rect.x + edge : rect.right() - edge - weightWidth;
         muiDrawIcon(MuiIcon::Weight, weightX + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.5f), theme.textDim);
         MuiRect weightRect = { weightX + iconSize + ui.dp(6.0f), rect.y, weightWidth, rect.h };
-        muiDrawTextAligned(weight, weightRect, textSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        muiDrawTextAligned(weight, weightRect, textSize, over ? kMuiOverLimit : theme.textDim, MuiAlign::Start, MuiAlign::Center);
 
         if (view.steal) {
             return;
