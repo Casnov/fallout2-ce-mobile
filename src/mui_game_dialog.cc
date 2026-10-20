@@ -43,6 +43,16 @@ namespace {
     constexpr float kWindowTabsSlopDp = 8.0f;
     constexpr Uint8 kWindowAlpha = 247;
 
+    // A window shown again within this time (another game screen's tab)
+    // keeps the world dark instead of fading it in anew, ms.
+    constexpr unsigned int kWindowContinueMs = 1000;
+
+    // When a window was last drawn (`muiScreenFrame`), the opening of the
+    // screen that drew it, whether that one went on from another window.
+    unsigned int gWindowShownTime = 0;
+    unsigned int gWindowOpenTime = 0;
+    bool gWindowContinued = false;
+
     // Content area the screens' tall layouts need, dp.
     constexpr float kTallMinWidthDp = 680.0f;
     constexpr float kTallMinHeightDp = 440.0f;
@@ -840,7 +850,15 @@ MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitl
         muiDrawTitleArt(ui, ui.screenRect().x);
     }
 
-    ui.dim();
+    // Decided when the screen opens: it fades the world in, or goes on from
+    // the window just closed.
+    unsigned int openTime = ui.current != nullptr ? ui.current->openTime : 0;
+    if (openTime != gWindowOpenTime) {
+        gWindowOpenTime = openTime;
+        gWindowContinued = gWindowShownTime != 0 && ui.now - gWindowShownTime < kWindowContinueMs;
+    }
+    gWindowShownTime = ui.now;
+    ui.dim(!gWindowContinued);
     const MuiTheme& theme = muiTheme();
     MuiColor fill = background.withAlpha(kWindowAlpha);
     float radius = ui.dp(kWindowRadiusDp);

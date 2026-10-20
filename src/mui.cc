@@ -325,13 +325,15 @@ float MuiContext::appear() const
     return std::min(static_cast<float>(elapsed) / kAppearDurationMs, 1.0f);
 }
 
-void MuiContext::dim()
+void MuiContext::dim(bool fadeIn)
 {
     // The scroll marks of what goes under the dim.
     drawScrollMarks();
 
     MuiColor color = kTheme.dim;
-    color.a = static_cast<Uint8>(color.a * appear());
+    if (fadeIn) {
+        color.a = static_cast<Uint8>(color.a * appear());
+    }
     muiFillRect(screen, color);
 }
 

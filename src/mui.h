@@ -140,8 +140,9 @@ public:
     // 0..1 progress of the screen's appear animation.
     float appear() const;
 
-    // Darkens everything below (for modal screens).
-    void dim();
+    // Darkens everything below (for modal screens), fading in as the
+    // screen opens unless [fadeIn] is off (it was dark already).
+    void dim(bool fadeIn = true);
 
     void panel(const MuiRect& rect);
 
