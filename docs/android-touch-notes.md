@@ -170,12 +170,12 @@ goes through mouse emulation in touchscreen (absolute) mode.
 
 ## Touch HUD (block 1, `src/touch_hud.cc`, `src/hud_layout.cc`)
 
-Enabled with `[touch] hud=1` (default on Android). `hud_scale` (percent) is
-the UI size setting, relative to the screen's default
-(`hudGetDefaultInterfaceScale`: 110% when the shorter side is 720 dp or more
-- 10"-11" tablets, held farther from the eyes - else 100%), so older
-settings files keep their meaning; the settings screen shows the resulting
-size. `hud_density` overrides screen density (0 - Android
+Enabled with `[touch] hud=1` (default on Android). `hud_scale` (percent, 100
+everywhere by default) is the UI size setting: everything of the HUD and the
+mobile UI - buttons, text, the game screens' windows and their margins - is
+laid out in dp times it, so a UI size works as a screen of that many dp (60%
+on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
+`hud_density` overrides screen density (0 - Android
 `densityDpi / 160`; the Mac rig uses 2.667 on Retina to match the phone:
 320 dpi, 1600x720 shown as 1066x480).
 
@@ -576,12 +576,14 @@ every screen on the new scalable UI, visual style/textures later via theme).
   `MuiTheme` (placeholder terminal-green).
 - `muiRunModal` runs input+render for synchronous game flows; Esc/Android
   back -> `MuiScreen::back`.
-- Tablet windows (`muiUsesWindows`: shorter side 500 dp or more - 7" tablets
-  and bigger - and `[touch] tablet_windows=1`, the "Windows on tablets" row
-  shown only there): game screens laid out by `muiScreenFrame` open as a
-  window over the world dimmed as under the game menu (`dim`), at most
-  896x680 of the screen's dp (the UI size scales what's inside, not the
-  window: the world around it stays), at least 24 dp from the edges,
+- Windows (`muiUsesWindows`, `[touch] windows`, the "Game screens" row:
+  0 Auto - where a window with the tall layouts fits: the screen 520x820 dp
+  or more in the UI's dp (7" and bigger at 100%, a phone at a small UI
+  size); 1 Full screen; 2 Windows - phones too): game screens laid out by
+  `muiScreenFrame` open
+  as a window over the world dimmed as under the game menu (`dim`), at most
+  896x680 dp (with everything else in the UI's dp: at 100% a 10" tablet
+  shows the windows' mockups as they are), at least 24 dp from the edges,
   the tab column outside it at its top right; when the column doesn't fit
   next to a centered window (4:3) the window moves left. Phones get
   `muiDialogLayout` unchanged. Such screens are `isGameScreen` and don't
@@ -599,12 +601,15 @@ every screen on the new scalable UI, visual style/textures later via theme).
   closed under them). Creation and talk take no tap outside (Back would
   cancel the character; talk has none).
   Screens pick their layout by the content area, not the device
-  (`muiIsTallContent`: 680x440 dp and more - every tablet window, phones
-  never): the roomy sizes of the windows' mockups (bigger rows, buttons,
+  (`muiIsTallContent`: windows of 680x440 dp and more - every tablet's;
+  screens covering the screen keep the phone's layouts): the roomy sizes of the windows' mockups (bigger rows, buttons,
   text; settings' sections 56 dp, save rows with thumbnails, character's
   stats tab as SPECIAL rows over conditions and derived stats in two
   columns, talk's speaker on top of one list of the reply and the answers,
-  the selector's stats in one column). The inventory's tall one has the
+  the party member panel with the speaker kept there, its stats at its
+  left, weapon and armor cards at its right, under them the dispositions in
+  a column beside the six settings as a 2x3 grid of cards, the selector's
+  stats in one column). The inventory's tall one has the
   items on the left and the character, armor and hands over the summary on
   the right in the mockup's proportions, the summary in two columns
   (SPECIAL with `statGetName`'s full names next to hit points, armor class
@@ -618,19 +623,22 @@ every screen on the new scalable UI, visual style/textures later via theme).
 - Widgets also: `scroll` (inertial, child ids `<id>.`), `dragSource` /
   `dragging` / `dropped` (drag starts on a sideways move or a 350 ms hold),
   `slider`, long press in `touchable` (500 ms). Every scroll area whose
-  content doesn't fit gets a thin bar along its far edge and a light fade
-  at each edge with more beyond; `scroll` keeps them for the frame and
-  `drawScrollMarks` draws them over the content (before `dim`, after each
-  screen's build), touches go through.
+  content doesn't fit gets a thin bar just past its far edge (in its
+  padding, off the content) and a light fade at each edge with more beyond;
+  `scroll` keeps them for the frame and `drawScrollMarks` draws them
+  (before `dim`, after each screen's build), touches go through. Areas with
+  their own marks (the HUD's attack modes, its log) pass `marks = false`.
 - Item grids take the column count keeping their cells nearest one size
   (`muiItemCellSize`: 68 dp, 88 in the tablet windows' tall layouts;
   `muiItemColumns`); barter picks its side columns the same way (4/1/1/4
   on a 20:9 phone, 3/1/1/3 in a tablet window). The right side of loot and
   barter tells what is carried like the left: weight / carry weight of
-  critters (red above it), size / capacity of containers
-  (`muiCarriedText`, the game's inventory rule).
-- Tablets: `[touch] tablet_tap_outside` (on by default, the "Close windows
-  by tapping outside" row shown while windows are on) - only the game
+  critters (red above it), weight of the rest (`muiCarriedText`);
+  containers also show their room - the items' size / capacity
+  (`muiContainerVolume`, `containerGetMaxSize`), a volume, with the bag
+  icon, not a weight.
+- `[touch] windows_tap_outside` (on by default, the "Close windows by
+  tapping outside" row shown while windows are used) - only the game
   screens' windows; small panels (game menu, called shot, action list, use
   item) always close by a tap aside.
 - Dialog tabs (`muiDialogTabs`, right edge, same place on every dialog
