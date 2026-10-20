@@ -818,7 +818,7 @@ namespace {
         MuiRect left = { rect.x, rect.y, (rect.w - gap) * 0.54f, rect.h };
         MuiRect right = { left.right() + gap, rect.y, rect.right() - left.right() - gap, rect.h };
 
-        float rowHeight = std::clamp(rect.h / kCharacterEditorDerivedStatCount, ui.dp(21.0f), ui.dp(30.0f));
+        float rowHeight = std::clamp(rect.h / kCharacterEditorDerivedStatCount, ui.dp(16.0f), ui.dp(30.0f));
         float size = ui.dp(14.0f);
         float padding = ui.dp(6.0f);
 
