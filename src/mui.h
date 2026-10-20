@@ -213,6 +213,10 @@ public:
 
     float scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal);
 
+    // Bars and edge fades of the areas scrolled since the last call, over
+    // their content: before `dim` and after each screen's build.
+    void drawScrollMarks();
+
     // Internal state, filled by mui.cc.
     float pixelsPerDp = 1.0f;
     MuiRect screen;

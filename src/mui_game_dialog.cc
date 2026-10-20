@@ -152,7 +152,7 @@ namespace {
         void buildIconButtons(MuiContext& ui, const MuiRect& column);
         void buildReply(MuiContext& ui, const MuiRect& rect);
         void buildOptions(MuiContext& ui, const MuiRect& rect);
-        void buildFeed(MuiContext& ui, const MuiRect& rect);
+        void buildFeed(MuiContext& ui, const MuiRect& area);
         void buildReview(MuiContext& ui, const MuiRect& rect);
         void buildPartyStats(MuiContext& ui, const MuiRect& rect, const PartyControlView& view);
         void buildParty(MuiContext& ui, const MuiRect& rect, const PartyControlView& view);
@@ -391,9 +391,11 @@ namespace {
 
     // The reply in its panel sized to its text, the answers under it (the
     // game's reaction colors), scrolling as one.
-    void TalkScreen::buildFeed(MuiContext& ui, const MuiRect& rect)
+    void TalkScreen::buildFeed(MuiContext& ui, const MuiRect& area)
     {
         const MuiTheme& theme = muiTheme();
+        // The panels leave the scroll bar its room at the right.
+        MuiRect rect = { area.x, area.y, area.w - ui.dp(12.0f), area.h };
         float replySize = ui.dp(18.0f);
         float replyLine = std::max(muiLineHeight(replySize), ui.dp(27.0f));
         float nameSize = ui.dp(16.0f);
@@ -421,7 +423,7 @@ namespace {
             total += gap + heights.back();
         }
 
-        float offset = ui.scroll("talk.feed", rect, total);
+        float offset = ui.scroll("talk.feed", area, total);
         bool scrolling = ui.isScrolling("talk.feed");
 
         muiPushClip(rect);

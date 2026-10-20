@@ -150,6 +150,17 @@ namespace {
 
     std::unordered_map<std::string, ScrollState> gScrolls;
 
+    // Scroll areas whose content doesn't fit, waiting for their marks
+    // (`MuiContext::drawScrollMarks`).
+    struct ScrollMark {
+        MuiRect rect;
+        float contentSize;
+        float offset;
+        bool horizontal;
+    };
+
+    std::vector<ScrollMark> gScrollMarks;
+
     int gOutputWidth = 1;
     int gOutputHeight = 1;
     float gPixelsPerDp = 1.0f;
@@ -316,6 +327,9 @@ float MuiContext::appear() const
 
 void MuiContext::dim()
 {
+    // The scroll marks of what goes under the dim.
+    drawScrollMarks();
+
     MuiColor color = kTheme.dim;
     color.a = static_cast<Uint8>(color.a * appear());
     muiFillRect(screen, color);
@@ -487,7 +501,61 @@ float MuiContext::scrollAlong(const std::string& id, const MuiRect& rect, float 
         }
     }
 
+    if (maxOffset > 0.0f) {
+        gScrollMarks.push_back({ rect, contentSize, state.offset, horizontal });
+    }
+
     return state.offset;
+}
+
+// Where the shown part is: a thin bar along the far edge (its track and
+// thumb), a light fade at each edge with more content beyond. Drawn only,
+// touches go to what is under them.
+void MuiContext::drawScrollMarks()
+{
+    for (const ScrollMark& mark : gScrollMarks) {
+        const MuiRect& rect = mark.rect;
+        float length = mark.horizontal ? rect.w : rect.h;
+        float maxOffset = mark.contentSize - length;
+        if (maxOffset <= 0.0f) {
+            continue;
+        }
+
+        float fade = std::min(dp(28.0f), length * 0.2f);
+        MuiColor clear = muiRgb(0x000000, 0);
+        MuiColor shade = muiRgb(0x000000, 120);
+        bool before = mark.offset > 0.5f;
+        bool after = mark.offset < maxOffset - 0.5f;
+        if (mark.horizontal) {
+            if (before) {
+                muiFillHorizontalGradient({ rect.x, rect.y, fade, rect.h }, shade, clear);
+            }
+            if (after) {
+                muiFillHorizontalGradient({ rect.right() - fade, rect.y, fade, rect.h }, clear, shade);
+            }
+        } else {
+            if (before) {
+                muiFillGradient({ rect.x, rect.y, rect.w, fade }, shade, shade, clear, clear);
+            }
+            if (after) {
+                muiFillGradient({ rect.x, rect.bottom() - fade, rect.w, fade }, clear, clear, shade, shade);
+            }
+        }
+
+        float thickness = dp(3.0f);
+        float inset = dp(3.0f);
+        float thumbLength = std::max(length * length / mark.contentSize, dp(24.0f));
+        float position = (length - inset * 2.0f - thumbLength) * std::clamp(mark.offset / maxOffset, 0.0f, 1.0f);
+        MuiRect track = mark.horizontal
+            ? MuiRect { rect.x + inset, rect.bottom() - inset - thickness, rect.w - inset * 2.0f, thickness }
+            : MuiRect { rect.right() - inset - thickness, rect.y + inset, thickness, rect.h - inset * 2.0f };
+        MuiRect thumb = mark.horizontal
+            ? MuiRect { track.x + position, track.y, thumbLength, thickness }
+            : MuiRect { track.x, track.y + position, thickness, thumbLength };
+        muiFillRoundRect(track, thickness / 2.0f, kTheme.buttonBorder.withAlpha(60));
+        muiFillRoundRect(thumb, thickness / 2.0f, kTheme.accent.withAlpha(170));
+    }
+    gScrollMarks.clear();
 }
 
 void MuiContext::setScroll(const std::string& id, float offset)
@@ -988,6 +1056,7 @@ void muiRender(SDL_Renderer* renderer)
         context.current = screen;
         context.isInteractive = screen == top;
         screen->build(context);
+        context.drawScrollMarks();
     }
 
     // Over every screen, not touchable.
