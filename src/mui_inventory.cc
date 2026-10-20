@@ -43,6 +43,15 @@ namespace {
     // Drag payload: list index, or slot.
     constexpr int kPayloadSlotBase = 100000;
 
+    // Content area the tall layout (tablet windows, 7" and bigger) needs,
+    // dp; smaller ones (phones) get the three columns.
+    constexpr float kTallMinWidthDp = 680.0f;
+    constexpr float kTallMinHeightDp = 440.0f;
+
+    // Tall layout's info rows, dp: the most spaced out ones everything fits
+    // with (0 - the font's line).
+    constexpr float kInfoRowSteps[] = { 22.0f, 20.0f, 0.0f };
+
     std::u32string number(int value)
     {
         return muiDecodeUtf8(std::to_string(value).c_str());
@@ -97,6 +106,10 @@ namespace {
         };
 
         bool wasActive = false;
+        // Items on the left, the character over the summary on the right.
+        bool tall = false;
+        // Its info's rows, dp (`kInfoRowSteps`).
+        float infoRowDp = 0.0f;
         MuiItemFilterState filter;
         Object* selected = nullptr;
         unsigned int examinedVersion = 0;
@@ -152,9 +165,13 @@ namespace {
         void buildList(MuiContext& ui, const MuiRect& rect);
         void buildBottom(MuiContext& ui, const MuiRect& rect);
         void buildCharacter(MuiContext& ui, const InventoryView& view, const MuiRect& rect);
+        void buildCharacterTall(MuiContext& ui, const InventoryView& view, const MuiRect& rect);
+        void buildFigure(MuiContext& ui, const InventoryView& view, const MuiRect& figure);
+        void buildStats(MuiContext& ui, const InventoryView& view, float x, float y, float width, float bottom, float lineHeight, float iconSize, float textSize, float iconGap);
         void buildSlot(MuiContext& ui, const InventoryView& view, InventorySlot slot, Object* item, const MuiRect& rect, bool active);
         void buildInfo(MuiContext& ui, const InventoryView& view, const MuiRect& rect);
         void buildSummary(MuiContext& ui, const MuiRect& content, float* y, bool draw);
+        void buildSummaryColumns(MuiContext& ui, const InventorySummary& summary, const MuiRect& content, float* y, bool draw);
         void buildItemInfo(MuiContext& ui, const MuiRect& content, float* y, bool draw);
         void handleDrop(MuiContext& ui, const InventoryView& view);
         void drawDragged(MuiContext& ui, const InventoryView& view);
@@ -247,19 +264,39 @@ namespace {
         }
 
         float gap = ui.dp(8.0f);
-        float leftWidth = content.w * 0.4f;
-        float centerWidth = content.w * 0.27f;
-        MuiRect left = { content.x, content.y, leftWidth, content.h };
-        MuiRect center = { left.right() + gap, content.y, centerWidth, content.h };
-        MuiRect right = { center.right() + gap, content.y, content.right() - center.right() - gap, content.h };
+        tall = content.w >= ui.dp(kTallMinWidthDp) && content.h >= ui.dp(kTallMinHeightDp);
+        if (tall) {
+            // Items on the left; the character, armor and hands over the
+            // summary on the right.
+            float columnGap = ui.dp(12.0f);
+            MuiRect left = { content.x, content.y, std::floor(content.w * 0.465f), content.h };
+            MuiRect right = { left.right() + columnGap, content.y, content.right() - left.right() - columnGap, content.h };
 
-        float rowHeight = ui.dp(30.0f);
-        float bottomHeight = ui.dp(34.0f);
-        buildHeader(ui, view, { left.x, left.y, left.w, rowHeight });
-        buildList(ui, { left.x, left.y + rowHeight + ui.dp(6.0f), left.w, left.h - rowHeight - bottomHeight - ui.dp(12.0f) });
-        buildBottom(ui, { left.x, left.bottom() - bottomHeight, left.w, bottomHeight });
-        buildCharacter(ui, view, center);
-        buildInfo(ui, view, right);
+            float rowHeight = ui.dp(40.0f);
+            float bottomHeight = ui.dp(44.0f);
+            buildHeader(ui, view, { left.x, left.y, left.w, rowHeight });
+            buildList(ui, { left.x, left.y + rowHeight + gap, left.w, left.h - rowHeight - bottomHeight - gap * 2.0f });
+            buildBottom(ui, { left.x, left.bottom() - bottomHeight, left.w, bottomHeight });
+
+            // As in the window's mockup: 252 of 652 dp.
+            float characterHeight = std::floor(right.h * 0.387f);
+            buildCharacterTall(ui, view, { right.x, right.y, right.w, characterHeight });
+            buildInfo(ui, view, { right.x, right.y + characterHeight + gap, right.w, right.h - characterHeight - gap });
+        } else {
+            float leftWidth = content.w * 0.4f;
+            float centerWidth = content.w * 0.27f;
+            MuiRect left = { content.x, content.y, leftWidth, content.h };
+            MuiRect center = { left.right() + gap, content.y, centerWidth, content.h };
+            MuiRect right = { center.right() + gap, content.y, content.right() - center.right() - gap, content.h };
+
+            float rowHeight = ui.dp(30.0f);
+            float bottomHeight = ui.dp(34.0f);
+            buildHeader(ui, view, { left.x, left.y, left.w, rowHeight });
+            buildList(ui, { left.x, left.y + rowHeight + ui.dp(6.0f), left.w, left.h - rowHeight - bottomHeight - ui.dp(12.0f) });
+            buildBottom(ui, { left.x, left.bottom() - bottomHeight, left.w, bottomHeight });
+            buildCharacter(ui, view, center);
+            buildInfo(ui, view, right);
+        }
 
         handleDrop(ui, view);
         drawDragged(ui, view);
@@ -299,7 +336,7 @@ namespace {
         Object* owner = target ? view.critter : view.container;
         MuiRect label = { rect.x + iconSize + ui.dp(16.0f), rect.y, rect.w - iconSize - ui.dp(20.0f), rect.h };
         muiPushClip(label);
-        muiDrawTextAligned(muiDecodeGameText(objectGetName(owner)), label, ui.dp(14.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
+        muiDrawTextAligned(muiDecodeGameText(objectGetName(owner)), label, ui.dp(tall ? 16.0f : 14.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
         muiPopClip();
     }
 
@@ -322,7 +359,7 @@ namespace {
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(target ? 2.0f : 1.0f), target ? theme.accent : theme.panelBorder);
 
         constexpr int kColumns = 4;
-        float gap = ui.dp(4.0f);
+        float gap = ui.dp(tall ? 6.0f : 4.0f);
         MuiRect area = rect.inset(gap);
         float cell = (area.w - gap * (kColumns - 1)) / kColumns;
         int rows = (static_cast<int>(items.size()) + kColumns - 1) / kColumns;
@@ -389,10 +426,10 @@ namespace {
 
         // Every filter, "All" too: the bottom always tells what the shown
         // items weigh (the total with what is worn and held is on the right).
-        float iconSize = ui.dp(15.0f);
+        float iconSize = ui.dp(tall ? 20.0f : 15.0f);
         muiDrawIcon(MuiIcon::Weight, rect.x + iconSize / 2.0f + ui.dp(2.0f), rect.centerY(), iconSize, ui.dp(1.5f), theme.textDim);
         MuiRect weightRect = { rect.x + iconSize + ui.dp(8.0f), rect.y, rect.w * 0.4f, rect.h };
-        muiDrawTextAligned(number(muiItemsWeight(items)), weightRect, ui.dp(14.0f), theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        muiDrawTextAligned(number(muiItemsWeight(items)), weightRect, ui.dp(tall ? 17.0f : 14.0f), theme.textDim, MuiAlign::Start, MuiAlign::Center);
 
         bool confirming = dropAllTime != 0 && ui.now - dropAllTime < kConfirmMs;
         MuiRect button = { rect.right() - rect.w * 0.55f, rect.y, rect.w * 0.55f, rect.h };
@@ -420,7 +457,7 @@ namespace {
         const char* label = confirming ? muiText(kTextSure, "SURE?") : muiText(kTextDropAll, "DROP ALL");
         MuiRect labelRect = button.inset(ui.dp(4.0f), 0.0f);
         muiPushClip(labelRect);
-        muiDrawTextAligned(muiDecodeGameText(label), labelRect, ui.dp(13.0f), color, MuiAlign::Center, MuiAlign::Center);
+        muiDrawTextAligned(muiDecodeGameText(label), labelRect, ui.dp(tall ? 15.0f : 13.0f), color, MuiAlign::Center, MuiAlign::Center);
         muiPopClip();
     }
 
@@ -428,10 +465,55 @@ namespace {
     // weight, hand slots.
     void InventoryScreen::buildCharacter(MuiContext& ui, const InventoryView& view, const MuiRect& rect)
     {
-        const MuiTheme& theme = muiTheme();
         float gap = ui.dp(8.0f);
 
         MuiRect figure = { rect.x, rect.y, rect.w * 0.58f, rect.h * 0.52f };
+        buildFigure(ui, view, figure);
+
+        float armorSize = rect.right() - figure.right() - gap;
+        MuiRect armor = { figure.right() + gap, rect.y, armorSize, armorSize };
+        buildSlot(ui, view, InventorySlot::Armor, view.armor, armor, false);
+        buildStats(ui, view, armor.x, armor.bottom() + ui.dp(10.0f), armor.w, figure.bottom(), ui.dp(22.0f), ui.dp(14.0f), ui.dp(13.0f), ui.dp(6.0f));
+
+        // Hands, the active one is marked.
+        float handsY = figure.bottom() + gap;
+        float handSize = std::min((rect.w - gap) / 2.0f, rect.bottom() - handsY);
+        MuiRect leftHand = { rect.x, handsY, handSize, handSize };
+        MuiRect rightHand = { rect.right() - handSize, handsY, handSize, handSize };
+        buildSlot(ui, view, InventorySlot::LeftHand, view.leftHand, leftHand, view.activeHand == HAND_LEFT);
+        buildSlot(ui, view, InventorySlot::RightHand, view.rightHand, rightHand, view.activeHand == HAND_RIGHT);
+    }
+
+    // Tall layout: the figure on the left; armor and the stats over the two
+    // hands, each above its weapon's column of the summary.
+    void InventoryScreen::buildCharacterTall(MuiContext& ui, const InventoryView& view, const MuiRect& rect)
+    {
+        float gap = ui.dp(8.0f);
+
+        MuiRect figure = { rect.x, rect.y, std::floor(rect.w * 0.372f), rect.h };
+        buildFigure(ui, view, figure);
+
+        MuiRect grid = { figure.right() + gap, rect.y, rect.right() - figure.right() - gap, rect.h };
+        float cellWidth = (grid.w - gap) / 2.0f;
+        float cellHeight = (grid.h - gap) / 2.0f;
+        MuiRect armor = { grid.x, grid.y, cellWidth, cellHeight };
+        buildSlot(ui, view, InventorySlot::Armor, view.armor, armor, false);
+
+        float lineHeight = std::min(ui.dp(32.0f), (armor.h - ui.dp(4.0f)) / 3.0f);
+        float statsX = armor.right() + gap + ui.dp(6.0f);
+        buildStats(ui, view, statsX, armor.centerY() - lineHeight * 1.5f, grid.right() - statsX, armor.bottom(), lineHeight, ui.dp(20.0f), ui.dp(17.0f), ui.dp(10.0f));
+
+        MuiRect leftHand = { grid.x, armor.bottom() + gap, cellWidth, cellHeight };
+        MuiRect rightHand = { grid.right() - cellWidth, leftHand.y, cellWidth, cellHeight };
+        buildSlot(ui, view, InventorySlot::LeftHand, view.leftHand, leftHand, view.activeHand == HAND_LEFT);
+        buildSlot(ui, view, InventorySlot::RightHand, view.rightHand, rightHand, view.activeHand == HAND_RIGHT);
+    }
+
+    // The character turned by a swipe over it, a target for using items on
+    // it.
+    void InventoryScreen::buildFigure(MuiContext& ui, const InventoryView& view, const MuiRect& figure)
+    {
+        const MuiTheme& theme = muiTheme();
         figureRect = figure;
         muiFillRoundRect(figure, ui.dp(6.0f), kListBackground);
         muiStrokeRoundRect(figure, ui.dp(6.0f), ui.dp(1.0f), theme.panelBorder);
@@ -513,44 +595,36 @@ namespace {
         }
 
         drawFlash(ui, figure, flash.target == FlashTarget::Figure);
+    }
 
-        float armorSize = rect.right() - figure.right() - gap;
-        MuiRect armor = { figure.right() + gap, rect.y, armorSize, armorSize };
-        buildSlot(ui, view, InventorySlot::Armor, view.armor, armor, false);
-
-        // Hit points, armor class, weight.
+    // Hit points, armor class, weight: lines from [y] while they fit above
+    // [bottom].
+    void InventoryScreen::buildStats(MuiContext& ui, const InventoryView& view, float x, float y, float width, float bottom, float lineHeight, float iconSize, float textSize, float iconGap)
+    {
+        const MuiTheme& theme = muiTheme();
         InventorySummary summary;
-        if (inventoryGetSummary(&summary)) {
-            float lineHeight = ui.dp(22.0f);
-            float iconSize = ui.dp(14.0f);
-            float y = armor.bottom() + ui.dp(10.0f);
-            struct Stat {
-                MuiIcon icon;
-                std::u32string value;
-                MuiColor color;
-            };
-            const Stat stats[3] = {
-                { MuiIcon::HitPoints, trimmed(summary.defense[0].value), theme.text },
-                { MuiIcon::FilterArmor, trimmed(summary.defense[1].value), theme.text },
-                { MuiIcon::Weight, number(view.weight) + U"/" + number(view.carryWeight), summary.encumbered ? kEncumbered : theme.text },
-            };
-            for (const Stat& stat : stats) {
-                if (y + lineHeight > figure.bottom()) {
-                    break;
-                }
-                muiDrawIcon(stat.icon, armor.x + iconSize / 2.0f, y + lineHeight / 2.0f, iconSize, ui.dp(1.5f), theme.accent);
-                muiDrawTextAligned(stat.value, { armor.x + iconSize + ui.dp(6.0f), y, armor.w, lineHeight }, ui.dp(13.0f), stat.color, MuiAlign::Start, MuiAlign::Center);
-                y += lineHeight;
-            }
+        if (!inventoryGetSummary(&summary)) {
+            return;
         }
 
-        // Hands, the active one is marked.
-        float handsY = figure.bottom() + gap;
-        float handSize = std::min((rect.w - gap) / 2.0f, rect.bottom() - handsY);
-        MuiRect leftHand = { rect.x, handsY, handSize, handSize };
-        MuiRect rightHand = { rect.right() - handSize, handsY, handSize, handSize };
-        buildSlot(ui, view, InventorySlot::LeftHand, view.leftHand, leftHand, view.activeHand == HAND_LEFT);
-        buildSlot(ui, view, InventorySlot::RightHand, view.rightHand, rightHand, view.activeHand == HAND_RIGHT);
+        struct Stat {
+            MuiIcon icon;
+            std::u32string value;
+            MuiColor color;
+        };
+        const Stat stats[3] = {
+            { MuiIcon::HitPoints, trimmed(summary.defense[0].value), theme.text },
+            { MuiIcon::FilterArmor, trimmed(summary.defense[1].value), theme.text },
+            { MuiIcon::Weight, number(view.weight) + U"/" + number(view.carryWeight), summary.encumbered ? kEncumbered : theme.text },
+        };
+        for (const Stat& stat : stats) {
+            if (y + lineHeight > bottom) {
+                break;
+            }
+            muiDrawIcon(stat.icon, x + iconSize / 2.0f, y + lineHeight / 2.0f, iconSize, ui.dp(1.5f), theme.accent);
+            muiDrawTextAligned(stat.value, { x + iconSize + iconGap, y, width, lineHeight }, textSize, stat.color, MuiAlign::Start, MuiAlign::Center);
+            y += lineHeight;
+        }
     }
 
     void InventoryScreen::buildSlot(MuiContext& ui, const InventoryView& view, InventorySlot slot, Object* item, const MuiRect& rect, bool active)
@@ -659,14 +733,26 @@ namespace {
             infoKey.clear();
         }
 
-        MuiRect content = rect.inset(ui.dp(12.0f), ui.dp(10.0f));
+        MuiRect content = tall ? rect.inset(ui.dp(18.0f), ui.dp(14.0f)) : rect.inset(ui.dp(12.0f), ui.dp(10.0f));
 
-        // Measure, scroll, draw.
+        // Measure (the tall layout's rows spaced out if it all fits), scroll,
+        // draw.
+        auto measure = [&]() {
+            float height = 0.0f;
+            if (selected != nullptr) {
+                buildItemInfo(ui, content, &height, false);
+            } else {
+                buildSummary(ui, content, &height, false);
+            }
+            return height;
+        };
         float height = 0.0f;
-        if (selected != nullptr) {
-            buildItemInfo(ui, content, &height, false);
-        } else {
-            buildSummary(ui, content, &height, false);
+        for (float step : kInfoRowSteps) {
+            infoRowDp = tall ? step : 0.0f;
+            height = measure();
+            if (height <= content.h || infoRowDp == 0.0f) {
+                break;
+            }
         }
 
         std::string scrollId = selected != nullptr ? "inventory.info.item" : "inventory.info.summary";
@@ -687,6 +773,8 @@ namespace {
         const MuiRect& content;
         float* y;
         bool draw;
+        // Rows at least this high (the tall layout's spacing).
+        float rowHeight = 0.0f;
 
         void text(const std::u32string& line, float size, MuiColor color)
         {
@@ -698,12 +786,13 @@ namespace {
 
         void row(const std::u32string& label, const std::u32string& value, float size, MuiColor labelColor, MuiColor valueColor)
         {
+            float height = std::max(muiLineHeight(size), rowHeight);
             if (draw) {
-                MuiRect rect = { content.x, *y, content.w, muiLineHeight(size) };
+                MuiRect rect = { content.x, *y, content.w, height };
                 muiDrawTextAligned(label, rect, size, labelColor, MuiAlign::Start, MuiAlign::Center);
                 muiDrawTextAligned(value, rect, size, valueColor, MuiAlign::End, MuiAlign::Center);
             }
-            *y += muiLineHeight(size);
+            *y += height;
         }
 
         void separator(float thickness, float gap, MuiColor color)
@@ -724,8 +813,16 @@ namespace {
             return;
         }
 
-        float size = ui.dp(13.0f);
         float start = *y;
+        if (tall) {
+            buildSummaryColumns(ui, summary, content, y, draw);
+            if (!draw) {
+                *y -= start;
+            }
+            return;
+        }
+
+        float size = ui.dp(13.0f);
         InfoWriter writer = { content, y, draw };
         writer.text(muiDecodeGameText(summary.name.c_str()), ui.dp(15.0f), theme.accent);
         writer.separator(ui.dp(1.0f), ui.dp(4.0f), theme.panelBorder);
@@ -771,15 +868,97 @@ namespace {
         }
     }
 
+    // Tall layout (the summary's columns): SPECIAL with the full names, as on
+    // the character screen (the game's two letters are for its narrow pane),
+    // next to hit points, armor class and resistances; each hand's weapon
+    // under its slot.
+    void InventoryScreen::buildSummaryColumns(MuiContext& ui, const InventorySummary& summary, const MuiRect& content, float* y, bool draw)
+    {
+        const MuiTheme& theme = muiTheme();
+        float size = ui.dp(15.0f);
+        float lineHeight = std::max(muiLineHeight(size), ui.dp(infoRowDp));
+        float separatorGap = ui.dp(infoRowDp != 0.0f ? infoRowDp - 14.0f : 4.0f);
+        InfoWriter writer = { content, y, draw };
+        writer.text(muiDecodeGameText(summary.name.c_str()), ui.dp(20.0f), theme.accent);
+        writer.separator(ui.dp(1.0f), separatorGap, theme.panelBorder);
+
+        float columnGap = ui.dp(14.0f);
+        float divider = ui.dp(1.0f);
+        float columnWidth = (content.w - columnGap * 2.0f - divider) / 2.0f;
+        float dividerX = content.x + columnWidth + columnGap;
+        float rightX = dividerX + divider + columnGap;
+
+        std::u32string labels[2][7];
+        std::u32string values[2][7];
+        float widest = 0.0f;
+        for (int row = 0; row < 7; row++) {
+            labels[0][row] = muiDecodeGameText(statGetName(static_cast<Stat>(STAT_STRENGTH + row)));
+            values[0][row] = trimmed(summary.stats[row].value);
+            labels[1][row] = trimmed(summary.defense[row].label);
+            values[1][row] = trimmed(summary.defense[row].value);
+            for (int column = 0; column < 2; column++) {
+                widest = std::max(widest, muiTextWidth(labels[column][row], size) + muiTextWidth(values[column][row], size));
+            }
+        }
+
+        // Smaller where the longest name and its value don't fit a column
+        // (7" tablets).
+        float room = columnWidth - ui.dp(8.0f);
+        float rowSize = widest > room ? size * room / widest : size;
+
+        float top = *y;
+        for (int row = 0; row < 7; row++) {
+            if (draw) {
+                for (int column = 0; column < 2; column++) {
+                    MuiRect rect = { column == 0 ? content.x : rightX, *y, columnWidth, lineHeight };
+                    muiDrawTextAligned(labels[column][row], rect, rowSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+                    muiDrawTextAligned(values[column][row], rect, rowSize, theme.text, MuiAlign::End, MuiAlign::Center);
+                }
+            }
+            *y += lineHeight;
+        }
+        if (draw) {
+            muiFillRect({ dividerX, top, divider, *y - top }, theme.panelBorder);
+        }
+        writer.separator(ui.dp(1.0f), separatorGap, theme.panelBorder);
+
+        top = *y;
+        float bottom = top;
+        for (int hand = 0; hand < 2; hand++) {
+            float x = hand == 0 ? content.x : rightX;
+            float lineY = top;
+            for (int line = 0; line < 3; line++) {
+                if (summary.hands[hand][line].empty()) {
+                    continue;
+                }
+                for (const std::u32string& wrapped : muiWrapText(muiDecodeGameText(summary.hands[hand][line].c_str()), columnWidth, size)) {
+                    if (draw) {
+                        muiDrawTextAligned(wrapped, { x, lineY, columnWidth, lineHeight }, size, line == 0 ? theme.text : theme.textDim, MuiAlign::Start, MuiAlign::Center);
+                    }
+                    lineY += lineHeight;
+                }
+            }
+            bottom = std::max(bottom, lineY);
+        }
+        if (draw) {
+            muiFillRect({ dividerX, top, divider, bottom - top }, theme.panelBorder);
+        }
+        *y = bottom;
+
+        writer.separator(ui.dp(1.0f), separatorGap, theme.panelBorder);
+        writer.text(muiDecodeGameText(summary.weight.c_str()), size, summary.encumbered ? kEncumbered : theme.text);
+    }
+
     void InventoryScreen::buildItemInfo(MuiContext& ui, const MuiRect& content, float* y, bool draw)
     {
         const MuiTheme& theme = muiTheme();
-        float size = ui.dp(13.0f);
+        float size = ui.dp(tall ? 15.0f : 13.0f);
+        float titleSize = ui.dp(tall ? 20.0f : 15.0f);
         float start = *y;
-        InfoWriter writer = { content, y, draw };
+        InfoWriter writer = { content, y, draw, ui.dp(infoRowDp) };
 
-        for (const std::u32string& line : muiWrapText(muiDecodeGameText(info.name.c_str()), content.w, ui.dp(15.0f))) {
-            writer.text(line, ui.dp(15.0f), theme.accent);
+        for (const std::u32string& line : muiWrapText(muiDecodeGameText(info.name.c_str()), content.w, titleSize)) {
+            writer.text(line, titleSize, theme.accent);
         }
         writer.separator(ui.dp(1.0f), ui.dp(4.0f), theme.panelBorder);
 
@@ -800,7 +979,7 @@ namespace {
 
         // Action points of the primary attack: lightning, as on the HUD.
         if (info.actionPoints >= 0) {
-            float lineHeight = muiLineHeight(size);
+            float lineHeight = std::max(muiLineHeight(size), writer.rowHeight);
             if (draw) {
                 float iconSize = size * 0.9f;
                 muiDrawIcon(MuiIcon::ActionPoints, content.x + iconSize / 2.0f, *y + lineHeight / 2.0f, iconSize, ui.dp(1.4f), theme.textDim);

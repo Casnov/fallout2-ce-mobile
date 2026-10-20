@@ -592,6 +592,13 @@ every screen on the new scalable UI, visual style/textures later via theme).
   the buttons off the edge), only 8 dp past the frameless tabs; the area is
   marked `window.tap_area` for autotests. The elevator keeps its card and
   puts Back next to it (`muiTabsBeside`). Done so far: inventory, elevator.
+  Screens pick their layout by the content area, not the device: the
+  inventory's tall one (680x440 dp and more: every tablet window) has the
+  items on the left and the character, armor and hands over the summary on
+  the right in the mockup's proportions, the summary in two columns
+  (SPECIAL with `statGetName`'s full names next to hit points, armor class
+  and resistances; each hand's weapon under its slot), its rows as spaced
+  out as fits (22, 20 dp or the font's line); phones get the three columns.
 - Done: dialog boxes (`showDialogBox` -> `muiShowDialogBox`, texts from
   DBOX.MSG), radial action menu drawing (54 dp circles, own line icons,
   centered on the finger, near edges buttons spread over the free arc;
