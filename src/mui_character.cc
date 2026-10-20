@@ -158,7 +158,9 @@ namespace {
             modal = true;
         }
 
-        bool coversScreen() override { return true; }
+        // Creating: the window is over the title menu's picture.
+        bool coversScreen() override { return !muiUsesWindows() || creating; }
+        bool isGameScreen() override { return true; }
 
         void reset();
         void build(MuiContext& ui) override;
@@ -170,6 +172,10 @@ namespace {
 
     private:
         bool creating = false;
+        // Tablet windows: the roomy layout (`muiIsTallContent`).
+        bool tall = false;
+        // Its header's sizes (they fit the width).
+        bool roomyHeader = false;
         Tab tab = Tab::Stats;
         Folder folder = Folder::Perks;
 
@@ -198,6 +204,8 @@ namespace {
         void buildTabs(MuiContext& ui, const MuiRect& column);
         void buildMain(MuiContext& ui, const MuiRect& rect);
         void buildStats(MuiContext& ui, const MuiRect& rect);
+        void buildStatsTall(MuiContext& ui, const MuiRect& rect);
+        float headerWidth(MuiContext& ui, float height, bool roomy);
         void buildSkills(MuiContext& ui, const MuiRect& rect);
         void buildFolder(MuiContext& ui, const MuiRect& rect);
         void buildTraits(MuiContext& ui, const MuiRect& rect);
@@ -338,7 +346,9 @@ namespace {
             }
         }
 
-        muiFillRect(ui.screenRect(), kBackground);
+        // Opaque over the map, or a window over it (the title menu's picture
+        // while creating).
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground, creating);
 
         // Under the perk panel and the name field nothing takes touches (they
         // are parts of this screen, the first widget under the finger would
@@ -346,16 +356,22 @@ namespace {
         bool interactive = ui.isInteractive;
         ui.isInteractive = interactive && perkStep == PerkStep::Closed && !nameOpen;
 
-        MuiRect content;
-        MuiRect tabs;
-        muiDialogLayout(ui, &content, &tabs);
+        const MuiRect& content = frame.content;
+        const MuiRect& tabs = frame.tabs;
 
-        float gap = ui.dp(8.0f);
-        float headerHeight = ui.dp(32.0f);
+        // A tap outside is Back in game (Done), not under the perk panel or the
+        // name field; creating it would be Cancel.
+        if (frame.tappedOutside && !creating && perkStep == PerkStep::Closed && !nameOpen) {
+            back();
+        }
+
+        tall = muiIsTallContent(ui, content);
+        float gap = ui.dp(tall ? 10.0f : 8.0f);
+        float headerHeight = ui.dp(tall ? 44.0f : 32.0f);
         buildHeader(ui, { content.x, content.y, content.w, headerHeight });
 
         MuiRect body = { content.x, content.y + headerHeight + gap, content.w, content.h - headerHeight - gap };
-        float cardWidth = std::clamp(body.w * 0.35f, ui.dp(220.0f), ui.dp(300.0f));
+        float cardWidth = tall ? std::clamp(body.w * 0.364f, ui.dp(260.0f), ui.dp(340.0f)) : std::clamp(body.w * 0.35f, ui.dp(220.0f), ui.dp(300.0f));
         MuiRect main = { body.x, body.y, body.w - cardWidth - gap, body.h };
         MuiRect cardRect = { main.right() + gap, body.y, cardWidth, body.h };
 
@@ -486,7 +502,7 @@ namespace {
         }
         muiFillRoundRect(rect, ui.dp(6.0f), fill);
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
-        float size = muiFitTextSize(label, rect.w - ui.dp(12.0f), ui.dp(14.0f), ui.dp(10.0f));
+        float size = muiFitTextSize(label, rect.w - ui.dp(12.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
         muiDrawTextAligned(label, rect, size, textColor, MuiAlign::Center, MuiAlign::Center);
         return tapped && enabled;
     }
@@ -495,9 +511,9 @@ namespace {
     float CharacterScreen::chip(MuiContext& ui, const std::string& id, float x, const MuiRect& bar, const std::u32string& text, MuiColor color, MuiIcon icon, bool hasIcon, bool* tapped)
     {
         const MuiTheme& theme = muiTheme();
-        float size = ui.dp(14.0f);
-        float padding = ui.dp(9.0f);
-        float iconSize = ui.dp(15.0f);
+        float size = ui.dp(roomyHeader ? 16.0f : 14.0f);
+        float padding = ui.dp(roomyHeader ? 14.0f : 9.0f);
+        float iconSize = ui.dp(roomyHeader ? 18.0f : 15.0f);
         float width = padding * 2.0f + muiTextWidth(text, size) + (hasIcon ? iconSize + ui.dp(5.0f) : 0.0f);
         MuiRect rect = { x, bar.y, width, bar.h };
 
@@ -519,10 +535,56 @@ namespace {
         return width;
     }
 
+    // The header's chips and buttons at the roomy or the compact sizes, as
+    // `buildHeader` lays them out.
+    float CharacterScreen::headerWidth(MuiContext& ui, float height, bool roomy)
+    {
+        float size = ui.dp(roomy ? 16.0f : 14.0f);
+        float padding = ui.dp(roomy ? 14.0f : 9.0f);
+        float iconSize = ui.dp(roomy ? 18.0f : 15.0f);
+        float gap = ui.dp(roomy ? 8.0f : 6.0f);
+        float buttonWidth = ui.dp(roomy ? 130.0f : 110.0f);
+        auto chipWidth = [&](const std::u32string& text, bool hasIcon) {
+            return padding * 2.0f + muiTextWidth(text, size) + (hasIcon ? iconSize + ui.dp(5.0f) : 0.0f) + gap;
+        };
+
+        if (creating) {
+            std::u32string nameText = gameText(characterEditorNameIsDefault() ? characterEditorGetText(kEditorName) : critterGetName(gDude));
+            std::u32string age = gameText(statGetName(STAT_AGE)) + U" " + number(critterGetStat(gDude, STAT_AGE));
+            int gender = critterGetStat(gDude, STAT_GENDER);
+            return chipWidth(nameText, true) + height * 2.0f + ui.dp(8.0f) + chipWidth(age, false)
+                + chipWidth(editorText(kEditorMale + gender), false)
+                + chipWidth(editorText(kEditorCharacterPoints) + U" " + number(characterEditorGetCharacterPoints()), false)
+                + buttonWidth;
+        }
+
+        int hp;
+        int maxHp;
+        characterEditorGetHitPoints(&hp, &maxHp);
+        std::u32string experience = editorText(kEditorExperience) + U" " + number(pcGetStat(PC_STAT_EXPERIENCE));
+        int next = pcGetExperienceForNextLevel();
+        if (next != -1) {
+            experience += U" / " + number(next);
+        }
+        float width = chipWidth(gameText(critterGetName(gDude)), false)
+            + chipWidth(editorText(kEditorLevel) + U" " + number(pcGetStat(PC_STAT_LEVEL)), false)
+            + chipWidth(number(hp) + U"/" + number(maxHp), true)
+            + chipWidth(experience, false);
+        if (skillPointsInPlay()) {
+            width += chipWidth(editorText(kEditorSkillPoints) + U" " + number(pcGetStat(PC_STAT_UNSPENT_SKILL_POINTS)), false);
+        }
+        if (characterEditorHasChanges()) {
+            width += buttonWidth;
+        }
+        return width;
+    }
+
     void CharacterScreen::buildHeader(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-        float gap = ui.dp(6.0f);
+        // Tall: the mockup's sizes while everything fits the width.
+        roomyHeader = tall && headerWidth(ui, rect.h, true) <= rect.w;
+        float gap = ui.dp(roomyHeader ? 8.0f : 6.0f);
         float x = rect.x;
         bool tapped;
 
@@ -570,7 +632,7 @@ namespace {
                 select(Item::Level, 0);
             }
 
-            float doneWidth = ui.dp(110.0f);
+            float doneWidth = ui.dp(roomyHeader ? 130.0f : 110.0f);
             MuiRect done = { rect.right() - doneWidth, rect.y, doneWidth, rect.h };
             if (textButton(ui, "character.done", done, ceText(kTextDone, "DONE"), true, true)) {
                 pending = Pending::Done;
@@ -613,7 +675,7 @@ namespace {
 
         // Puts back what was changed here (the game's Cancel).
         if (characterEditorHasChanges()) {
-            float resetWidth = ui.dp(110.0f);
+            float resetWidth = ui.dp(roomyHeader ? 130.0f : 110.0f);
             MuiRect reset = { rect.right() - resetWidth, rect.y, resetWidth, rect.h };
             if (textButton(ui, "character.reset", reset, ceText(kTextReset, "Reset"), false, true)) {
                 _gsound_red_butt_press(-1, 0);
@@ -640,11 +702,24 @@ namespace {
     void CharacterScreen::buildMain(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-        ui.panel(rect);
 
-        MuiRect inner = rect.inset(ui.dp(6.0f));
-        float tabHeight = ui.dp(34.0f);
-        float gap = ui.dp(4.0f);
+        // Tall: the tabs over the panel (the window's mockup), else in it.
+        MuiRect inner;
+        MuiRect panelRect;
+        float tabHeight;
+        float gap;
+        if (tall) {
+            tabHeight = ui.dp(44.0f);
+            gap = ui.dp(8.0f);
+            inner = rect;
+            panelRect = { rect.x, rect.y + tabHeight + ui.dp(8.0f), rect.w, rect.h - tabHeight - ui.dp(8.0f) };
+            ui.panel(panelRect);
+        } else {
+            ui.panel(rect);
+            inner = rect.inset(ui.dp(6.0f));
+            tabHeight = ui.dp(34.0f);
+            gap = ui.dp(4.0f);
+        }
 
         struct TabInfo {
             Tab tab;
@@ -678,10 +753,11 @@ namespace {
             bool tapped = ui.touchable(info.id, tabRect, &pressed);
             muiFillRoundRect(tabRect, ui.dp(6.0f), pressed ? theme.buttonPressed : (active ? theme.buttonPrimary : theme.button));
             muiStrokeRoundRect(tabRect, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
-            float size = muiFitTextSize(info.label, tabRect.w - ui.dp(10.0f), ui.dp(14.0f), ui.dp(10.0f));
+            float size = muiFitTextSize(info.label, tabRect.w - ui.dp(10.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
             muiDrawTextAligned(info.label, tabRect, size, active && !pressed ? theme.buttonPrimaryText : theme.buttonText, MuiAlign::Center, MuiAlign::Center);
             if (info.tab == Tab::Perks && perkOwed) {
-                muiFillCircle(tabRect.right() - ui.dp(9.0f), tabRect.y + ui.dp(9.0f), ui.dp(4.0f), kNotice);
+                float dotInset = ui.dp(tall ? 12.0f : 9.0f);
+                muiFillCircle(tabRect.right() - dotInset, tabRect.y + dotInset, ui.dp(tall ? 4.5f : 4.0f), kNotice);
             }
 
             if (tapped && !active) {
@@ -706,17 +782,24 @@ namespace {
             }
         }
 
-        MuiRect area = { inner.x, inner.y + tabHeight + ui.dp(6.0f), inner.w, inner.bottom() - inner.y - tabHeight - ui.dp(6.0f) };
+        MuiRect area = tall ? panelRect.inset(ui.dp(8.0f)) : MuiRect { inner.x, inner.y + tabHeight + ui.dp(6.0f), inner.w, inner.bottom() - inner.y - tabHeight - ui.dp(6.0f) };
         switch (tab) {
         case Tab::Stats:
-            buildStats(ui, area);
+            if (tall) {
+                buildStatsTall(ui, area);
+            } else {
+                buildStats(ui, area);
+            }
             break;
         case Tab::Skills:
-            buildSkills(ui, area);
+            // Tall: the list scrolls under the panel's edges.
+            buildSkills(ui, tall ? panelRect.inset(ui.dp(8.0f), ui.dp(2.0f)) : area);
             break;
         case Tab::Perks:
             if (creating) {
-                buildTraits(ui, area);
+                buildTraits(ui, tall ? panelRect.inset(ui.dp(8.0f), ui.dp(2.0f)) : area);
+            } else if (tall) {
+                buildFolder(ui, area);
             } else {
                 // Own frame: its sides and bottom are the panel's.
                 MuiRect frame = { rect.x, area.y, rect.w, rect.bottom() - area.y };
@@ -853,12 +936,178 @@ namespace {
         }
     }
 
+    // Tall layout (the window's mockups): SPECIAL in rows over the whole
+    // width (creation: bigger, with the rank and - +; in game: conditions
+    // under them), derived stats in two columns under a line. Rows shrink
+    // when they don't fit (7" tablets, every condition at once).
+    void CharacterScreen::buildStatsTall(MuiContext& ui, const MuiRect& rect)
+    {
+        const MuiTheme& theme = muiTheme();
+        float size = ui.dp(16.0f);
+        float rankSize = ui.dp(14.0f);
+        float padding = ui.dp(12.0f);
+        float lineGap = ui.dp(10.0f);
+
+        // Conditions laid out first: their height.
+        struct ConditionChip {
+            int condition;
+            std::u32string text;
+            MuiRect rect;
+        };
+        std::vector<ConditionChip> chips;
+        float chipSize = ui.dp(13.0f);
+        float chipHeight = ui.dp(26.0f);
+        float chipGap = ui.dp(6.0f);
+        float conditionsHeight = 0.0f;
+        if (!creating) {
+            float x = 0.0f;
+            float y = 0.0f;
+            float room = rect.w - ui.dp(8.0f);
+            for (int condition = 0; condition < kCharacterEditorConditionCount; condition++) {
+                if (!characterEditorConditionIsActive(condition)) {
+                    continue;
+                }
+                std::u32string text = gameText(characterEditorGetConditionName(condition));
+                float width = std::min(muiTextWidth(text, chipSize) + ui.dp(20.0f), room);
+                if (x + width > room && x > 0.0f) {
+                    x = 0.0f;
+                    y += chipHeight + chipGap;
+                }
+                chips.push_back({ condition, text, { x, y, width, chipHeight } });
+                x += width + chipGap;
+            }
+            conditionsHeight = ui.dp(8.0f) + (chips.empty() ? chipHeight : y + chipHeight);
+        }
+
+        int derivedRows = (kCharacterEditorDerivedStatCount + 1) / 2;
+        float statNominal = ui.dp(creating ? 50.0f : 34.0f);
+        float derivedNominal = ui.dp(30.0f);
+        float natural = statNominal * PRIMARY_STAT_COUNT + conditionsHeight + lineGap * 2.0f + derivedNominal * derivedRows;
+        float scale = std::min(1.0f, (rect.h - conditionsHeight - lineGap * 2.0f) / (natural - conditionsHeight - lineGap * 2.0f));
+        float statHeight = std::floor(statNominal * scale);
+        float derivedHeight = std::floor(derivedNominal * scale);
+
+        float y = rect.y;
+        for (int stat = 0; stat < PRIMARY_STAT_COUNT; stat++) {
+            MuiRect rowRect = { rect.x, y, rect.w, statHeight };
+            y += statHeight;
+            std::string id = "character.special." + std::to_string(stat);
+            std::u32string label = gameText(statGetName(static_cast<Stat>(stat)));
+            int value = characterEditorGetPrimaryStat(static_cast<Stat>(stat));
+            std::u32string rank = gameText(characterEditorGetPrimaryStatDescription(static_cast<Stat>(stat)));
+
+            if (creating) {
+                // Name, rank, - value +.
+                float buttonHeight = std::min(ui.dp(40.0f), statHeight - ui.dp(8.0f));
+                float buttonWidth = ui.dp(44.0f);
+                MuiRect plus = { rowRect.right() - ui.dp(6.0f) - buttonWidth, rowRect.centerY() - buttonHeight / 2.0f, buttonWidth, buttonHeight };
+                MuiRect valueRect = { plus.x - ui.dp(36.0f), rowRect.y, ui.dp(36.0f), rowRect.h };
+                MuiRect minus = { valueRect.x - buttonWidth, plus.y, buttonWidth, buttonHeight };
+                MuiRect rankRect = { minus.x - ui.dp(8.0f) - ui.dp(96.0f), rowRect.y, ui.dp(96.0f), rowRect.h };
+
+                bool pressed;
+                if (row(ui, id, rowRect, item == Item::PrimaryStat && itemIndex == stat, &pressed, minus.x)) {
+                    select(Item::PrimaryStat, stat);
+                }
+                float labelSize = muiFitTextSize(label, rankRect.x - rowRect.x - padding * 2.0f, size, ui.dp(11.0f));
+                muiDrawTextAligned(label, { rowRect.x + padding, rowRect.y, rankRect.x - rowRect.x, rowRect.h }, labelSize, theme.text, MuiAlign::Start, MuiAlign::Center);
+                muiDrawTextAligned(rank, rankRect, muiFitTextSize(rank, rankRect.w, rankSize, ui.dp(10.0f)), theme.textDim, MuiAlign::End, MuiAlign::Center);
+                muiDrawTextAligned(number(value), valueRect, size, value > 10 ? kWarning : theme.accent, MuiAlign::Center, MuiAlign::Center);
+
+                if (smallButton(ui, id + ".minus", minus, MuiIcon::Minus, value > 1)) {
+                    select(Item::PrimaryStat, stat);
+                    if (characterEditorAdjustPrimaryStat(static_cast<Stat>(stat), -1)) {
+                        _gsound_red_butt_press(-1, 0);
+                    } else {
+                        soundPlayFile("iisxxxx1");
+                    }
+                }
+                if (smallButton(ui, id + ".plus", plus, MuiIcon::Plus, characterEditorGetCharacterPoints() > 0 && value < 10)) {
+                    select(Item::PrimaryStat, stat);
+                    if (characterEditorAdjustPrimaryStat(static_cast<Stat>(stat), 1)) {
+                        _gsound_red_butt_press(-1, 0);
+                    } else {
+                        soundPlayFile("iisxxxx1");
+                    }
+                }
+                continue;
+            }
+
+            // Name; value and rank at the right.
+            bool pressed;
+            if (row(ui, id, rowRect, item == Item::PrimaryStat && itemIndex == stat, &pressed)) {
+                select(Item::PrimaryStat, stat);
+            }
+            float rankWidth = muiTextWidth(rank, rankSize);
+            MuiRect rankRect = { rowRect.right() - padding - rankWidth, rowRect.y, rankWidth, rowRect.h };
+            MuiRect valueRect = { rankRect.x - ui.dp(8.0f) - ui.dp(30.0f), rowRect.y, ui.dp(30.0f), rowRect.h };
+            float labelSize = muiFitTextSize(label, valueRect.x - rowRect.x - padding * 2.0f, size, ui.dp(11.0f));
+            muiDrawTextAligned(label, { rowRect.x + padding, rowRect.y, valueRect.x - rowRect.x, rowRect.h }, labelSize, theme.text, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(number(value), valueRect, size, theme.accent, MuiAlign::End, MuiAlign::Center);
+            muiDrawTextAligned(rank, rankRect, rankSize, theme.textDim, MuiAlign::End, MuiAlign::Center);
+        }
+
+        // Conditions the character has, or that there are none.
+        if (!creating) {
+            float top = y + ui.dp(8.0f);
+            float left = rect.x + ui.dp(4.0f);
+            if (chips.empty()) {
+                std::u32string text = ceText(kTextNoConditions, "No conditions");
+                muiDrawTextAligned(text, { rect.x + padding, top, rect.w - padding, chipHeight }, ui.dp(14.0f), theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            }
+            for (const ConditionChip& chip : chips) {
+                MuiRect chipRect = { left + chip.rect.x, top + chip.rect.y, chip.rect.w, chip.rect.h };
+                bool selected = item == Item::Condition && itemIndex == chip.condition;
+                bool pressed;
+                if (ui.touchable("character.condition." + std::to_string(chip.condition), chipRect, &pressed)) {
+                    select(Item::Condition, chip.condition);
+                }
+                muiFillRoundRect(chipRect, ui.dp(5.0f), pressed || selected ? kSelected : kListBackground);
+                muiStrokeRoundRect(chipRect, ui.dp(5.0f), ui.dp(1.0f), kWarning);
+                muiDrawTextAligned(chip.text, chipRect, chipSize, kWarning, MuiAlign::Center, MuiAlign::Center);
+            }
+            y += conditionsHeight;
+        }
+
+        y += lineGap;
+        muiFillRect({ rect.x + ui.dp(4.0f), y, rect.w - ui.dp(8.0f), ui.dp(1.0f) }, theme.panelBorder);
+        y += lineGap;
+
+        // Two columns: armor class, action points, carry weight, melee
+        // damage, healing rate; resistances, sequence, critical chance.
+        static const int kColumns[2][5] = {
+            { 0, 1, 2, 3, 8 },
+            { 4, 5, 6, 7, 9 },
+        };
+        float columnGap = ui.dp(10.0f);
+        float columnWidth = (rect.w - columnGap) / 2.0f;
+        for (int column = 0; column < 2; column++) {
+            for (int line = 0; line < derivedRows; line++) {
+                int index = kColumns[column][line];
+                MuiRect rowRect = { rect.x + column * (columnWidth + columnGap), y + line * derivedHeight, columnWidth, derivedHeight };
+                bool pressed;
+                if (row(ui, "character.derived." + std::to_string(index), rowRect, item == Item::DerivedStat && itemIndex == index, &pressed)) {
+                    select(Item::DerivedStat, index);
+                }
+
+                bool warning;
+                std::u32string value = gameText(characterEditorFormatDerivedStat(index, &warning).c_str());
+                float valueWidth = muiTextWidth(value, size);
+                std::u32string label = gameText(characterEditorGetDerivedStatName(index));
+                float labelSize = muiFitTextSize(label, rowRect.w - valueWidth - padding * 3.0f, size, ui.dp(11.0f));
+                muiDrawTextAligned(label, { rowRect.x + padding, rowRect.y, rowRect.w, rowRect.h }, labelSize, theme.text, MuiAlign::Start, MuiAlign::Center);
+                muiDrawTextAligned(value, { rowRect.x, rowRect.y, rowRect.w - padding, rowRect.h }, size, warning ? kWarning : theme.accent, MuiAlign::End, MuiAlign::Center);
+            }
+        }
+    }
+
     // Skills: tagged marked, - and + for skill points (tag in creation).
     void CharacterScreen::buildSkills(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-        float rowHeight = ui.dp(42.0f);
-        float size = ui.dp(15.0f);
+        // Tall: creation's rows bigger (their own buttons, the mockup).
+        float rowHeight = ui.dp(tall && creating ? 52.0f : 42.0f);
+        float size = ui.dp(tall ? 16.0f : 15.0f);
         float padding = ui.dp(6.0f);
         float button = ui.dp(36.0f);
 
@@ -956,8 +1205,8 @@ namespace {
     void CharacterScreen::buildFolder(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-        float tabHeight = ui.dp(32.0f);
-        float gap = ui.dp(4.0f);
+        float tabHeight = ui.dp(tall ? 40.0f : 32.0f);
+        float gap = ui.dp(tall ? 6.0f : 4.0f);
 
         const struct {
             Folder folder;
@@ -978,7 +1227,7 @@ namespace {
             muiFillRoundRect(tabRect, ui.dp(6.0f), pressed ? theme.buttonPressed : (active ? kSelected : theme.button));
             muiStrokeRoundRect(tabRect, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
             std::u32string label = editorText(tabs[index].label);
-            float size = muiFitTextSize(label, tabRect.w - ui.dp(8.0f), ui.dp(13.0f), ui.dp(10.0f));
+            float size = muiFitTextSize(label, tabRect.w - ui.dp(8.0f), ui.dp(tall ? 15.0f : 13.0f), ui.dp(10.0f));
             muiDrawTextAligned(label, tabRect, size, active ? theme.accent : theme.buttonText, MuiAlign::Center, MuiAlign::Center);
             if (tapped && !active) {
                 _gsound_red_butt_press(-1, 0);
@@ -988,12 +1237,13 @@ namespace {
             }
         }
 
-        MuiRect list = { rect.x, rect.y + tabHeight + ui.dp(6.0f), rect.w, rect.bottom() - rect.y - tabHeight - ui.dp(6.0f) };
+        float listGap = ui.dp(tall ? 8.0f : 6.0f);
+        MuiRect list = { rect.x, rect.y + tabHeight + listGap, rect.w, rect.bottom() - rect.y - tabHeight - listGap };
 
         // Owed perk: notice opening the perk panel.
         bool owed = folder == Folder::Perks && characterEditorGetPerkOwed() != 0 && !characterEditorGetAvailablePerks().empty();
         if (owed) {
-            MuiRect notice = { list.x, list.y, list.w, ui.dp(36.0f) };
+            MuiRect notice = { list.x, list.y, list.w, ui.dp(tall ? 40.0f : 36.0f) };
             bool pressed;
             if (ui.touchable("character.perks.owed", notice, &pressed)) {
                 _gsound_red_butt_press(-1, 0);
@@ -1002,16 +1252,16 @@ namespace {
             muiFillRoundRect(notice, ui.dp(6.0f), pressed ? theme.buttonPressed : kListBackground);
             muiStrokeRoundRect(notice, ui.dp(6.0f), ui.dp(1.2f), kNotice);
             std::u32string text = ceText(kTextNewPerk, "New perk available");
-            float size = muiFitTextSize(text, notice.w - ui.dp(16.0f), ui.dp(14.0f), ui.dp(10.0f));
-            muiDrawTextAligned(text, notice.inset(ui.dp(8.0f), 0.0f), size, kNotice, MuiAlign::Start, MuiAlign::Center);
-            list.y += notice.h + ui.dp(6.0f);
-            list.h -= notice.h + ui.dp(6.0f);
+            float size = muiFitTextSize(text, notice.w - ui.dp(16.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
+            muiDrawTextAligned(text, notice.inset(ui.dp(tall ? 12.0f : 8.0f), 0.0f), size, kNotice, MuiAlign::Start, MuiAlign::Center);
+            list.y += notice.h + listGap;
+            list.h -= notice.h + listGap;
         }
 
         std::vector<CharacterEditorFolderEntry> entries = characterEditorGetFolder(static_cast<CharacterEditorFolder>(folder));
 
-        float rowHeight = ui.dp(34.0f);
-        float headingHeight = ui.dp(28.0f);
+        float rowHeight = ui.dp(tall ? 48.0f : 34.0f);
+        float headingHeight = ui.dp(tall ? 34.0f : 28.0f);
         float height = 0.0f;
         for (const CharacterEditorFolderEntry& entry : entries) {
             height += entry.heading ? headingHeight : rowHeight;
@@ -1019,8 +1269,8 @@ namespace {
 
         float offset = ui.scroll("character.folder", list, height);
         bool scrolling = ui.isScrolling("character.folder");
-        float size = ui.dp(14.0f);
-        float padding = ui.dp(8.0f);
+        float size = ui.dp(tall ? 16.0f : 14.0f);
+        float padding = ui.dp(tall ? 14.0f : 8.0f);
 
         muiPushClip(list);
         float y = list.y - offset;
@@ -1070,8 +1320,8 @@ namespace {
     void CharacterScreen::buildTraits(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-        float rowHeight = ui.dp(42.0f);
-        float size = ui.dp(15.0f);
+        float rowHeight = ui.dp(tall ? 52.0f : 42.0f);
+        float size = ui.dp(tall ? 16.0f : 15.0f);
         float padding = ui.dp(6.0f);
         float button = ui.dp(36.0f);
 
@@ -1127,7 +1377,7 @@ namespace {
         const MuiTheme& theme = muiTheme();
         ui.panel(rect);
 
-        MuiRect content = rect.inset(ui.dp(12.0f), ui.dp(10.0f));
+        MuiRect content = tall ? rect.inset(ui.dp(18.0f), ui.dp(16.0f)) : rect.inset(ui.dp(12.0f), ui.dp(10.0f));
 
         std::string newKey = std::to_string(card.frmId.fid()) + card.title;
         if (newKey != *key) {
@@ -1146,13 +1396,13 @@ namespace {
             y += pictureHeight + ui.dp(8.0f);
         }
 
-        float titleSize = ui.dp(17.0f);
+        float titleSize = ui.dp(tall ? 22.0f : 17.0f);
         std::u32string title = gameText(card.title.c_str());
         titleSize = muiFitTextSize(title, content.w, titleSize, ui.dp(12.0f));
         muiDrawTextAligned(title, { content.x, y, content.w, muiLineHeight(titleSize) }, titleSize, theme.accent, MuiAlign::Start, MuiAlign::Start);
         y += muiLineHeight(titleSize) + ui.dp(3.0f);
 
-        float textSize = ui.dp(13.5f);
+        float textSize = ui.dp(tall ? 16.0f : 13.5f);
         float lineHeight = muiLineHeight(textSize);
         std::vector<std::u32string> lines;
         size_t subtitleLines = 0;
