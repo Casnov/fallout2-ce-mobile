@@ -57,6 +57,11 @@ namespace {
     constexpr float kTallMinWidthDp = 680.0f;
     constexpr float kTallMinHeightDp = 440.0f;
 
+    // Talk in windows: the left column (the speaker picture over the reply
+    // or the party member's stats) at most, the party member's name row, dp.
+    constexpr float kTallLeftColumnDp = 460.0f;
+    constexpr float kPartyStatsNameDp = 24.0f;
+
     const MuiColor kBackground = muiRgb(0x060A07);
     const MuiColor kReactionGood = muiRgb(0x78B4FF);
     const MuiColor kReactionBad = muiRgb(0xFF6E5E);
@@ -66,8 +71,6 @@ namespace {
 
     // Texts in `game\ce.msg`.
     constexpr int kTextPartyStats = 172;
-    constexpr int kTextPartyWeapon = 180;
-    constexpr int kTextPartyArmor = 181;
     constexpr int kTextPartyBestWeapon = 182;
     constexpr int kTextPartyBestArmor = 183;
     constexpr int kTextPartyDisposition = 184;
@@ -96,12 +99,41 @@ namespace {
         return muiDecodeGameText(muiText(id, fallback));
     }
 
+    // A row of the party member's stats (as the game's combat control
+    // panel): label (index in kPartyStatFallbacks), value (none: the label
+    // alone, the addiction), whether it warns.
+    struct PartyStat {
+        int label;
+        std::string value;
+        bool warning;
+    };
+
+    std::vector<PartyStat> partyStats(const PartyControlView& view)
+    {
+        std::vector<PartyStat> stats = {
+            { 0, std::to_string(view.hitPoints) + "/" + std::to_string(view.maximumHitPoints), false },
+            { 1, skillGetName(view.bestSkill), false },
+            { 2, std::to_string(view.weight) + "/" + std::to_string(view.carryWeight), view.encumbered },
+            { 3, std::to_string(view.meleeDamage), false },
+            { 4, std::to_string(view.actionPoints) + "/" + std::to_string(view.maximumActionPoints), false },
+        };
+        if (view.extraInfo) {
+            stats.push_back({ 5, std::to_string(view.level), false });
+            stats.push_back({ 6, std::to_string(view.armorClass), false });
+            if (view.addicted) {
+                stats.push_back({ 7, std::string(), true });
+            }
+        }
+        return stats;
+    }
+
     // Talk screen: speaker (talking head or map around the speaker, drawn by
     // the game) on the left with the reply below it, options on the right,
     // tabs at the right edge. Reply, options and review scroll in their own
     // areas. Party members also get the party member control panel (the
     // game's combat control and customization panels in one): their stats
-    // under the head instead of the reply.
+    // and equipment under the head instead of the reply, the combat
+    // settings instead of the options.
     class TalkScreen : public MuiScreen {
     public:
         bool reviewOpen = false;
@@ -165,17 +197,14 @@ namespace {
     private:
         void buildHead(MuiContext& ui, const MuiRect& rect);
         void buildIconButtons(MuiContext& ui, const MuiRect& column);
-        void buildReply(MuiContext& ui, const MuiRect& rect);
-        void buildOptions(MuiContext& ui, const MuiRect& rect);
-        void buildFeed(MuiContext& ui, const MuiRect& area);
+        void buildReply(MuiContext& ui, const MuiRect& rect, bool tall);
+        void buildOptions(MuiContext& ui, const MuiRect& area, bool tall);
         void buildReview(MuiContext& ui, const MuiRect& rect);
-        void buildPartyStats(MuiContext& ui, const MuiRect& rect, const PartyControlView& view);
-        void buildParty(MuiContext& ui, const MuiRect& rect, const PartyControlView& view);
-        void buildPartyTall(MuiContext& ui, const MuiRect& head, const MuiRect& below, const MuiRect& content, const PartyControlView& view);
-        void buildPartyStatsTall(MuiContext& ui, const MuiRect& rect, const PartyControlView& view);
+        void buildPartyMember(MuiContext& ui, const MuiRect& rect, const PartyControlView& view, bool tall);
+        void buildPartyStats(MuiContext& ui, const MuiRect& rect, const std::vector<PartyStat>& stats, bool tall);
         bool buildPartyCard(MuiContext& ui, const MuiRect& rect, const std::string& id, Object* item, bool weapon, bool enabled, const std::u32string& emptyText);
-        void buildPartySettingsTall(MuiContext& ui, const MuiRect& rect, const PartyControlView& view);
-        bool buildPartyEquipment(MuiContext& ui, const MuiRect& rect, const std::string& id, int label, Object* item, int button, bool enabled);
+        void buildPartySettings(MuiContext& ui, const MuiRect& rect, const PartyControlView& view, bool tall);
+        void buildPartyDispositions(MuiContext& ui, const MuiRect& rect, const PartyControlView& view, bool tall);
     };
 
     TalkScreen* gTalkScreen = nullptr;
@@ -199,48 +228,35 @@ namespace {
             ui.setScroll("talk.options", 0.0f);
         }
 
-        // Tablet windows (the window's mockup): the speaker at the top in
-        // the middle, under it the reply and the answers as one list; the
-        // review and the party member panel there too.
-        if (muiIsTallContent(ui, content)) {
-            float headHeight = std::floor(std::min(content.h * 0.42f, ui.dp(246.0f)));
-            float headWidth = std::min(content.w, headHeight * 388.0f / 200.0f);
-            MuiRect head = { content.centerX() - headWidth / 2.0f, content.y, headWidth, headHeight };
-            buildHead(ui, head);
-            MuiRect below = { content.x, content.y + headHeight + gap, content.w, content.h - headHeight - gap };
-
-            PartyControlView partyView;
-            if (partyOpen && gameDialogGetPartyControlView(&partyView)) {
-                buildPartyTall(ui, head, below, content, partyView);
-            } else if (reviewOpen) {
-                buildReview(ui, below);
-            } else {
-                buildFeed(ui, below);
-            }
-
-            buildIconButtons(ui, iconColumn);
-            return;
+        // The speaker picture keeps the game's aspect (388 x 200) across the
+        // left column, the reply (the party member's stats and equipment)
+        // below it, the answers (review, party member settings) at the
+        // right. Tablet windows (their mockups): a wider column, the picture
+        // about 1.2 times the game's.
+        bool tall = muiIsTallContent(ui, content);
+        MuiRect left;
+        float headHeight;
+        if (tall) {
+            left = { content.x, content.y, std::floor(std::min(ui.dp(kTallLeftColumnDp), content.w * 0.53f)), content.h };
+            headHeight = std::floor(std::min(left.w * 200.0f / 388.0f, content.h * 0.42f));
+        } else {
+            left = { content.x, content.y, (iconColumn.right() - content.x) * 0.46f, content.h };
+            headHeight = std::min(left.w * 200.0f / 388.0f, left.h * 0.6f);
         }
-
-        MuiRect left = { content.x, content.y, (iconColumn.right() - content.x) * 0.46f, content.h };
         MuiRect right = { left.right() + gap, content.y, content.right() - left.right() - gap, content.h };
-
-        // Speaker picture keeps the game's aspect (388 x 200) across the
-        // left column, the reply takes the rest below it.
-        float headHeight = std::min(left.w * 200.0f / 388.0f, left.h * 0.6f);
         buildHead(ui, { left.x, left.y, left.w, headHeight });
         MuiRect below = { left.x, left.y + headHeight + gap, left.w, left.h - headHeight - gap };
 
         PartyControlView partyView;
         if (partyOpen && gameDialogGetPartyControlView(&partyView)) {
-            buildPartyStats(ui, below, partyView);
-            buildParty(ui, right, partyView);
+            buildPartyMember(ui, below, partyView, tall);
+            buildPartySettings(ui, right, partyView, tall);
         } else {
-            buildReply(ui, below);
+            buildReply(ui, below, tall);
             if (reviewOpen) {
                 buildReview(ui, right);
             } else {
-                buildOptions(ui, right);
+                buildOptions(ui, right, tall);
             }
         }
 
@@ -301,25 +317,25 @@ namespace {
         }
     }
 
-    void TalkScreen::buildReply(MuiContext& ui, const MuiRect& rect)
+    void TalkScreen::buildReply(MuiContext& ui, const MuiRect& rect, bool tall)
     {
         const MuiTheme& theme = muiTheme();
         ui.panel(rect);
 
-        float size = ui.dp(17.0f);
-        MuiRect content = rect.inset(ui.dp(12.0f), ui.dp(10.0f));
+        float size = ui.dp(tall ? 18.0f : 17.0f);
+        float lineHeight = std::max(muiLineHeight(size), ui.dp(tall ? 27.0f : 0.0f));
+        MuiRect content = tall ? rect.inset(ui.dp(18.0f), ui.dp(12.0f)) : rect.inset(ui.dp(12.0f), ui.dp(10.0f));
 
         // Speaker name as the header.
         if (gGameDialogSpeaker != nullptr) {
-            float nameSize = ui.dp(15.0f);
-            float nameHeight = muiLineHeight(nameSize);
-            muiDrawTextAligned(muiDecodeGameText(objectGetName(gGameDialogSpeaker)), { content.x, content.y, content.w, nameHeight }, nameSize, theme.accent, MuiAlign::Start, MuiAlign::Start);
+            float nameSize = ui.dp(tall ? 16.0f : 15.0f);
+            float nameHeight = std::max(muiLineHeight(nameSize), ui.dp(tall ? 24.0f : 0.0f));
+            muiDrawTextAligned(muiDecodeGameText(objectGetName(gGameDialogSpeaker)), { content.x, content.y, content.w, nameHeight }, nameSize, theme.accent, MuiAlign::Start, MuiAlign::Center);
             content.y += nameHeight + ui.dp(4.0f);
             content.h -= nameHeight + ui.dp(4.0f);
         }
 
         std::vector<std::u32string> lines = muiWrapText(muiDecodeGameText(gameDialogGetReplyText()), content.w, size);
-        float lineHeight = muiLineHeight(size);
         float height = lines.size() * lineHeight;
 
         float offset = ui.scroll("talk.reply", content, height);
@@ -328,30 +344,35 @@ namespace {
         float y = content.y - offset;
         for (const std::u32string& line : lines) {
             if (y + lineHeight >= content.y && y <= content.bottom()) {
-                muiDrawText(line, content.x, y, size, theme.text);
+                muiDrawTextAligned(line, { content.x, y, content.w, lineHeight }, size, theme.text, MuiAlign::Start, MuiAlign::Center);
             }
             y += lineHeight;
         }
         muiPopClip();
     }
 
-    void TalkScreen::buildOptions(MuiContext& ui, const MuiRect& rect)
+    void TalkScreen::buildOptions(MuiContext& ui, const MuiRect& area, bool tall)
     {
         const MuiTheme& theme = muiTheme();
 
-        float size = ui.dp(16.0f);
-        float padding = ui.dp(10.0f);
-        float gap = ui.dp(6.0f);
-        float minHeight = ui.dp(46.0f);
-        float lineHeight = muiLineHeight(size);
+        // In windows the scroll bar gets its room at the right.
+        MuiRect rect = tall ? MuiRect { area.x, area.y, area.w - ui.dp(12.0f), area.h } : area;
+        float size = ui.dp(tall ? 17.0f : 16.0f);
+        float paddingX = ui.dp(tall ? 18.0f : 10.0f);
+        float paddingY = ui.dp(tall ? 12.0f : 7.0f);
+        float gap = ui.dp(tall ? 8.0f : 6.0f);
+        float minHeight = ui.dp(tall ? 52.0f : 46.0f);
+        float radius = ui.dp(tall ? 8.0f : 6.0f);
+        float lineHeight = std::max(muiLineHeight(size), ui.dp(tall ? 26.0f : 0.0f));
+        float textWidth = rect.w - paddingX * 2.0f;
 
         int count = gameDialogGetOptionCount();
         std::vector<std::vector<std::u32string>> texts;
         std::vector<float> heights;
         float total = 0.0f;
         for (int index = 0; index < count; index++) {
-            texts.push_back(muiWrapText(muiDecodeGameText(gameDialogGetOptionText(index)), rect.w - padding * 2.0f, size));
-            heights.push_back(std::max(texts.back().size() * lineHeight + padding * 1.4f, minHeight));
+            texts.push_back(muiWrapText(muiDecodeGameText(gameDialogGetOptionText(index)), textWidth, size));
+            heights.push_back(std::max(texts.back().size() * lineHeight + paddingY * 2.0f, minHeight));
             total += heights.back() + (index > 0 ? gap : 0.0f);
         }
 
@@ -377,8 +398,8 @@ namespace {
             bool pressed;
             bool tapped = ui.touchable("talk.options." + std::to_string(index), touchRect, &pressed);
 
-            muiFillRoundRect(optionRect, ui.dp(6.0f), pressed ? theme.buttonPressed : theme.button);
-            muiStrokeRoundRect(optionRect, ui.dp(6.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
+            muiFillRoundRect(optionRect, radius, pressed ? theme.buttonPressed : theme.button);
+            muiStrokeRoundRect(optionRect, radius, ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
 
             MuiColor color = theme.text;
             switch (gameDialogGetOptionReaction(index)) {
@@ -394,7 +415,7 @@ namespace {
 
             float textY = optionRect.y + (optionRect.h - texts[index].size() * lineHeight) / 2.0f;
             for (const std::u32string& line : texts[index]) {
-                muiDrawText(line, optionRect.x + padding, textY, size, color);
+                muiDrawTextAligned(line, { optionRect.x + paddingX, textY, textWidth, lineHeight }, size, color, MuiAlign::Start, MuiAlign::Center);
                 textY += lineHeight;
             }
 
@@ -406,192 +427,102 @@ namespace {
         muiPopClip();
     }
 
-    // The reply in its panel sized to its text, the answers under it (the
-    // game's reaction colors), scrolling as one.
-    void TalkScreen::buildFeed(MuiContext& ui, const MuiRect& area)
+    // Under the head: the party member's stats and its weapon and armor -
+    // in windows the stats over the width in two columns and the two cards
+    // beside each other under them, on phones the stats at the left and
+    // the cards over each other at the right.
+    void TalkScreen::buildPartyMember(MuiContext& ui, const MuiRect& rect, const PartyControlView& view, bool tall)
+    {
+        std::vector<PartyStat> stats = partyStats(view);
+        MuiRect statsRect;
+        MuiRect weapon;
+        MuiRect armor;
+        if (tall) {
+            float gap = ui.dp(10.0f);
+            int rows = static_cast<int>(stats.size() + 1) / 2;
+            float fixed = ui.dp(10.0f) * 2.0f + ui.dp(kPartyStatsNameDp) + ui.dp(11.0f);
+            // The cards keep at least a low card's height.
+            float rowHeight = std::clamp((rect.h - ui.dp(96.0f) - gap - fixed) / rows, ui.dp(20.0f), ui.dp(28.0f));
+            statsRect = { rect.x, rect.y, rect.w, fixed + rows * rowHeight };
+            float cardsY = statsRect.bottom() + gap;
+            float cardWidth = std::floor((rect.w - gap) / 2.0f);
+            weapon = { rect.x, cardsY, cardWidth, rect.bottom() - cardsY };
+            armor = { weapon.right() + gap, cardsY, rect.right() - weapon.right() - gap, weapon.h };
+        } else {
+            float gap = ui.dp(6.0f);
+            statsRect = { rect.x, rect.y, std::floor((rect.w - gap) / 2.0f), rect.h };
+            float x = statsRect.right() + gap;
+            float cardHeight = (rect.h - gap) / 2.0f;
+            weapon = { x, rect.y, rect.right() - x, cardHeight };
+            armor = { x, weapon.bottom() + gap, weapon.w, rect.bottom() - weapon.bottom() - gap };
+        }
+
+        buildPartyStats(ui, statsRect, stats, tall);
+
+        if (buildPartyCard(ui, weapon, "talk.party.weapon", view.weapon, true, true, partyText(kTextPartyNoWeapon, "No weapon"))) {
+            _gsound_red_butt_press(-1, 0);
+            gameDialogQueuePartyControlAction(PartyControlAction::UseBestWeapon);
+        }
+        std::u32string noArmor = view.canEquipArmor ? partyText(kTextPartyNoArmor, "No armor") : partyText(kTextPartyWearsNoArmor, "Wears no armor");
+        if (buildPartyCard(ui, armor, "talk.party.armor", view.armor, false, view.canEquipArmor, noArmor)) {
+            _gsound_red_butt_press(-1, 0);
+            gameDialogQueuePartyControlAction(PartyControlAction::UseBestArmor);
+        }
+    }
+
+    // Name and the stats (two columns in windows), rows as high as the
+    // panel allows; they scroll only if even their least rows don't fit.
+    void TalkScreen::buildPartyStats(MuiContext& ui, const MuiRect& rect, const std::vector<PartyStat>& stats, bool tall)
     {
         const MuiTheme& theme = muiTheme();
-        // The scroll bar's room at the right.
-        MuiRect rect = { area.x, area.y, area.w - ui.dp(12.0f), area.h };
-        float replySize = ui.dp(18.0f);
-        float replyLine = std::max(muiLineHeight(replySize), ui.dp(27.0f));
-        float nameSize = ui.dp(16.0f);
-        float nameLine = std::max(muiLineHeight(nameSize), ui.dp(24.0f));
-        float optionSize = ui.dp(17.0f);
-        float optionLine = std::max(muiLineHeight(optionSize), ui.dp(26.0f));
-        float gap = ui.dp(8.0f);
-        float replyPaddingX = ui.dp(20.0f);
-        float optionPaddingX = ui.dp(18.0f);
-        float optionPaddingY = ui.dp(12.0f);
-        float minOptionHeight = ui.dp(52.0f);
+        ui.panel(rect);
+        MuiRect content = tall ? rect.inset(ui.dp(14.0f), ui.dp(10.0f)) : rect.inset(ui.dp(9.0f), ui.dp(5.0f));
 
-        std::u32string speaker = gGameDialogSpeaker != nullptr ? muiDecodeGameText(objectGetName(gGameDialogSpeaker)) : U"";
-        std::vector<std::u32string> replyLines = muiWrapText(muiDecodeGameText(gameDialogGetReplyText()), rect.w - replyPaddingX * 2.0f, replySize);
-        float replyHeight = ui.dp(12.0f) + (speaker.empty() ? 0.0f : nameLine + ui.dp(2.0f)) + replyLines.size() * replyLine + ui.dp(14.0f);
+        float nameSize = ui.dp(tall ? 17.0f : 13.0f);
+        float nameHeight = tall ? ui.dp(kPartyStatsNameDp) : std::max(muiLineHeight(nameSize), ui.dp(17.0f));
+        std::u32string name = muiDecodeGameText(objectGetName(gGameDialogSpeaker));
+        muiDrawTextAligned(name, { content.x, content.y, content.w, nameHeight }, muiFitTextSize(name, content.w, nameSize, ui.dp(11.0f)), theme.accent, MuiAlign::Start, MuiAlign::Center);
+        float y = content.y + nameHeight + ui.dp(tall ? 6.0f : 3.0f);
+        muiFillRect({ content.x, y, content.w, ui.dp(1.0f) }, theme.panelBorder);
+        y += ui.dp(tall ? 5.0f : 3.0f);
 
-        int count = gameDialogGetOptionCount();
-        float textWidth = rect.w - optionPaddingX * 2.0f;
-        std::vector<std::vector<std::u32string>> texts;
-        std::vector<float> heights;
-        float total = replyHeight;
-        for (int index = 0; index < count; index++) {
-            texts.push_back(muiWrapText(muiDecodeGameText(gameDialogGetOptionText(index)), textWidth, optionSize));
-            heights.push_back(std::max(texts.back().size() * optionLine + optionPaddingY * 2.0f, minOptionHeight));
-            total += gap + heights.back();
-        }
+        int columns = tall ? 2 : 1;
+        int rows = (static_cast<int>(stats.size()) + columns - 1) / columns;
+        MuiRect area = { content.x, y, content.w, content.bottom() - y };
+        float rowHeight = tall
+            ? std::min(ui.dp(28.0f), area.h / rows)
+            : std::clamp(area.h / rows, ui.dp(14.0f), ui.dp(23.0f));
+        float labelSize = tall ? ui.dp(14.0f) : std::min(ui.dp(15.0f), rowHeight * 0.74f);
+        float valueSize = tall ? ui.dp(15.0f) : labelSize;
+        float columnGap = ui.dp(24.0f);
+        float columnWidth = (area.w - columnGap * (columns - 1)) / columns;
 
-        // The answers' ids ("talk.options.<n>") are the list's children: a
-        // finger moving along it scrolls instead of pressing them.
-        float offset = ui.scroll("talk.options", rect, total);
-        bool scrolling = ui.isScrolling("talk.options");
-
-        muiPushClip(rect);
-        float y = rect.y - offset;
-
-        MuiRect replyRect = { rect.x, y, rect.w, replyHeight };
-        ui.panel(replyRect);
-        float textY = y + ui.dp(12.0f);
-        if (!speaker.empty()) {
-            muiDrawTextAligned(speaker, { rect.x + replyPaddingX, textY, rect.w - replyPaddingX * 2.0f, nameLine }, nameSize, theme.accent, MuiAlign::Start, MuiAlign::Center);
-            textY += nameLine + ui.dp(2.0f);
-        }
-        for (const std::u32string& line : replyLines) {
-            if (textY + replyLine >= rect.y && textY <= rect.bottom()) {
-                muiDrawTextAligned(line, { rect.x + replyPaddingX, textY, rect.w - replyPaddingX * 2.0f, replyLine }, replySize, theme.text, MuiAlign::Start, MuiAlign::Center);
-            }
-            textY += replyLine;
-        }
-        y += replyHeight;
-
-        for (int index = 0; index < count; index++) {
-            y += gap;
-            MuiRect optionRect = { rect.x, y, rect.w, heights[index] };
-            y += heights[index];
-            if (optionRect.bottom() < rect.y || optionRect.y > rect.bottom()) {
-                continue;
-            }
-
-            // Visible part only, so a half hidden answer can't be tapped
-            // outside the area.
-            MuiRect touchRect = optionRect;
-            touchRect.y = std::max(optionRect.y, rect.y);
-            touchRect.h = std::min(optionRect.bottom(), rect.bottom()) - touchRect.y;
-
-            bool pressed;
-            bool tapped = ui.touchable("talk.options." + std::to_string(index), touchRect, &pressed);
-            muiFillRoundRect(optionRect, ui.dp(8.0f), pressed ? theme.buttonPressed : theme.button);
-            muiStrokeRoundRect(optionRect, ui.dp(8.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
-
-            MuiColor color = theme.text;
-            switch (gameDialogGetOptionReaction(index)) {
-            case 0:
-                color = kReactionGood;
-                break;
-            case 2:
-                color = kReactionBad;
-                break;
-            default:
-                break;
-            }
-
-            float lineY = optionRect.y + (optionRect.h - texts[index].size() * optionLine) / 2.0f;
-            for (const std::u32string& line : texts[index]) {
-                muiDrawTextAligned(line, { optionRect.x + optionPaddingX, lineY, textWidth, optionLine }, optionSize, color, MuiAlign::Start, MuiAlign::Center);
-                lineY += optionLine;
-            }
-
-            if (tapped && !scrolling) {
-                _gsound_red_butt_press(-1, 0);
-                gameDialogChooseOption(index);
+        float offset = ui.scroll("talk.party.stats", area, rows * rowHeight);
+        muiPushClip(area);
+        for (size_t index = 0; index < stats.size(); index++) {
+            const PartyStat& stat = stats[index];
+            int column = static_cast<int>(index) / rows;
+            int row = static_cast<int>(index) % rows;
+            MuiRect cell = { area.x + column * (columnWidth + columnGap), area.y - offset + row * rowHeight, columnWidth, rowHeight };
+            std::u32string label = partyText(kTextPartyStats + stat.label, kPartyStatFallbacks[stat.label]);
+            MuiColor valueColor = stat.warning ? muiRgb(0xFF6E5E) : theme.text;
+            if (stat.value.empty()) {
+                muiDrawTextAligned(label, cell, labelSize, valueColor, MuiAlign::Start, MuiAlign::Center);
+            } else {
+                // The value fits beside its label (the best skill's name).
+                std::u32string value = muiDecodeGameText(stat.value.c_str());
+                float labelWidth = muiTextWidth(label, labelSize) + ui.dp(8.0f);
+                muiDrawTextAligned(label, cell, labelSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+                muiDrawTextAligned(value, cell, muiFitTextSize(value, cell.w - labelWidth, valueSize, ui.dp(9.0f)), valueColor, MuiAlign::End, MuiAlign::Center);
             }
         }
         muiPopClip();
     }
 
-    // Tall layout of the party member panel (the window's mockup): the
-    // speaker where talk has it, its stats at its left, weapon and armor at
-    // its right, the disposition and the six settings under them.
-    void TalkScreen::buildPartyTall(MuiContext& ui, const MuiRect& head, const MuiRect& below, const MuiRect& content, const PartyControlView& view)
-    {
-        float gap = ui.dp(10.0f);
-        buildPartyStatsTall(ui, { content.x, head.y, head.x - gap - content.x, head.h }, view);
-
-        MuiRect side = { head.right() + gap, head.y, content.right() - head.right() - gap, head.h };
-        float cardGap = ui.dp(8.0f);
-        float cardHeight = (side.h - cardGap) / 2.0f;
-        if (buildPartyCard(ui, { side.x, side.y, side.w, cardHeight }, "talk.party.weapon", view.weapon, true, true, partyText(kTextPartyNoWeapon, "No weapon"))) {
-            _gsound_red_butt_press(-1, 0);
-            gameDialogQueuePartyControlAction(PartyControlAction::UseBestWeapon);
-        }
-        std::u32string noArmor = view.canEquipArmor ? partyText(kTextPartyNoArmor, "No armor") : partyText(kTextPartyWearsNoArmor, "Wears no armor");
-        if (buildPartyCard(ui, { side.x, side.y + cardHeight + cardGap, side.w, cardHeight }, "talk.party.armor", view.armor, false, view.canEquipArmor, noArmor)) {
-            _gsound_red_butt_press(-1, 0);
-            gameDialogQueuePartyControlAction(PartyControlAction::UseBestArmor);
-        }
-
-        buildPartySettingsTall(ui, below, view);
-    }
-
-    // Name and the stats in rows as high as the panel allows.
-    void TalkScreen::buildPartyStatsTall(MuiContext& ui, const MuiRect& rect, const PartyControlView& view)
-    {
-        const MuiTheme& theme = muiTheme();
-        ui.panel(rect);
-        MuiRect content = rect.inset(ui.dp(12.0f), ui.dp(10.0f));
-
-        float nameSize = ui.dp(17.0f);
-        float nameHeight = std::max(muiLineHeight(nameSize), ui.dp(24.0f));
-        std::u32string name = muiDecodeGameText(objectGetName(gGameDialogSpeaker));
-        muiDrawTextAligned(name, { content.x, content.y, content.w, nameHeight }, muiFitTextSize(name, content.w, nameSize, ui.dp(12.0f)), theme.accent, MuiAlign::Start, MuiAlign::Center);
-        float y = content.y + nameHeight + ui.dp(6.0f);
-        muiFillRect({ content.x, y, content.w, ui.dp(1.0f) }, theme.panelBorder);
-        y += ui.dp(5.0f);
-
-        struct Stat {
-            int label;
-            std::string value;
-            bool warning;
-        };
-        std::vector<Stat> stats = {
-            { 0, std::to_string(view.hitPoints) + "/" + std::to_string(view.maximumHitPoints), false },
-            { 1, skillGetName(view.bestSkill), false },
-            { 2, std::to_string(view.weight) + "/" + std::to_string(view.carryWeight), view.encumbered },
-            { 3, std::to_string(view.meleeDamage), false },
-            { 4, std::to_string(view.actionPoints) + "/" + std::to_string(view.maximumActionPoints), false },
-        };
-        if (view.extraInfo) {
-            stats.push_back({ 5, std::to_string(view.level), false });
-            stats.push_back({ 6, std::to_string(view.armorClass), false });
-            if (view.addicted) {
-                stats.push_back({ 7, std::string(), true });
-            }
-        }
-
-        float rowHeight = std::min(ui.dp(25.0f), (content.bottom() - y) / stats.size());
-        float labelSize = ui.dp(14.0f);
-        float valueSize = ui.dp(15.0f);
-        for (const Stat& stat : stats) {
-            MuiRect row = { content.x, y, content.w, rowHeight };
-            std::u32string label = partyText(kTextPartyStats + stat.label, kPartyStatFallbacks[stat.label]);
-            MuiColor valueColor = stat.warning ? muiRgb(0xFF6E5E) : theme.text;
-            if (stat.value.empty()) {
-                muiDrawTextAligned(label, row, labelSize, valueColor, MuiAlign::Start, MuiAlign::Center);
-            } else {
-                // The value fits beside its label (the best skill's name).
-                std::u32string value = muiDecodeGameText(stat.value.c_str());
-                float labelWidth = muiTextWidth(label, labelSize) + ui.dp(8.0f);
-                muiDrawTextAligned(label, row, labelSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
-                muiDrawTextAligned(value, row, muiFitTextSize(value, row.w - labelWidth, valueSize, ui.dp(10.0f)), valueColor, MuiAlign::End, MuiAlign::Center);
-            }
-            y += rowHeight;
-        }
-    }
-
-    // Weapon or armor: its picture in an inventory cell (the empty slot's
-    // mark without one), the name, its "use best" button under them - or,
-    // where the card is too low for that (7" tablets), the picture at the
-    // left of the name over the button; returns true if the button was
-    // tapped.
+    // Weapon or armor: its picture (the empty slot's mark without one) over
+    // the name and its "use best" button - or, where the card is too low
+    // for that (phones, 7" tablets), the picture at the left of the name
+    // over the button; returns true if the button was tapped.
     bool TalkScreen::buildPartyCard(MuiContext& ui, const MuiRect& rect, const std::string& id, Object* item, bool weapon, bool enabled, const std::u32string& emptyText)
     {
         const MuiTheme& theme = muiTheme();
@@ -599,16 +530,16 @@ namespace {
         MuiRect inner = rect.inset(ui.dp(8.0f));
         float gap = ui.dp(8.0f);
 
+        float size = ui.dp(item != nullptr ? 15.0f : 14.0f);
+        float lineHeight = std::max(muiLineHeight(size), ui.dp(20.0f));
         float buttonHeight = ui.dp(36.0f);
         MuiRect art;
         MuiRect text;
         MuiRect buttonRect;
-        if (inner.h - buttonHeight - gap >= ui.dp(48.0f)) {
+        if (inner.h - buttonHeight - lineHeight - gap * 2.0f >= ui.dp(56.0f)) {
             buttonRect = { inner.x, inner.bottom() - buttonHeight, inner.w, buttonHeight };
-            float top = buttonRect.y - gap - inner.y;
-            float artHeight = std::min(top, ui.dp(56.0f));
-            art = { inner.x, inner.y + (top - artHeight) / 2.0f, ui.dp(72.0f), artHeight };
-            text = { art.right() + ui.dp(10.0f), inner.y, inner.right() - art.right() - ui.dp(10.0f), top };
+            text = { inner.x, buttonRect.y - gap - lineHeight, inner.w, lineHeight };
+            art = { inner.x, inner.y, inner.w, text.y - gap - inner.y };
         } else {
             art = { inner.x, inner.y, std::min(ui.dp(84.0f), inner.w * 0.48f), inner.h };
             float right = art.right() + gap;
@@ -624,24 +555,38 @@ namespace {
             int height;
             SDL_Texture* texture = muiArtTexture(itemGetInventoryFrmId(item), 0, &width, &height);
             if (texture != nullptr) {
-                muiDrawTexture(texture, muiFitRect(art.inset(ui.dp(4.0f)), static_cast<float>(width), static_cast<float>(height)));
+                // No bigger than an inventory cell shows it.
+                MuiRect box = art.inset(ui.dp(4.0f));
+                float boxWidth = std::min(box.w, ui.dp(120.0f));
+                float boxHeight = std::min(box.h, ui.dp(80.0f));
+                box = { box.centerX() - boxWidth / 2.0f, box.centerY() - boxHeight / 2.0f, boxWidth, boxHeight };
+                muiDrawTexture(texture, muiFitRect(box, static_cast<float>(width), static_cast<float>(height)));
             }
         } else {
-            muiDrawIcon(weapon ? MuiIcon::Use : MuiIcon::FilterArmor, art.centerX(), art.centerY(), art.h * 0.55f, ui.dp(1.6f), theme.buttonBorder);
+            float iconSize = std::min({ art.h * 0.55f, art.w * 0.55f, ui.dp(44.0f) });
+            muiDrawIcon(weapon ? MuiIcon::Use : MuiIcon::FilterArmor, art.centerX(), art.centerY(), iconSize, ui.dp(1.6f), theme.buttonBorder);
         }
 
-        // Up to two lines (as many as there's room for).
-        float size = ui.dp(item != nullptr ? 15.0f : 14.0f);
-        float lineHeight = std::max(muiLineHeight(size), ui.dp(20.0f));
-        std::vector<std::u32string> lines = muiWrapText(item != nullptr ? muiDecodeGameText(itemGetName(item)) : emptyText, text.w, size);
+        // Up to two lines (as many as there's room for); one line smaller
+        // before it's cut.
+        std::u32string name = item != nullptr ? muiDecodeGameText(itemGetName(item)) : emptyText;
+        std::vector<std::u32string> lines = muiWrapText(name, text.w, size);
         size_t maxLines = std::clamp(static_cast<size_t>(text.h / lineHeight), static_cast<size_t>(1), static_cast<size_t>(2));
+        float nameSize = size;
+        if (maxLines == 1 && lines.size() > 1) {
+            float fitted = muiFitTextSize(name, text.w, size, ui.dp(11.0f));
+            if (muiTextWidth(name, fitted) <= text.w) {
+                lines = { name };
+                nameSize = fitted;
+            }
+        }
         if (lines.size() > maxLines) {
             lines.resize(maxLines);
         }
         float y = text.centerY() - lines.size() * lineHeight / 2.0f;
         muiPushClip(text);
         for (const std::u32string& line : lines) {
-            muiDrawTextAligned(line, { text.x, y, text.w, lineHeight }, size, item != nullptr ? theme.text : theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(line, { text.x, y, text.w, lineHeight }, nameSize, item != nullptr ? theme.text : theme.textDim, MuiAlign::Start, MuiAlign::Center);
             y += lineHeight;
         }
         muiPopClip();
@@ -661,114 +606,92 @@ namespace {
         return tapped;
     }
 
-    // The dispositions (the game's presets) in a column at the left, the six
-    // settings as cards in two columns at the right (their name, the value
-    // up to two lines; a tap opens the values). The settings scroll only if
-    // even their least cards don't fit.
-    void TalkScreen::buildPartySettingsTall(MuiContext& ui, const MuiRect& rect, const PartyControlView& view)
+    // The right column: the title (in windows), the dispositions (the
+    // game's presets) in a row, the six settings under them one per row
+    // (their name, the value; a tap opens the values). The settings scroll
+    // only if even their least rows don't fit. Their values are the chosen
+    // disposition's; changing one switches to the custom one, as in the
+    // game.
+    void TalkScreen::buildPartySettings(MuiContext& ui, const MuiRect& rect, const PartyControlView& view, bool tall)
     {
         const MuiTheme& theme = muiTheme();
-        ui.panel(rect);
-        MuiRect inner = rect.inset(ui.dp(12.0f));
-        float gap = ui.dp(8.0f);
-        float columnGap = ui.dp(12.0f);
-
-        // Presets: the title where there's room for it.
-        MuiRect presets = { inner.x, inner.y, std::clamp(inner.w * 0.24f, ui.dp(150.0f), ui.dp(210.0f)), inner.h };
-        float titleHeight = ui.dp(24.0f);
-        float presetGap = ui.dp(6.0f);
-        bool titled = presets.h - titleHeight - presetGap >= ui.dp(36.0f) * kPartyControlDispositionCount + presetGap * (kPartyControlDispositionCount - 1);
-        float y = presets.y;
-        if (titled) {
+        float y = rect.y;
+        if (tall) {
+            float titleHeight = ui.dp(28.0f);
             std::u32string title = partyText(kTextPartyDisposition, "Disposition");
-            muiDrawTextAligned(title, { presets.x + ui.dp(2.0f), y, presets.w, titleHeight }, muiFitTextSize(title, presets.w, ui.dp(16.0f), ui.dp(11.0f)), theme.accent, MuiAlign::Start, MuiAlign::Center);
-            y += titleHeight + presetGap;
+            muiDrawTextAligned(title, { rect.x, y, rect.w, titleHeight }, muiFitTextSize(title, rect.w, ui.dp(17.0f), ui.dp(11.0f)), theme.accent, MuiAlign::Start, MuiAlign::Center);
+            y += titleHeight + ui.dp(8.0f);
         }
-        float presetHeight = std::min(ui.dp(64.0f), (presets.bottom() - y - presetGap * (kPartyControlDispositionCount - 1)) / kPartyControlDispositionCount);
-        for (int disposition = 0; disposition < kPartyControlDispositionCount; disposition++) {
-            MuiRect cell = { presets.x, y + disposition * (presetHeight + presetGap), presets.w, presetHeight };
-            bool supported = view.dispositionSupported[disposition];
-            bool active = view.disposition == disposition;
+        float dispositionHeight = ui.dp(tall ? 48.0f : 36.0f);
+        buildPartyDispositions(ui, { rect.x, y, rect.w, dispositionHeight }, view, tall);
+        y += dispositionHeight + ui.dp(tall ? 10.0f : 6.0f);
 
-            bool pressed;
-            bool tapped = ui.touchable("talk.party.disposition." + std::to_string(disposition), cell, &pressed) && supported;
-            pressed = pressed && supported;
-
-            MuiColor fill = pressed ? theme.buttonPressed : (active ? theme.buttonPrimary : theme.button);
-            muiFillRoundRect(cell, ui.dp(8.0f), fill);
-            muiStrokeRoundRect(cell, ui.dp(8.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
-
-            std::u32string label = partyText(kTextPartyDispositions + disposition, kPartyDispositionFallbacks[disposition]);
-            float size = muiFitTextSize(label, cell.w - ui.dp(16.0f), ui.dp(16.0f), ui.dp(10.0f));
-            MuiColor color = !supported ? theme.textDim : (active && !pressed ? theme.buttonPrimaryText : theme.buttonText);
-            muiDrawTextAligned(label, cell, size, color, MuiAlign::Center, MuiAlign::Center);
-
-            if (tapped && !active) {
-                _gsound_red_butt_press(-1, 0);
-                gameDialogQueuePartyControlAction(PartyControlAction::SetDisposition, disposition);
-            }
-        }
-
-        // Settings: three rows over the height there is.
-        MuiRect area = { presets.right() + columnGap, inner.y, inner.right() - presets.right() - columnGap, inner.h };
-        int rows = (kPartyControlSettingCount + 1) / 2;
-        float cardHeight = std::clamp((area.h - gap * (rows - 1)) / rows, ui.dp(56.0f), ui.dp(120.0f));
-        float total = cardHeight * rows + gap * (rows - 1);
+        MuiRect area = { rect.x, y, rect.w, rect.bottom() - y };
+        float rowGap = ui.dp(tall ? 8.0f : 4.0f);
+        float rowHeight = std::clamp((area.h - rowGap * (kPartyControlSettingCount - 1)) / kPartyControlSettingCount,
+            ui.dp(tall ? 52.0f : 40.0f), ui.dp(tall ? 96.0f : 64.0f));
+        float total = rowHeight * kPartyControlSettingCount + rowGap * (kPartyControlSettingCount - 1);
 
         float offset = ui.scroll("talk.party", area, total);
         bool scrolling = ui.isScrolling("talk.party");
 
-        muiPushClip(area);
-        y = area.y - offset;
-        float cardWidth = (area.w - gap) / 2.0f;
+        float iconSize = ui.dp(tall ? 24.0f : 18.0f);
+        float padding = ui.dp(tall ? 16.0f : 10.0f);
+        float chevronWidth = ui.dp(tall ? 16.0f : 12.0f);
+        float nameSize = ui.dp(tall ? 13.0f : 11.0f);
+        float nameHeight = std::max(muiLineHeight(nameSize), ui.dp(tall ? 18.0f : 13.0f));
+        float valueSize = ui.dp(tall ? 17.0f : 13.0f);
+        float valueLine = std::max(muiLineHeight(valueSize), ui.dp(tall ? 24.0f : 17.0f));
+        int maxLines = rowHeight >= nameHeight + valueLine * 2.0f + ui.dp(8.0f) ? 2 : 1;
+
+        float textX = area.x + padding * 2.0f + iconSize;
+        float textWidth = area.right() - padding - chevronWidth - ui.dp(8.0f) - textX;
+        std::u32string values[kPartyControlSettingCount];
         for (int setting = 0; setting < kPartyControlSettingCount; setting++) {
-            MuiRect card = { area.x + (setting % 2) * (cardWidth + gap), y + (setting / 2) * (cardHeight + gap), cardWidth, cardHeight };
-
-            bool pressed;
-            bool tapped = ui.touchable("talk.party.setting." + std::to_string(setting), card, &pressed);
-            muiFillRoundRect(card, ui.dp(8.0f), pressed ? theme.buttonPressed : theme.button);
-            muiStrokeRoundRect(card, ui.dp(8.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
-
-            float iconSize = ui.dp(24.0f);
-            float padding = ui.dp(14.0f);
-            muiDrawIcon(kPartySettingIcons[setting], card.x + padding + iconSize / 2.0f, card.centerY(), iconSize, ui.dp(1.8f), theme.accent);
-
-            float chevronWidth = ui.dp(16.0f);
-            MuiRect text = { card.x + padding * 2.0f + iconSize, card.y, card.right() - padding - chevronWidth - (card.x + padding * 2.0f + iconSize), card.h };
-            std::u32string name = muiDecodeGameText(gameDialogPartyControlSettingName(setting));
-            std::u32string value = muiDecodeGameText(view.settings[setting] != -1
+            values[setting] = muiDecodeGameText(view.settings[setting] != -1
                     ? gameDialogPartyControlValueName(setting, view.settings[setting])
                     : gameDialogPartyControlNotApplicable());
+        }
 
-            float nameSize = ui.dp(13.0f);
-            float nameHeight = std::max(muiLineHeight(nameSize), ui.dp(18.0f));
-            float valueSize = ui.dp(16.0f);
-            float valueLine = std::max(muiLineHeight(valueSize), ui.dp(22.0f));
-            // Two lines where the card is high enough; else one, smaller
-            // before it's cut.
-            std::vector<std::u32string> lines = muiWrapText(value, text.w, valueSize);
-            int maxLines = cardHeight >= nameHeight + valueLine * 2.0f + ui.dp(8.0f) ? 2 : 1;
-            if (maxLines == 1 && lines.size() > 1) {
-                float fitted = muiFitTextSize(value, text.w, valueSize, ui.dp(12.0f));
-                if (muiTextWidth(value, fitted) <= text.w) {
-                    lines = { value };
-                }
+        // One line: the values in one size, as small as the longest needs
+        // (cut below the least).
+        if (maxLines == 1) {
+            for (const std::u32string& value : values) {
+                valueSize = std::min(valueSize, muiFitTextSize(value, textWidth, valueSize, ui.dp(10.0f)));
             }
+        }
+
+        muiPushClip(area);
+        for (int setting = 0; setting < kPartyControlSettingCount; setting++) {
+            MuiRect row = { area.x, area.y - offset + setting * (rowHeight + rowGap), area.w, rowHeight };
+
+            bool pressed;
+            bool tapped = ui.touchable("talk.party.setting." + std::to_string(setting), row, &pressed);
+            muiFillRoundRect(row, ui.dp(8.0f), pressed ? theme.buttonPressed : theme.button);
+            muiStrokeRoundRect(row, ui.dp(8.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
+
+            muiDrawIcon(kPartySettingIcons[setting], row.x + padding + iconSize / 2.0f, row.centerY(), iconSize, ui.dp(1.8f), theme.accent);
+
+            MuiRect text = { textX, row.y, textWidth, row.h };
+            std::u32string name = muiDecodeGameText(gameDialogPartyControlSettingName(setting));
+
+            // Two lines where the row is high enough.
+            std::vector<std::u32string> lines = maxLines == 1 ? std::vector<std::u32string> { values[setting] } : muiWrapText(values[setting], text.w, valueSize);
             if (static_cast<int>(lines.size()) > maxLines) {
                 lines.resize(maxLines);
             }
             float blockHeight = nameHeight + ui.dp(2.0f) + lines.size() * valueLine;
-            float ty = card.centerY() - blockHeight / 2.0f;
-            muiDrawTextAligned(name, { text.x, ty, text.w, nameHeight }, muiFitTextSize(name, text.w, nameSize, ui.dp(10.0f)), theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            float ty = row.centerY() - blockHeight / 2.0f;
+            muiDrawTextAligned(name, { text.x, ty, text.w, nameHeight }, muiFitTextSize(name, text.w, nameSize, ui.dp(9.0f)), theme.textDim, MuiAlign::Start, MuiAlign::Center);
             ty += nameHeight + ui.dp(2.0f);
             MuiColor valueColor = view.settings[setting] != -1 ? theme.accent : theme.textDim;
             for (const std::u32string& line : lines) {
-                muiDrawTextAligned(line, { text.x, ty, text.w, valueLine }, lines.size() == 1 ? muiFitTextSize(line, text.w, valueSize, ui.dp(11.0f)) : valueSize, valueColor, MuiAlign::Start, MuiAlign::Center);
+                muiDrawTextAligned(line, { text.x, ty, text.w, valueLine }, valueSize, valueColor, MuiAlign::Start, MuiAlign::Center);
                 ty += valueLine;
             }
-            float chevronX = card.right() - padding - chevronWidth / 2.0f;
-            float chevron = ui.dp(5.0f);
-            muiDrawPolyline({ { chevronX - chevron / 2.0f, card.centerY() - chevron }, { chevronX + chevron / 2.0f, card.centerY() }, { chevronX - chevron / 2.0f, card.centerY() + chevron } }, ui.dp(1.8f), theme.textDim);
+            float chevronX = row.right() - padding - chevronWidth / 2.0f;
+            float chevron = ui.dp(tall ? 5.0f : 4.0f);
+            muiDrawPolyline({ { chevronX - chevron / 2.0f, row.centerY() - chevron }, { chevronX + chevron / 2.0f, row.centerY() }, { chevronX - chevron / 2.0f, row.centerY() + chevron } }, ui.dp(1.8f), theme.textDim);
 
             if (tapped && !scrolling) {
                 _gsound_red_butt_press(-1, 0);
@@ -779,13 +702,13 @@ namespace {
                     MuiActionItem item;
                     item.icon = kPartySettingIcons[setting];
                     item.label = muiDecodeGameText(gameDialogPartyControlValueName(setting, value));
-                    item.detail = value == view.settings[setting] ? U"\u2022" : U"";
+                    item.detail = value == view.settings[setting] ? U"•" : U"";
                     item.enabled = gameDialogPartyControlValueSupported(setting, value);
                     items.push_back(item);
                 }
 
                 muiShowActionList(
-                    "talk.party.values", items, card, card,
+                    "talk.party.values", items, row, row,
                     [setting](int value) {
                         gameDialogQueuePartyControlAction(PartyControlAction::SetSetting, setting, value);
                     },
@@ -793,6 +716,57 @@ namespace {
             }
         }
         muiPopClip();
+    }
+
+    // The dispositions in one row, each as wide as its name and the room
+    // left shared out; the names smaller where they don't fit together.
+    void TalkScreen::buildPartyDispositions(MuiContext& ui, const MuiRect& rect, const PartyControlView& view, bool tall)
+    {
+        const MuiTheme& theme = muiTheme();
+        float gap = ui.dp(tall ? 6.0f : 4.0f);
+        float padding = ui.dp(6.0f);
+        float size = ui.dp(tall ? 14.0f : 12.0f);
+
+        std::u32string labels[kPartyControlDispositionCount];
+        float textWidth = 0.0f;
+        for (int disposition = 0; disposition < kPartyControlDispositionCount; disposition++) {
+            labels[disposition] = partyText(kTextPartyDispositions + disposition, kPartyDispositionFallbacks[disposition]);
+            textWidth += muiTextWidth(labels[disposition], size);
+        }
+        float room = rect.w - gap * (kPartyControlDispositionCount - 1) - padding * 2.0f * kPartyControlDispositionCount;
+        if (textWidth > room && textWidth > 0.0f) {
+            float fitted = std::max(size * room / textWidth, ui.dp(9.0f));
+            textWidth *= fitted / size;
+            size = fitted;
+        }
+        float extra = std::max(room - textWidth, 0.0f) / kPartyControlDispositionCount;
+
+        float x = rect.x;
+        for (int disposition = 0; disposition < kPartyControlDispositionCount; disposition++) {
+            float width = disposition == kPartyControlDispositionCount - 1
+                ? rect.right() - x
+                : muiTextWidth(labels[disposition], size) + padding * 2.0f + extra;
+            MuiRect cell = { x, rect.y, width, rect.h };
+            x += width + gap;
+            bool supported = view.dispositionSupported[disposition];
+            bool active = view.disposition == disposition;
+
+            bool pressed;
+            bool tapped = ui.touchable("talk.party.disposition." + std::to_string(disposition), cell, &pressed) && supported;
+            pressed = pressed && supported;
+
+            MuiColor fill = pressed ? theme.buttonPressed : (active ? theme.buttonPrimary : theme.button);
+            muiFillRoundRect(cell, ui.dp(tall ? 8.0f : 7.0f), fill);
+            muiStrokeRoundRect(cell, ui.dp(tall ? 8.0f : 7.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
+
+            MuiColor color = !supported ? theme.textDim : (active && !pressed ? theme.buttonPrimaryText : theme.buttonText);
+            muiDrawTextAligned(labels[disposition], cell, size, color, MuiAlign::Center, MuiAlign::Center);
+
+            if (tapped && !active) {
+                _gsound_red_butt_press(-1, 0);
+                gameDialogQueuePartyControlAction(PartyControlAction::SetDisposition, disposition);
+            }
+        }
     }
 
     // Everything said in this conversation, like the game's review window.
@@ -858,229 +832,6 @@ namespace {
             }
             y += lineHeight;
         }
-        muiPopClip();
-    }
-
-    // Stats of the combat control panel under the head.
-    void TalkScreen::buildPartyStats(MuiContext& ui, const MuiRect& rect, const PartyControlView& view)
-    {
-        const MuiTheme& theme = muiTheme();
-        ui.panel(rect);
-
-        float size = ui.dp(15.0f);
-        float lineHeight = muiLineHeight(size) + ui.dp(4.0f);
-        MuiRect content = rect.inset(ui.dp(12.0f), ui.dp(10.0f));
-
-        float nameSize = ui.dp(15.0f);
-        float nameHeight = muiLineHeight(nameSize);
-        muiDrawTextAligned(muiDecodeGameText(objectGetName(gGameDialogSpeaker)), { content.x, content.y, content.w, nameHeight }, nameSize, theme.accent, MuiAlign::Start, MuiAlign::Start);
-        content.y += nameHeight + ui.dp(6.0f);
-        content.h -= nameHeight + ui.dp(6.0f);
-
-        struct Stat {
-            int label;
-            std::string value;
-            bool warning;
-        };
-
-        std::vector<Stat> stats = {
-            { 0, std::to_string(view.hitPoints) + "/" + std::to_string(view.maximumHitPoints), false },
-            { 1, skillGetName(view.bestSkill), false },
-            { 2, std::to_string(view.weight) + "/" + std::to_string(view.carryWeight), view.encumbered },
-            { 3, std::to_string(view.meleeDamage), false },
-            { 4, std::to_string(view.actionPoints) + "/" + std::to_string(view.maximumActionPoints), false },
-        };
-        if (view.extraInfo) {
-            stats.push_back({ 5, std::to_string(view.level), false });
-            stats.push_back({ 6, std::to_string(view.armorClass), false });
-            if (view.addicted) {
-                stats.push_back({ 7, std::string(), true });
-            }
-        }
-
-        float contentHeight = stats.size() * lineHeight;
-        float offset = ui.scroll("talk.party.stats", content, contentHeight);
-
-        muiPushClip(content);
-        float y = content.y - offset;
-        for (const Stat& stat : stats) {
-            MuiRect row = { content.x, y, content.w, lineHeight };
-            MuiColor valueColor = stat.warning ? muiRgb(0xFF6E5E) : theme.accent;
-            if (stat.value.empty()) {
-                muiDrawTextAligned(partyText(kTextPartyStats + stat.label, kPartyStatFallbacks[stat.label]), row, size, valueColor, MuiAlign::Start, MuiAlign::Center);
-            } else {
-                muiDrawTextAligned(partyText(kTextPartyStats + stat.label, kPartyStatFallbacks[stat.label]), row, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
-                muiDrawTextAligned(muiDecodeGameText(stat.value.c_str()), row, size, valueColor, MuiAlign::End, MuiAlign::Center);
-            }
-            y += lineHeight;
-        }
-        muiPopClip();
-    }
-
-    // Weapon or armor with its "use best" button; returns true if the button
-    // was tapped.
-    bool TalkScreen::buildPartyEquipment(MuiContext& ui, const MuiRect& rect, const std::string& id, int label, Object* item, int button, bool enabled)
-    {
-        const MuiTheme& theme = muiTheme();
-        float gap = ui.dp(6.0f);
-
-        std::u32string buttonText = partyText(button, button == kTextPartyBestWeapon ? "Use best weapon" : "Use best armor");
-        float buttonTextSize = ui.dp(13.0f);
-        // Both buttons as wide as the longer text, so the slots line up.
-        float textWidth = std::max(muiTextWidth(partyText(kTextPartyBestWeapon, "Use best weapon"), buttonTextSize),
-            muiTextWidth(partyText(kTextPartyBestArmor, "Use best armor"), buttonTextSize));
-        float buttonWidth = std::min(textWidth + ui.dp(20.0f), rect.w * 0.45f);
-        MuiRect slot = { rect.x, rect.y, rect.w - buttonWidth - gap, rect.h };
-        MuiRect buttonRect = { slot.right() + gap, rect.y, buttonWidth, rect.h };
-
-        muiFillRoundRect(slot, ui.dp(6.0f), theme.button);
-        muiStrokeRoundRect(slot, ui.dp(6.0f), ui.dp(1.0f), theme.buttonBorder);
-
-        // Item picture.
-        MuiRect art = { slot.x + ui.dp(4.0f), slot.y + ui.dp(4.0f), slot.h - ui.dp(8.0f), slot.h - ui.dp(8.0f) };
-        if (item != nullptr) {
-            int width;
-            int height;
-            SDL_Texture* texture = muiArtTexture(itemGetInventoryFrmId(item), 0, &width, &height);
-            if (texture != nullptr) {
-                muiDrawTexture(texture, muiFitRect(art, static_cast<float>(width), static_cast<float>(height)));
-            }
-        }
-
-        MuiRect text = { art.right() + ui.dp(6.0f), slot.y + ui.dp(4.0f), slot.right() - art.right() - ui.dp(10.0f), slot.h - ui.dp(8.0f) };
-        float labelSize = ui.dp(11.0f);
-        muiDrawTextAligned(partyText(label, label == kTextPartyWeapon ? "Weapon" : "Armor"), { text.x, text.y, text.w, text.h / 2.0f }, labelSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
-        std::u32string name = item != nullptr ? muiDecodeGameText(itemGetName(item)) : std::u32string(U"—");
-        float nameSize = muiFitTextSize(name, text.w, ui.dp(14.0f), ui.dp(10.0f));
-        muiPushClip(text);
-        muiDrawTextAligned(name, { text.x, text.y + text.h / 2.0f, text.w, text.h / 2.0f }, nameSize, theme.text, MuiAlign::Start, MuiAlign::Center);
-        muiPopClip();
-
-        bool pressed;
-        bool tapped = ui.touchable(id, buttonRect, &pressed) && enabled;
-        pressed = pressed && enabled;
-        muiFillRoundRect(buttonRect, ui.dp(6.0f), pressed ? theme.buttonPressed : theme.button);
-        muiStrokeRoundRect(buttonRect, ui.dp(6.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
-        float size = muiFitTextSize(buttonText, buttonRect.w - ui.dp(12.0f), buttonTextSize, ui.dp(9.0f));
-        muiDrawTextAligned(buttonText, buttonRect, size, enabled ? (pressed ? theme.buttonText : theme.accent) : theme.textDim, MuiAlign::Center, MuiAlign::Center);
-        return tapped;
-    }
-
-    // Equipment, dispositions and the six settings (their values are the
-    // chosen disposition's; changing one switches to the custom one, as in
-    // the game).
-    void TalkScreen::buildParty(MuiContext& ui, const MuiRect& rect, const PartyControlView& view)
-    {
-        const MuiTheme& theme = muiTheme();
-        float gap = ui.dp(6.0f);
-        float equipmentHeight = ui.dp(52.0f);
-        float titleHeight = ui.dp(24.0f);
-        float dispositionHeight = ui.dp(40.0f);
-        float settingHeight = ui.dp(42.0f);
-
-        float total = equipmentHeight * 2.0f + gap * 2.0f + titleHeight + dispositionHeight + gap + kPartyControlSettingCount * settingHeight;
-        float offset = ui.scroll("talk.party", rect, total);
-        bool scrolling = ui.isScrolling("talk.party");
-
-        muiPushClip(rect);
-        float y = rect.y - offset;
-
-        if (buildPartyEquipment(ui, { rect.x, y, rect.w, equipmentHeight }, "talk.party.weapon", kTextPartyWeapon, view.weapon, kTextPartyBestWeapon, true) && !scrolling) {
-            _gsound_red_butt_press(-1, 0);
-            gameDialogQueuePartyControlAction(PartyControlAction::UseBestWeapon);
-        }
-        y += equipmentHeight + gap;
-
-        if (buildPartyEquipment(ui, { rect.x, y, rect.w, equipmentHeight }, "talk.party.armor", kTextPartyArmor, view.armor, kTextPartyBestArmor, view.canEquipArmor) && !scrolling) {
-            _gsound_red_butt_press(-1, 0);
-            gameDialogQueuePartyControlAction(PartyControlAction::UseBestArmor);
-        }
-        y += equipmentHeight + gap;
-
-        muiDrawTextAligned(partyText(kTextPartyDisposition, "Disposition"), { rect.x, y, rect.w, titleHeight }, ui.dp(13.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
-        y += titleHeight;
-
-        // Dispositions in one row.
-        float cellGap = ui.dp(4.0f);
-        float cellWidth = (rect.w - cellGap * (kPartyControlDispositionCount - 1)) / kPartyControlDispositionCount;
-        for (int disposition = 0; disposition < kPartyControlDispositionCount; disposition++) {
-            MuiRect cell = { rect.x + disposition * (cellWidth + cellGap), y, cellWidth, dispositionHeight };
-            bool supported = view.dispositionSupported[disposition];
-            bool active = view.disposition == disposition;
-
-            bool pressed;
-            bool tapped = ui.touchable("talk.party.disposition." + std::to_string(disposition), cell, &pressed) && supported;
-            pressed = pressed && supported;
-
-            MuiColor fill = pressed ? theme.buttonPressed : (active ? theme.buttonPrimary : theme.button);
-            muiFillRoundRect(cell, ui.dp(6.0f), fill);
-            muiStrokeRoundRect(cell, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
-
-            std::u32string label = partyText(kTextPartyDispositions + disposition, kPartyDispositionFallbacks[disposition]);
-            float size = muiFitTextSize(label, cell.w - ui.dp(6.0f), ui.dp(13.0f), ui.dp(8.0f));
-            MuiColor color = !supported ? theme.textDim : (active && !pressed ? theme.buttonPrimaryText : theme.accent);
-            muiDrawTextAligned(label, cell, size, color, MuiAlign::Center, MuiAlign::Center);
-
-            if (tapped && !active && !scrolling) {
-                _gsound_red_butt_press(-1, 0);
-                gameDialogQueuePartyControlAction(PartyControlAction::SetDisposition, disposition);
-            }
-        }
-        y += dispositionHeight + gap;
-
-        // Settings: tap opens the values (ones the party member can't use are
-        // dimmed).
-        float size = ui.dp(14.0f);
-        for (int setting = 0; setting < kPartyControlSettingCount; setting++) {
-            MuiRect row = { rect.x, y, rect.w, settingHeight };
-            y += settingHeight;
-
-            bool pressed;
-            bool tapped = ui.touchable("talk.party.setting." + std::to_string(setting), row, &pressed);
-            if (pressed) {
-                muiFillRoundRect(row, ui.dp(6.0f), theme.buttonPressed);
-            }
-            if (setting > 0) {
-                muiFillRect({ row.x + ui.dp(8.0f), row.y, row.w - ui.dp(16.0f), ui.dp(1.0f) }, theme.panelBorder);
-            }
-
-            float iconSize = ui.dp(18.0f);
-            muiDrawIcon(kPartySettingIcons[setting], row.x + ui.dp(8.0f) + iconSize / 2.0f, row.centerY(), iconSize, ui.dp(1.6f), theme.accent);
-
-            MuiRect text = { row.x + ui.dp(16.0f) + iconSize, row.y, row.w - ui.dp(24.0f) - iconSize, row.h };
-            std::u32string name = muiDecodeGameText(gameDialogPartyControlSettingName(setting));
-            std::u32string value = muiDecodeGameText(view.settings[setting] != -1
-                    ? gameDialogPartyControlValueName(setting, view.settings[setting])
-                    : gameDialogPartyControlNotApplicable());
-            float nameWidth = std::min(muiTextWidth(name, size), text.w * 0.45f);
-            muiDrawTextAligned(name, { text.x, text.y, nameWidth, text.h }, size, theme.text, MuiAlign::Start, MuiAlign::Center);
-            MuiRect valueRect = { text.x + nameWidth + ui.dp(8.0f), text.y, text.w - nameWidth - ui.dp(8.0f), text.h };
-            float valueSize = muiFitTextSize(value, valueRect.w, size, ui.dp(10.0f));
-            muiDrawTextAligned(value, valueRect, valueSize, theme.accent, MuiAlign::End, MuiAlign::Center);
-
-            if (tapped && !scrolling) {
-                _gsound_red_butt_press(-1, 0);
-
-                std::vector<MuiActionItem> items;
-                int count = gameDialogPartyControlValueCount(setting);
-                for (int value = 0; value < count; value++) {
-                    MuiActionItem item;
-                    item.icon = kPartySettingIcons[setting];
-                    item.label = muiDecodeGameText(gameDialogPartyControlValueName(setting, value));
-                    item.detail = value == view.settings[setting] ? U"\u2022" : U"";
-                    item.enabled = gameDialogPartyControlValueSupported(setting, value);
-                    items.push_back(item);
-                }
-
-                muiShowActionList(
-                    "talk.party.values", items, row, row,
-                    [setting](int value) {
-                        gameDialogQueuePartyControlAction(PartyControlAction::SetSetting, setting, value);
-                    },
-                    []() { return gTalkScreen != nullptr && gTalkScreen->partyOpen && gameDialogIsTalking(); });
-            }
-        }
-
         muiPopClip();
     }
 
