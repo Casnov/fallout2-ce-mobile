@@ -150,6 +150,18 @@ float hudGetPixelsPerDp();
 
 // Screen density (Android dp scale), UI size setting not included.
 float hudGetScreenDensity();
+
+// The screen's shorter side in dp, UI size setting not included (0 before
+// the renderer is up).
+float hudGetScreenShortSideDp();
+
+// UI size the screen starts with, percent: bigger on big tablets, held
+// farther from the eyes than phones.
+int hudGetDefaultInterfaceScale();
+
+// UI size factor: the screen's default (`hudGetDefaultInterfaceScale`) times
+// the player's `[touch] hud_scale`.
+float hudGetInterfaceScale();
 int hudDpToPixels(const HudMetrics& metrics, float dp);
 
 const HudLayout& hudLayoutLandscape();

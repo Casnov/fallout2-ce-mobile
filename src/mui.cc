@@ -943,7 +943,7 @@ void muiRender(SDL_Renderer* renderer)
         return;
     }
 
-    gPixelsPerDp = hudGetScreenDensity() * static_cast<float>(settings.touch.hud_scale) / 100.0f;
+    gPixelsPerDp = hudGetScreenDensity() * hudGetInterfaceScale();
 
     unsigned int now = SDL_GetTicks();
     updateSafeRect(now);

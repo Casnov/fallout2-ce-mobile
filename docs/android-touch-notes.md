@@ -171,7 +171,11 @@ goes through mouse emulation in touchscreen (absolute) mode.
 ## Touch HUD (block 1, `src/touch_hud.cc`, `src/hud_layout.cc`)
 
 Enabled with `[touch] hud=1` (default on Android). `hud_scale` (percent) is
-the UI size setting, `hud_density` overrides screen density (0 - Android
+the UI size setting, relative to the screen's default
+(`hudGetDefaultInterfaceScale`: 110% when the shorter side is 720 dp or more
+- 10"-11" tablets, held farther from the eyes - else 100%), so older
+settings files keep their meaning; the settings screen shows the resulting
+size. `hud_density` overrides screen density (0 - Android
 `densityDpi / 160`; the Mac rig uses 2.667 on Retina to match the phone:
 320 dpi, 1600x720 shown as 1066x480).
 

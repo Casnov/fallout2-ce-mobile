@@ -80,6 +80,31 @@ float hudGetScreenDensity()
 #endif
 }
 
+// Shorter side of tablet screens, dp: phones in landscape have up to ~430,
+// 7"-8" tablets from ~530, 10"-11" ones ~800.
+constexpr float kBigTabletShortSideDp = 720.0f;
+constexpr int kBigTabletInterfaceScale = 110;
+
+float hudGetScreenShortSideDp()
+{
+    int width = 0;
+    int height = 0;
+    if (gSdlRenderer == nullptr || SDL_GetRendererOutputSize(gSdlRenderer, &width, &height) != 0 || width <= 0 || height <= 0) {
+        return 0.0f;
+    }
+    return static_cast<float>(std::min(width, height)) / hudGetScreenDensity();
+}
+
+int hudGetDefaultInterfaceScale()
+{
+    return hudGetScreenShortSideDp() >= kBigTabletShortSideDp ? kBigTabletInterfaceScale : 100;
+}
+
+float hudGetInterfaceScale()
+{
+    return static_cast<float>(hudGetDefaultInterfaceScale()) * static_cast<float>(settings.touch.hud_scale) / 10000.0f;
+}
+
 // Display cutout safe insets in physical pixels (left, top, right, bottom).
 static void hudGetSafeInsets(int insets[4])
 {
@@ -137,8 +162,7 @@ float hudGetPixelsPerDp()
     int outputWidth;
     int outputHeight;
     float outputScale = hudGetOutputScale(&outputWidth, &outputHeight);
-    float scale = static_cast<float>(settings.touch.hud_scale) / 100.0f;
-    return std::max(hudGetScreenDensity() / outputScale * scale, 0.25f);
+    return std::max(hudGetScreenDensity() / outputScale * hudGetInterfaceScale(), 0.25f);
 }
 
 HudMetrics hudMetricsGet()

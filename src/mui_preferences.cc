@@ -198,6 +198,7 @@ namespace {
         bool worldmapFollow;
         bool tacticalView;
         bool saveCompatibility;
+        // The size seen, percent (the screen's default times `hud_scale`).
         int interfaceSize;
         int mapFilter;
         bool autoOpenDoors;
@@ -221,7 +222,7 @@ namespace {
         values.worldmapFollow = settings.enhancements.worldmap_follow_party;
         values.tacticalView = settings.enhancements.tactical_view;
         values.saveCompatibility = settings.enhancements.save_compatibility;
-        values.interfaceSize = settings.touch.hud_scale;
+        values.interfaceSize = static_cast<int>(std::lround(hudGetInterfaceScale() * 20.0f)) * 5;
         values.mapFilter = settings.world_view.filter;
         values.autoOpenDoors = settings.qol.auto_open_doors;
         values.walkWhenSneaking = settings.qol.walk_when_sneaking;
@@ -245,7 +246,7 @@ namespace {
         values.worldmapFollow = EnhancementSettings().worldmap_follow_party;
         values.tacticalView = EnhancementSettings().tactical_view;
         values.saveCompatibility = EnhancementSettings().save_compatibility;
-        values.interfaceSize = TouchSettings().hud_scale;
+        values.interfaceSize = hudGetDefaultInterfaceScale() * TouchSettings().hud_scale / 100;
         values.mapFilter = WorldViewSettings().filter;
         QolSettings qol;
         values.autoOpenDoors = qol.auto_open_doors;
@@ -319,7 +320,7 @@ namespace {
         settings.enhancements.worldmap_follow_party = values.worldmapFollow;
         settings.enhancements.tactical_view = values.tacticalView;
         settings.enhancements.save_compatibility = values.saveCompatibility;
-        settings.touch.hud_scale = values.interfaceSize;
+        settings.touch.hud_scale = static_cast<int>(std::lround(values.interfaceSize * 100.0f / hudGetDefaultInterfaceScale()));
         settings.world_view.filter = values.mapFilter;
         worldViewSetFilter(values.mapFilter);
         settings.qol.auto_open_doors = values.autoOpenDoors;

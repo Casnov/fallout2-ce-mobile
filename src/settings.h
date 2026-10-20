@@ -341,7 +341,8 @@ struct TouchSettings {
     bool hud = false;
     bool mobile_ui = false;
 #endif
-    // HUD size in percent of the default (buttons are sized in dp).
+    // HUD and mobile UI size in percent of the screen's default (buttons are
+    // sized in dp; big tablets start bigger, `hudGetDefaultInterfaceScale`).
     int hud_scale = 100;
     // Screen density (Android dp scale). 0 - detect (Android), 1.0 elsewhere.
     double hud_density = 0.0;
