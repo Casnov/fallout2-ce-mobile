@@ -188,23 +188,19 @@ namespace {
         float requestX = offerX + unit + groupGap;
         float bartererX = requestX + unit + groupGap;
 
-        // Sides: lists down to their totals at the bottom; tables: lists,
-        // totals, the offer button under both. Tall (the window's mockup):
-        // the sides end with the tables, their totals beside the button.
+        // One layout on phones and in windows: the tables' titles in the
+        // header row between the sides' headers, their prices under them
+        // (in the filters' row), all four lists down to the offer button
+        // under the tables, the sides' totals beside it.
         float rowHeight = ui.dp(tall ? 36.0f : 30.0f);
         float filterHeight = ui.dp(tall ? 40.0f : 30.0f);
         float gap = ui.dp(tall ? 8.0f : 6.0f);
         float buttonHeight = ui.dp(tall ? 52.0f : 40.0f);
-        float infoHeight = ui.dp(tall ? 24.0f : 18.0f);
         float headerY = content.y;
         float filterY = headerY + rowHeight + gap;
         float listY = filterY + filterHeight + gap;
         float buttonY = content.bottom() - buttonHeight;
-        float tableInfoY = buttonY - gap - infoHeight;
-        float tableListHeight = tableInfoY - gap - listY;
-        float sideInfoY = tall ? buttonY : content.bottom() - infoHeight;
-        float sideInfoHeight = tall ? buttonHeight : infoHeight;
-        float sideListHeight = tall ? tableListHeight : sideInfoY - gap - listY;
+        float listHeight = buttonY - gap - listY;
 
         // Headers: party tabs (or player name), trader name and money.
         buildPartyTabs(ui, view, { playerX, headerY, sideWidth, rowHeight });
@@ -216,12 +212,14 @@ namespace {
         }
         muiDrawTextAligned(bartererName, { bartererX, headerY, sideWidth, rowHeight }, nameSize, theme.accent, MuiAlign::Start, MuiAlign::Center);
 
-        // Filters and table titles.
+        // Table titles, filters.
+        float titleSize = ui.dp(tall ? 13.0f : 12.0f);
+        std::u32string offerTitle = muiDecodeGameText(text(kTextYourOffer, "OFFER"));
+        std::u32string requestTitle = muiDecodeGameText(text(kTextRequest, "REQUEST"));
+        muiDrawTextAligned(offerTitle, { offerX, headerY, unit, rowHeight }, muiFitTextSize(offerTitle, unit, titleSize, ui.dp(9.0f)), theme.textDim, MuiAlign::Center, MuiAlign::Center);
+        muiDrawTextAligned(requestTitle, { requestX, headerY, unit, rowHeight }, muiFitTextSize(requestTitle, unit, titleSize, ui.dp(9.0f)), theme.textDim, MuiAlign::Center, MuiAlign::Center);
         muiItemFilterRow(ui, "barter.filter.player", { playerX, filterY, sideWidth, filterHeight }, &playerFilter);
         muiItemFilterRow(ui, "barter.filter.barterer", { bartererX, filterY, sideWidth, filterHeight }, &bartererFilter);
-        float titleSize = ui.dp(tall ? 13.0f : 12.0f);
-        muiDrawTextAligned(muiDecodeGameText(text(kTextYourOffer, "OFFER")), { offerX, filterY, unit, filterHeight }, titleSize, theme.textDim, MuiAlign::Center, MuiAlign::Center);
-        muiDrawTextAligned(muiDecodeGameText(text(kTextRequest, "REQUEST")), { requestX, filterY, unit, filterHeight }, titleSize, theme.textDim, MuiAlign::Center, MuiAlign::Center);
 
         // Lists.
         MuiItemFilterState all;
@@ -230,10 +228,10 @@ namespace {
         lists[LIST_BARTERER_TABLE] = muiInventoryItems(view.bartererTable, all);
         lists[LIST_BARTERER] = muiInventoryItems(view.barterer, bartererFilter);
 
-        buildList(ui, LIST_PLAYER, sideColumns, { playerX, listY, sideWidth, sideListHeight });
-        buildList(ui, LIST_PLAYER_TABLE, 1, { offerX, listY, unit, tableListHeight });
-        buildList(ui, LIST_BARTERER_TABLE, 1, { requestX, listY, unit, tableListHeight });
-        buildList(ui, LIST_BARTERER, sideColumns, { bartererX, listY, sideWidth, sideListHeight });
+        buildList(ui, LIST_PLAYER, sideColumns, { playerX, listY, sideWidth, listHeight });
+        buildList(ui, LIST_PLAYER_TABLE, 1, { offerX, listY, unit, listHeight });
+        buildList(ui, LIST_BARTERER_TABLE, 1, { requestX, listY, unit, listHeight });
+        buildList(ui, LIST_BARTERER, sideColumns, { bartererX, listY, sideWidth, listHeight });
 
         // Totals: player's weight and money (and of the shown category), table
         // prices (weights when bartering with a party member).
@@ -244,11 +242,11 @@ namespace {
         if (playerFilter.filter != MuiItemFilter::All) {
             playerInfo += U"  (" + number(muiItemsWeight(lists[LIST_PLAYER])) + U")";
         }
-        drawWeight(ui, playerInfo, { playerX, sideInfoY, sideWidth, sideInfoHeight }, infoSize, theme.textDim, MuiAlign::Start);
+        drawWeight(ui, playerInfo, { playerX, buttonY, sideWidth, buttonHeight }, infoSize, theme.textDim, MuiAlign::Start);
 
         float tableInfoSize = ui.dp(tall ? 16.0f : 13.0f);
-        MuiRect offerInfo = { offerX, tableInfoY, unit, infoHeight };
-        MuiRect requestInfo = { requestX, tableInfoY, unit, infoHeight };
+        MuiRect offerInfo = { offerX, filterY, unit, filterHeight };
+        MuiRect requestInfo = { requestX, filterY, unit, filterHeight };
         if (view.partyMemberBarter) {
             drawWeight(ui, number(view.offerValue), offerInfo, tableInfoSize, theme.text, MuiAlign::Center);
             drawWeight(ui, number(view.requestValue), requestInfo, tableInfoSize, theme.text, MuiAlign::Center);
@@ -264,7 +262,7 @@ namespace {
         if (bartererFilter.filter != MuiItemFilter::All) {
             bartererInfo += U"  (" + number(muiItemsWeight(lists[LIST_BARTERER])) + U")";
         }
-        drawWeight(ui, bartererInfo, { bartererX, sideInfoY, sideWidth, sideInfoHeight }, infoSize, over ? kMuiOverLimit : theme.textDim, MuiAlign::End);
+        drawWeight(ui, bartererInfo, { bartererX, buttonY, sideWidth, buttonHeight }, infoSize, over ? kMuiOverLimit : theme.textDim, MuiAlign::End);
 
         // Offer under both tables.
         MuiRect offerRect = { offerX, buttonY, requestX + unit - offerX, buttonHeight };
