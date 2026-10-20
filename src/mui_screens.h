@@ -213,10 +213,14 @@ float muiItemCellSize(MuiContext& ui, bool roomy);
 // Columns of [gap]-spaced cells across [width] nearest that size.
 int muiItemColumns(MuiContext& ui, float width, float gap, bool roomy);
 
-// What [owner] carries as the game's inventory tells it: critters - weight
-// / carry weight ([over] when above it), containers - their items' size /
-// capacity (`containerGetMaxSize`), the rest - weight.
+// What [owner] carries: critters - weight / carry weight ([over] when above
+// it), the rest - weight.
 std::u32string muiCarriedText(Object* owner, bool* over);
+
+// Containers' room as the game's inventory tells it: their items' size and
+// the capacity (`containerGetMaxSize`) - a volume, not a weight. False for
+// the rest (no limit).
+bool muiContainerVolume(Object* owner, int* used, int* capacity);
 
 // Weight above what can be carried.
 constexpr MuiColor kMuiOverLimit = muiRgb(0xFF4A3A);

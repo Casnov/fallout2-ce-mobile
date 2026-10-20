@@ -149,12 +149,21 @@ std::u32string muiCarriedText(Object* owner, bool* over)
         int carry = critterGetStat(owner, STAT_CARRY_WEIGHT);
         *over = weight > carry;
         text = std::to_string(weight) + "/" + std::to_string(carry);
-    } else if (ProtoId(owner).objectType() == OBJ_TYPE_ITEM && itemGetType(owner) == ITEM_TYPE_CONTAINER) {
-        text = std::to_string(containerGetTotalSize(owner)) + "/" + std::to_string(containerGetMaxSize(owner));
     } else {
         text = std::to_string(objectGetInventoryWeight(owner));
     }
     return muiDecodeUtf8(text.c_str());
+}
+
+bool muiContainerVolume(Object* owner, int* used, int* capacity)
+{
+    if (ProtoId(owner).objectType() != OBJ_TYPE_ITEM || itemGetType(owner) != ITEM_TYPE_CONTAINER) {
+        return false;
+    }
+
+    *used = containerGetTotalSize(owner);
+    *capacity = containerGetMaxSize(owner);
+    return true;
 }
 
 void muiNotifyPartyMemberOutOfReach(Object* critter)

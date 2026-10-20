@@ -347,19 +347,34 @@ namespace {
         const MuiTheme& theme = muiTheme();
 
         // The right side as the left one: weight / carry weight of critters,
-        // size / capacity of containers.
+        // weight of the rest; containers also their room (a volume).
         bool over = false;
         std::u32string weight = side == SIDE_LEFT
             ? number(view.weight) + (view.carryWeight > 0 ? U"/" + number(view.carryWeight) : U"")
             : muiCarriedText(view.rightOwner, &over);
+        int used;
+        int capacity;
+        std::u32string volume;
+        if (side == SIDE_RIGHT && muiContainerVolume(view.rightOwner, &used, &capacity)) {
+            volume = number(used) + U"/" + number(capacity);
+        }
+
         float iconSize = ui.dp(tall ? 20.0f : 15.0f);
         float textSize = ui.dp(tall ? 17.0f : 14.0f);
         float edge = ui.dp(2.0f);
-        float weightWidth = iconSize + ui.dp(6.0f) + muiTextWidth(weight, textSize);
-        float weightX = side == SIDE_LEFT ? rect.x + edge : rect.right() - edge - weightWidth;
+        float iconGap = ui.dp(6.0f);
+        float weightWidth = iconSize + iconGap + muiTextWidth(weight, textSize);
+        float volumeWidth = volume.empty() ? 0.0f : iconSize + iconGap + muiTextWidth(volume, textSize);
+        float partsGap = volume.empty() ? 0.0f : ui.dp(14.0f);
+        float weightX = side == SIDE_LEFT ? rect.x + edge : rect.right() - edge - volumeWidth - partsGap - weightWidth;
         muiDrawIcon(MuiIcon::Weight, weightX + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.5f), theme.textDim);
-        MuiRect weightRect = { weightX + iconSize + ui.dp(6.0f), rect.y, weightWidth, rect.h };
+        MuiRect weightRect = { weightX + iconSize + iconGap, rect.y, weightWidth, rect.h };
         muiDrawTextAligned(weight, weightRect, textSize, over ? kMuiOverLimit : theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        if (!volume.empty()) {
+            float volumeX = rect.right() - edge - volumeWidth;
+            muiDrawIcon(MuiIcon::Inventory, volumeX + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.5f), theme.textDim);
+            muiDrawTextAligned(volume, { volumeX + iconSize + iconGap, rect.y, volumeWidth, rect.h }, textSize, used > capacity ? kMuiOverLimit : theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        }
 
         if (view.steal) {
             return;
