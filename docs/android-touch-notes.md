@@ -580,7 +580,8 @@ every screen on the new scalable UI, visual style/textures later via theme).
   and bigger - and `[touch] tablet_windows=1`, the "Windows on tablets" row
   shown only there): game screens laid out by `muiScreenFrame` open as a
   window over the world dimmed as under the game menu (`dim`), at most
-  896x680 dp (times the UI size), at least 24 dp from the screen's edges,
+  896x680 of the screen's dp (the UI size scales what's inside, not the
+  window: the world around it stays), at least 24 dp from the edges,
   the tab column outside it at its top right; when the column doesn't fit
   next to a centered window (4:3) the window moves left. Phones get
   `muiDialogLayout` unchanged. Such screens are `isGameScreen` and don't

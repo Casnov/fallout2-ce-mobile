@@ -667,15 +667,17 @@ MuiScreenFrame muiScreenFrameLayout(MuiContext& ui)
         return frame;
     }
 
-    // The window: at most the size the screens are laid out for (the phone
-    // layouts fit any smaller one), the screen's margins and the tab column
-    // outside it kept.
+    // The window: at most the size the screens are laid out for, the
+    // screen's margins and the tab column outside it kept. Its size is in
+    // the screen's dp, the UI size scales what's inside: the world around
+    // it stays as much as designed.
     MuiRect safe = ui.safeRect();
     float margin = ui.dp(kWindowMarginDp);
     float tabsWidth = ui.dp(kTabColumnWidthDp);
     float tabsGap = ui.dp(kWindowTabsGapDp);
-    float width = std::min(ui.dp(kWindowWidthDp), safe.w - margin * 2.0f - tabsGap - tabsWidth);
-    float height = std::min(ui.dp(kWindowHeightDp), safe.h - margin * 2.0f);
+    float uiScale = hudGetInterfaceScale();
+    float width = std::min(ui.dp(kWindowWidthDp) / uiScale, safe.w - margin * 2.0f - tabsGap - tabsWidth);
+    float height = std::min(ui.dp(kWindowHeightDp) / uiScale, safe.h - margin * 2.0f);
     float x = safe.centerX() - width / 2.0f;
     x = std::min(x, safe.right() - margin - tabsWidth - tabsGap - width);
     x = std::max(x, safe.x + margin);
