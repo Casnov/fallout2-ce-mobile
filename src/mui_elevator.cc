@@ -142,12 +142,10 @@ namespace {
     {
         ui.dim();
 
-        MuiRect content;
-        MuiRect rail;
-        muiDialogLayout(ui, &content, &rail);
-        if (target == -1 && muiGameScreenTabs(ui, rail, "elevator", MuiGameScreenTab::None, false) == MuiGameScreenTab::Back) {
-            back();
-        }
+        // Phones: the card in the safe area, Back at the screen's edge.
+        // Windows: the card at most a window's size, Back next to it.
+        MuiScreenFrame frame = muiScreenFrameLayout(ui);
+        const MuiRect& content = frame.content;
 
         int width;
         int height;
@@ -166,6 +164,11 @@ namespace {
         MuiRect card = { 0.0f, 0.0f, width * scale + padding * 2.0f, height * scale + titleHeight + padding * 3.0f };
         card.x = content.centerX() - card.w / 2.0f;
         card.y = content.centerY() - card.h / 2.0f;
+
+        MuiRect rail = frame.windowed ? muiTabsBeside(ui, card) : frame.tabs;
+        if (target == -1 && muiGameScreenTabs(ui, rail, "elevator", MuiGameScreenTab::None, false) == MuiGameScreenTab::Back) {
+            back();
+        }
 
         if (target == -1 && ui.tappedOutside(card)) {
             back();

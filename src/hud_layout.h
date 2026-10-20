@@ -155,6 +155,10 @@ float hudGetScreenDensity();
 // the renderer is up).
 float hudGetScreenShortSideDp();
 
+// Tablet sized screen (7" and bigger): game screens can open as windows
+// over the world (`muiUsesWindows`).
+bool hudIsTabletScreen();
+
 // UI size the screen starts with, percent: bigger on big tablets, held
 // farther from the eyes than phones.
 int hudGetDefaultInterfaceScale();

@@ -96,6 +96,8 @@ namespace {
     constexpr int kTextWorldmapFollowNote = 323;
     constexpr int kTextTacticalView = 373;
     constexpr int kTextTacticalViewNote = 374;
+    constexpr int kTextTabletWindows = 375;
+    constexpr int kTextTabletWindowsNote = 376;
     constexpr int kTextSaveCompatibility = 327;
     constexpr int kTextSaveCompatibilityNote = 328;
     constexpr int kTextSectionFiles = 336;
@@ -200,6 +202,7 @@ namespace {
         bool saveCompatibility;
         // The size seen, percent (the screen's default times `hud_scale`).
         int interfaceSize;
+        bool tabletWindows;
         int mapFilter;
         bool autoOpenDoors;
         bool walkWhenSneaking;
@@ -223,6 +226,7 @@ namespace {
         values.tacticalView = settings.enhancements.tactical_view;
         values.saveCompatibility = settings.enhancements.save_compatibility;
         values.interfaceSize = static_cast<int>(std::lround(hudGetInterfaceScale() * 20.0f)) * 5;
+        values.tabletWindows = settings.touch.tablet_windows;
         values.mapFilter = settings.world_view.filter;
         values.autoOpenDoors = settings.qol.auto_open_doors;
         values.walkWhenSneaking = settings.qol.walk_when_sneaking;
@@ -247,6 +251,7 @@ namespace {
         values.tacticalView = EnhancementSettings().tactical_view;
         values.saveCompatibility = EnhancementSettings().save_compatibility;
         values.interfaceSize = hudGetDefaultInterfaceScale() * TouchSettings().hud_scale / 100;
+        values.tabletWindows = TouchSettings().tablet_windows;
         values.mapFilter = WorldViewSettings().filter;
         QolSettings qol;
         values.autoOpenDoors = qol.auto_open_doors;
@@ -321,6 +326,7 @@ namespace {
         settings.enhancements.tactical_view = values.tacticalView;
         settings.enhancements.save_compatibility = values.saveCompatibility;
         settings.touch.hud_scale = static_cast<int>(std::lround(values.interfaceSize * 100.0f / hudGetDefaultInterfaceScale()));
+        settings.touch.tablet_windows = values.tabletWindows;
         settings.world_view.filter = values.mapFilter;
         worldViewSetFilter(values.mapFilter);
         settings.qol.auto_open_doors = values.autoOpenDoors;
@@ -615,6 +621,13 @@ namespace {
             };
             row.get = [](const Values& values) { return static_cast<float>(values.interfaceSize); };
             row.set = [](Values& values, float value) { values.interfaceSize = static_cast<int>(std::lround(value / 5.0f) * 5); };
+            rows.push_back(row);
+        }
+        // Only where screens can be windows.
+        if (hudIsTabletScreen()) {
+            Row row { Section::Display, RowKind::Toggle, kTextTabletWindows, "Windows on tablets", Origin::Port, kTextTabletWindowsNote, "Screens open as a window over the game world" };
+            row.get = [](const Values& values) { return values.tabletWindows ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.tabletWindows = value != 0.0f; };
             rows.push_back(row);
         }
         {

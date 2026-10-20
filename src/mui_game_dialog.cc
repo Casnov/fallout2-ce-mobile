@@ -25,6 +25,23 @@ namespace fallout {
 
 namespace {
 
+    // Tab column of game screens, dp.
+    constexpr float kTabColumnWidthDp = 52.0f;
+
+    // Game screen windows (`muiScreenFrame`), dp: the largest window (the
+    // size the screens' tablet layouts are made for), the least margin to
+    // the screen's edges, the gap to the tab column outside, the strip
+    // past the tabs where a tap doesn't close the window (the tabs have no
+    // frame; the window's padding keeps its own buttons off its edge).
+    constexpr float kWindowWidthDp = 896.0f;
+    constexpr float kWindowHeightDp = 680.0f;
+    constexpr float kWindowPaddingDp = 14.0f;
+    constexpr float kWindowMarginDp = 24.0f;
+    constexpr float kWindowTabsGapDp = 12.0f;
+    constexpr float kWindowRadiusDp = 12.0f;
+    constexpr float kWindowTabsSlopDp = 8.0f;
+    constexpr Uint8 kWindowAlpha = 247;
+
     const MuiColor kBackground = muiRgb(0x060A07);
     const MuiColor kReactionGood = muiRgb(0x78B4FF);
     const MuiColor kReactionBad = muiRgb(0xFF6E5E);
@@ -636,9 +653,67 @@ namespace {
 void muiDialogLayout(MuiContext& ui, MuiRect* content, MuiRect* tabs)
 {
     MuiRect safe = ui.safeRect().inset(ui.dp(10.0f));
-    float width = ui.dp(52.0f);
+    float width = ui.dp(kTabColumnWidthDp);
     *tabs = { safe.right() - width, safe.y, width, safe.h };
     *content = { safe.x, safe.y, tabs->x - ui.dp(10.0f) - safe.x, safe.h };
+}
+
+MuiScreenFrame muiScreenFrameLayout(MuiContext& ui)
+{
+    MuiScreenFrame frame;
+    if (!muiUsesWindows()) {
+        frame.window = ui.screenRect();
+        muiDialogLayout(ui, &frame.content, &frame.tabs);
+        return frame;
+    }
+
+    // The window: at most the size the screens are laid out for (the phone
+    // layouts fit any smaller one), the screen's margins and the tab column
+    // outside it kept.
+    MuiRect safe = ui.safeRect();
+    float margin = ui.dp(kWindowMarginDp);
+    float tabsWidth = ui.dp(kTabColumnWidthDp);
+    float tabsGap = ui.dp(kWindowTabsGapDp);
+    float width = std::min(ui.dp(kWindowWidthDp), safe.w - margin * 2.0f - tabsGap - tabsWidth);
+    float height = std::min(ui.dp(kWindowHeightDp), safe.h - margin * 2.0f);
+    float x = safe.centerX() - width / 2.0f;
+    x = std::min(x, safe.right() - margin - tabsWidth - tabsGap - width);
+    x = std::max(x, safe.x + margin);
+    float y = safe.centerY() - height / 2.0f;
+
+    frame.windowed = true;
+    frame.window = { x, y, width, height };
+    frame.content = frame.window.inset(ui.dp(kWindowPaddingDp));
+    frame.tabs = muiTabsBeside(ui, frame.window);
+    return frame;
+}
+
+MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background)
+{
+    MuiScreenFrame frame = muiScreenFrameLayout(ui);
+    if (!frame.windowed) {
+        muiFillRect(ui.screenRect(), background);
+        return frame;
+    }
+
+    ui.dim();
+    const MuiTheme& theme = muiTheme();
+    MuiColor fill = background.withAlpha(kWindowAlpha);
+    float radius = ui.dp(kWindowRadiusDp);
+    muiFillRoundRect(frame.window, radius, fill);
+    muiStrokeRoundRect(frame.window, radius, ui.dp(theme.borderWidth), theme.panelBorder);
+
+    // Like the game menu: a tap past the window's edge closes it, only a
+    // finger missing a tab sideways doesn't.
+    MuiRect around = { frame.window.x, frame.window.y, frame.tabs.right() + ui.dp(kWindowTabsSlopDp) - frame.window.x, frame.window.h };
+    ui.mark(kMuiWindowTapArea, around);
+    frame.tappedOutside = ui.tappedOutside(around);
+    return frame;
+}
+
+MuiRect muiTabsBeside(MuiContext& ui, const MuiRect& rect)
+{
+    return { rect.right() + ui.dp(kWindowTabsGapDp), rect.y, ui.dp(kTabColumnWidthDp), rect.h };
 }
 
 int muiDialogTabs(MuiContext& ui, const MuiRect& column, MuiDialogTab active, bool barterAvailable, bool partyAvailable)

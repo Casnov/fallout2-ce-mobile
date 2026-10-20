@@ -348,6 +348,9 @@ struct TouchSettings {
     double hud_density = 0.0;
     // Combat's tactical view (its HUD button), kept until switched again.
     bool tactical_view = false;
+    // Tablets: mobile UI's game screens open as windows over the world
+    // instead of covering the screen (`muiUsesWindows`).
+    bool tablet_windows = true;
 };
 
 struct MapperSettings {

@@ -29,6 +29,34 @@ enum class MuiDialogTab {
 // same on every dialog screen.
 void muiDialogLayout(MuiContext& ui, MuiRect* content, MuiRect* tabs);
 
+// Where a game screen lays out. Phones: the safe area with the tab column at
+// the right edge (`muiDialogLayout`). With windows (`muiUsesWindows`): a
+// window centered over the dimmed world (smaller than the screen, the UI
+// size included), the tab column outside it at its top right, the window
+// moved left when the column doesn't fit next to it (4:3).
+struct MuiScreenFrame {
+    // The window (phones: the screen).
+    MuiRect window;
+    MuiRect content;
+    // Tab column (`muiGameScreenTabs`, `muiDialogTabs`).
+    MuiRect tabs;
+    bool windowed = false;
+    // A tap on the world outside the window and its tabs: the screen's Back.
+    bool tappedOutside = false;
+};
+
+// Lays out a game screen and draws its background: phones - [background]
+// over the screen; windows - the world dimmed as under the game menu and the
+// window's panel of [background].
+MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background);
+
+// The same layout, nothing drawn (`tappedOutside` not set).
+MuiScreenFrame muiScreenFrameLayout(MuiContext& ui);
+
+// Tab column outside [rect] at its top right (screens with a card of their
+// own size, the elevator).
+MuiRect muiTabsBeside(MuiContext& ui, const MuiRect& rect);
+
 // Tab buttons in [column] (barter only when available), returns the tapped
 // tab or -1.
 int muiDialogTabs(MuiContext& ui, const MuiRect& column, MuiDialogTab active, bool barterAvailable, bool partyAvailable);

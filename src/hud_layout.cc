@@ -82,6 +82,7 @@ float hudGetScreenDensity()
 
 // Shorter side of tablet screens, dp: phones in landscape have up to ~430,
 // 7"-8" tablets from ~530, 10"-11" ones ~800.
+constexpr float kTabletShortSideDp = 500.0f;
 constexpr float kBigTabletShortSideDp = 720.0f;
 constexpr int kBigTabletInterfaceScale = 110;
 
@@ -93,6 +94,11 @@ float hudGetScreenShortSideDp()
         return 0.0f;
     }
     return static_cast<float>(std::min(width, height)) / hudGetScreenDensity();
+}
+
+bool hudIsTabletScreen()
+{
+    return hudGetScreenShortSideDp() >= kTabletShortSideDp;
 }
 
 int hudGetDefaultInterfaceScale()

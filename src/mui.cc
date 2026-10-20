@@ -294,6 +294,11 @@ bool muiIsEnabled()
 }
 #endif
 
+bool muiUsesWindows()
+{
+    return muiIsEnabled() && settings.touch.tablet_windows && hudIsTabletScreen();
+}
+
 const MuiTheme& muiTheme()
 {
     return kTheme;
@@ -841,11 +846,11 @@ bool muiHoldsFrame()
         }
     }
 
-    // Until the next screen covers everything.
+    // Until the next screen covers everything (or shows its window).
     if (gSwitchPending) {
         bool arrived = false;
         for (MuiScreen* screen : gScreens) {
-            if (screen != gSwitchFrom && screen->isActive() && screen->coversScreen()) {
+            if (screen != gSwitchFrom && screen->isActive() && (screen->coversScreen() || screen->isGameScreen())) {
                 arrived = true;
                 break;
             }

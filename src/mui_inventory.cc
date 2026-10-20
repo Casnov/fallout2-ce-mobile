@@ -68,7 +68,8 @@ namespace {
             modal = true;
         }
 
-        bool coversScreen() override { return true; }
+        bool coversScreen() override { return !muiUsesWindows(); }
+        bool isGameScreen() override { return true; }
 
         bool isActive() override
         {
@@ -232,17 +233,14 @@ namespace {
             }
         }
 
-        // Opaque over the map.
-        muiFillRect(ui.screenRect(), kBackground);
-
-        MuiRect content;
-        MuiRect tabs;
-        muiDialogLayout(ui, &content, &tabs);
+        // Opaque over the map, or a window over it.
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground);
+        const MuiRect& content = frame.content;
 
         // Back: closes the open container, then the inventory. The other game
         // screens: the inventory closes and the game opens them.
-        MuiGameScreenTab tab = muiGameScreenTabs(ui, tabs, "inventory", MuiGameScreenTab::Inventory, view.critter == gDude);
-        if (tab == MuiGameScreenTab::Back) {
+        MuiGameScreenTab tab = muiGameScreenTabs(ui, frame.tabs, "inventory", MuiGameScreenTab::Inventory, view.critter == gDude);
+        if (tab == MuiGameScreenTab::Back || frame.tappedOutside) {
             back();
         } else if (tab != MuiGameScreenTab::None && muiSwitchGameScreen(ui, tab)) {
             inventoryRequestClose();

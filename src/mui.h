@@ -37,6 +37,10 @@ constexpr bool muiIsEnabled() { return true; }
 bool muiIsEnabled();
 #endif
 
+// Game screens open as windows over the world (tablets, `[touch]
+// tablet_windows`) instead of covering the screen.
+bool muiUsesWindows();
+
 struct MuiTheme {
     MuiColor dim;
     MuiColor panel;
@@ -108,6 +112,12 @@ public:
     // Over the map without covering it, but the HUD's buttons shouldn't show
     // under it (a game screen the game shows over the map: the elevator).
     virtual bool hidesHud() { return false; }
+
+    // A game screen (inventory, character...): covers the screen on phones,
+    // a window over the world with windows (`muiUsesWindows`,
+    // `muiScreenFrame`). Switching between game screens holds the last frame
+    // until the next one shows (`muiHoldFrameForSwitch`).
+    virtual bool isGameScreen() { return false; }
 
     bool modal = true;
     bool finished = false;
@@ -446,6 +456,10 @@ int muiShowDialogBox(const char* title, const char** body, int bodyLength, const
 // Automated tests: center of widget [id] of the last frame in normalized
 // screen coordinates.
 bool muiGetWidgetCenter(const char* id, float* x, float* y);
+
+// Mark of a game screen's window and its tabs: a tap outside closes it
+// (`muiScreenFrame`).
+constexpr const char* kMuiWindowTapArea = "window.tap_area";
 
 } // namespace fallout
 

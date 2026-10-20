@@ -576,6 +576,21 @@ every screen on the new scalable UI, visual style/textures later via theme).
   `MuiTheme` (placeholder terminal-green).
 - `muiRunModal` runs input+render for synchronous game flows; Esc/Android
   back -> `MuiScreen::back`.
+- Tablet windows (`muiUsesWindows`: shorter side 500 dp or more - 7" tablets
+  and bigger - and `[touch] tablet_windows=1`, the "Windows on tablets" row
+  shown only there): game screens laid out by `muiScreenFrame` open as a
+  window over the world dimmed as under the game menu (`dim`), at most
+  896x680 dp (times the UI size), at least 24 dp from the screen's edges,
+  the tab column outside it at its top right; when the column doesn't fit
+  next to a centered window (4:3) the window moves left. Phones get
+  `muiDialogLayout` unchanged. Such screens are `isGameScreen` and don't
+  `coversScreen` with windows, so the map is drawn under them; switching
+  between game screens holds the frame until the next one shows either way.
+  A tap on the world outside the window and its tabs is the screen's Back,
+  like the game menu's: no band around the window (its 14 dp padding keeps
+  the buttons off the edge), only 8 dp past the frameless tabs; the area is
+  marked `window.tap_area` for autotests. The elevator keeps its card and
+  puts Back next to it (`muiTabsBeside`). Done so far: inventory, elevator.
 - Done: dialog boxes (`showDialogBox` -> `muiShowDialogBox`, texts from
   DBOX.MSG), radial action menu drawing (54 dp circles, own line icons,
   centered on the finger, near edges buttons spread over the free arc;
