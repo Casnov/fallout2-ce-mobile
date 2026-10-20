@@ -103,6 +103,9 @@ namespace {
         // Against the game's files now (save_compatibility.h).
         SaveCompatibility compatibility = SaveCompatibility::kSame;
         std::vector<SaveCompatibilityChange> changes;
+        // The tall layout's thumbnail (SAVE.DAT's), read when first shown.
+        std::vector<unsigned char> thumbnail;
+        bool thumbnailRead = false;
     };
 
     // "mods/rpu.dat" -> "rpu.dat".
@@ -144,7 +147,9 @@ namespace {
     public:
         LoadSaveScreen(bool save, bool mainMenu);
 
-        bool coversScreen() override { return true; }
+        // From the title menu the window is over its picture.
+        bool coversScreen() override { return !muiUsesWindows() || fromMainMenu; }
+        bool isGameScreen() override { return true; }
         void build(MuiContext& ui) override;
         void back() override;
         void key(int keyCode) override;
@@ -163,6 +168,10 @@ namespace {
         bool fromMainMenu;
 
         std::vector<SlotRow> rows;
+        // Changes when the rows are read again (their thumbnails' textures).
+        unsigned int rowsVersion = 0;
+        // Tablet windows: the roomy layout (`muiIsTallContent`).
+        bool tall = false;
         int selected = -1;
         // Slot of a new save (the "New save" row), -1 - none left.
         int newSlot = -1;
@@ -198,6 +207,7 @@ namespace {
 
         void buildTabs(MuiContext& ui, const MuiRect& list);
         void buildList(MuiContext& ui, const MuiRect& list);
+        void buildTallRow(MuiContext& ui, SlotRow& row, const MuiRect& rect, bool isSelected);
         void buildDetails(MuiContext& ui, const MuiRect& details);
         void buildDescriptionEditor(MuiContext& ui);
         void buildLoadingPlate(MuiContext& ui);
@@ -267,6 +277,7 @@ namespace {
         newSlot = lsgFindFreeManualSlot();
 
         rows.clear();
+        rowsVersion++;
         for (int slot = 0; slot < lsgGetTotalSlotCount(); slot++) {
             MobileSaveSlotInfo info;
             if (lsgMobileGetSlotInfo(slot, &info) && info.state != MobileSaveSlotState::Empty) {
@@ -386,26 +397,27 @@ namespace {
             ui.isInteractive = false;
         }
 
-        muiFillRect(ui.screenRect(), kBackground);
+        // Opaque over the map, or a window over it (the title menu's
+        // picture).
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground, fromMainMenu);
+        const MuiRect& content = frame.content;
 
-        MuiRect content;
-        MuiRect tabs;
-        muiDialogLayout(ui, &content, &tabs);
-
-        if (muiGameScreenTabs(ui, tabs, "loadsave", MuiGameScreenTab::None, false) == MuiGameScreenTab::Back) {
+        if (muiGameScreenTabs(ui, frame.tabs, "loadsave", MuiGameScreenTab::None, false) == MuiGameScreenTab::Back || frame.tappedOutside) {
             back();
         }
 
         // List at the left (under the save / load switch in game), details
         // up to the top at the right.
-        float gap = ui.dp(8.0f);
+        tall = muiIsTallContent(ui, content);
+        float gap = ui.dp(tall ? 12.0f : 8.0f);
+        float switchHeight = ui.dp(tall ? 48.0f : 38.0f);
         float listWidth = content.w * 0.44f - gap / 2.0f;
-        float tabsHeight = fromMainMenu ? 0.0f : ui.dp(38.0f) + gap;
+        float tabsHeight = fromMainMenu ? 0.0f : switchHeight + ui.dp(tall ? 10.0f : 8.0f);
         MuiRect list = { content.x, content.y + tabsHeight, listWidth, content.h - tabsHeight };
         MuiRect details = { list.right() + gap, content.y, content.right() - list.right() - gap, content.h };
 
         if (!fromMainMenu) {
-            buildTabs(ui, { list.x, content.y, list.w, ui.dp(38.0f) });
+            buildTabs(ui, { list.x, content.y, list.w, switchHeight });
         }
 
         buildList(ui, list);
@@ -447,8 +459,10 @@ namespace {
         muiFillRoundRect(list, ui.dp(7.0f), kPanel);
         muiStrokeRoundRect(list, ui.dp(7.0f), ui.dp(1.0f), theme.panelBorder);
 
-        MuiRect inner = list.inset(ui.dp(6.0f));
-        float rowHeight = ui.dp(50.0f);
+        MuiRect inner = list.inset(ui.dp(tall ? 8.0f : 6.0f));
+        // Tall: a thumbnail and three lines.
+        float rowHeight = ui.dp(tall ? 84.0f : 50.0f);
+        float newRowHeight = tall ? ui.dp(56.0f) : rowHeight;
         bool hasNewRow = saving && newSlot != -1;
 
         if (!hasNewRow && rows.empty()) {
@@ -459,8 +473,8 @@ namespace {
         // "New save" stays at the top, the saves scroll under it.
         MuiRect scrollArea = inner;
         if (hasNewRow) {
-            scrollArea.y += rowHeight;
-            scrollArea.h -= rowHeight;
+            scrollArea.y += newRowHeight;
+            scrollArea.h -= newRowHeight;
         }
 
         if (resetScroll) {
@@ -478,7 +492,9 @@ namespace {
             int slot = isNew ? newSlot : rows[rowIndex].slot;
 
             MuiRect clip = isNew ? inner : scrollArea;
-            MuiRect rect = { inner.x, inner.y + index * rowHeight - (isNew ? 0.0f : offset), inner.w, rowHeight - ui.dp(3.0f) };
+            MuiRect rect = isNew
+                ? MuiRect { inner.x, inner.y, inner.w, newRowHeight - ui.dp(3.0f) }
+                : MuiRect { inner.x, scrollArea.y + rowIndex * rowHeight - offset, inner.w, rowHeight - ui.dp(3.0f) };
             if (rect.bottom() < clip.y || rect.y > clip.bottom()) {
                 continue;
             }
@@ -498,6 +514,12 @@ namespace {
 
             float textX = rect.x + numberWidth + ui.dp(13.0f);
             float textWidth = rect.right() - textX - ui.dp(5.0f);
+
+            if (tall && !isNew) {
+                buildTallRow(ui, rows[rowIndex], rect, slot == selected);
+                muiPopClip();
+                continue;
+            }
 
             if (isNew) {
                 muiStrokeRoundRect(rect, ui.dp(5.0f), ui.dp(1.0f), theme.accent);
@@ -547,18 +569,81 @@ namespace {
         }
     }
 
+    // Tall layout's row: the save's thumbnail, its title, where, when in
+    // the game; quick saves and saves of other game files marked at the
+    // right.
+    void LoadSaveScreen::buildTallRow(MuiContext& ui, SlotRow& row, const MuiRect& rect, bool isSelected)
+    {
+        const MuiTheme& theme = muiTheme();
+        const MobileSaveSlotInfo& info = row.info;
+        bool occupied = info.state == MobileSaveSlotState::Occupied;
+
+        MuiRect thumbnail = { rect.x + ui.dp(8.0f), rect.centerY() - ui.dp(32.5f), ui.dp(104.0f), ui.dp(65.0f) };
+        muiFillRoundRect(thumbnail, ui.dp(4.0f), kBackground);
+        if (occupied && !row.thumbnailRead) {
+            row.thumbnailRead = true;
+            std::vector<unsigned char> indexed(kMobileSavePreviewWidth * kMobileSavePreviewHeight);
+            if (lsgMobileReadPreview(row.slot, indexed.data(), indexed.size())) {
+                convertThumbnail(indexed, &row.thumbnail);
+            }
+        }
+        if (!row.thumbnail.empty()) {
+            SDL_Texture* texture = muiRgbaTexture("loadsave.thumbnail." + std::to_string(row.slot), row.thumbnail.data(), kMobileSavePreviewWidth, kMobileSavePreviewHeight, rowsVersion);
+            muiDrawTextureCover(texture, thumbnail.inset(ui.dp(1.0f)));
+        }
+        muiStrokeRoundRect(thumbnail, ui.dp(4.0f), ui.dp(1.0f), theme.panelBorder);
+
+        float textX = thumbnail.right() + ui.dp(12.0f);
+        float right = rect.right() - ui.dp(8.0f);
+        if (lsgMobileIsQuickSlot(row.slot)) {
+            float badgeWidth = ui.dp(64.0f);
+            muiDrawTextAligned(text(kTextQuick, "Quick"), { right - badgeWidth, rect.y, badgeWidth, rect.h }, ui.dp(12.0f), theme.accent, MuiAlign::End, MuiAlign::Center);
+            right -= badgeWidth + ui.dp(4.0f);
+        }
+
+        // Made with other game files: likely works (?) or not (x).
+        if (row.compatibility == SaveCompatibility::kLikely || row.compatibility == SaveCompatibility::kUnlikely) {
+            float markWidth = ui.dp(24.0f);
+            bool unlikely = row.compatibility == SaveCompatibility::kUnlikely;
+            muiDrawTextAligned(unlikely ? U"\u00D7" : U"?", { right - markWidth, rect.y, markWidth, rect.h }, ui.dp(unlikely ? 20.0f : 17.0f), unlikely ? kDanger : theme.accent, MuiAlign::Center, MuiAlign::Center);
+            right -= markWidth;
+        }
+
+        // Title (description or place), where if it has a description, the
+        // game's date.
+        float width = right - textX;
+        float lineHeight = ui.dp(22.0f);
+        std::vector<std::pair<std::u32string, float>> lines;
+        std::u32string title = titleOf(info);
+        lines.push_back({ title, ui.dp(16.0f) });
+        if (occupied) {
+            if (info.description[0] != '\0') {
+                lines.push_back({ placeOf(info), ui.dp(14.0f) });
+            }
+            lines.push_back({ gameDateText(info.gameDay, info.gameMonth, info.gameYear, info.gameTime), ui.dp(14.0f) });
+        }
+
+        float y = rect.centerY() - lines.size() * lineHeight / 2.0f;
+        for (size_t index = 0; index < lines.size(); index++) {
+            MuiColor color = index != 0 ? theme.textDim : (!occupied ? kDanger : (isSelected ? theme.accent : theme.text));
+            float size = muiFitTextSize(lines[index].first, width, lines[index].second, ui.dp(11.0f));
+            muiDrawTextAligned(lines[index].first, { textX, y, width, lineHeight }, size, color, MuiAlign::Start, MuiAlign::Center);
+            y += lineHeight;
+        }
+    }
+
     void LoadSaveScreen::buildDetails(MuiContext& ui, const MuiRect& details)
     {
         const MuiTheme& theme = muiTheme();
         muiFillRoundRect(details, ui.dp(7.0f), kPanel);
         muiStrokeRoundRect(details, ui.dp(7.0f), ui.dp(1.0f), theme.panelBorder);
 
-        MuiRect inner = details.inset(ui.dp(8.0f));
+        MuiRect inner = details.inset(ui.dp(tall ? 14.0f : 8.0f));
 
         // Picture: cropped to fill, a small margin inside the frame.
-        float lineHeight = ui.dp(17.0f);
+        float lineHeight = ui.dp(tall ? 26.0f : 17.0f);
         const SlotRow* selectedRow = rowFor(selected);
-        float pictureHeight = std::min(inner.h * 0.5f, inner.w * 9.0f / 16.0f);
+        float pictureHeight = tall ? std::min(inner.h * 0.55f, inner.w * 10.0f / 16.0f) : std::min(inner.h * 0.5f, inner.w * 9.0f / 16.0f);
         MuiRect frame = { inner.x, inner.y, inner.w, pictureHeight };
         muiFillRoundRect(frame, ui.dp(5.0f), kBackground);
         if (picture.valid) {
@@ -575,7 +660,7 @@ namespace {
         // Details: who, where, game time, when it was made.
         const MobileSaveSlotInfo* info = infoFor(selected);
         bool isNew = selected != -1 && selected == newSlot;
-        float y = frame.bottom() + ui.dp(4.0f);
+        float y = frame.bottom() + ui.dp(tall ? 10.0f : 4.0f);
         auto line = [&](const std::u32string& value, float size, MuiColor color) {
             muiDrawTextAligned(value, { inner.x, y, inner.w, lineHeight }, ui.dp(size), color, MuiAlign::Start, MuiAlign::Center);
             y += lineHeight;
@@ -586,7 +671,7 @@ namespace {
             // files: the first difference (and how many more), or that it
             // isn't known. Nothing for a save made with this game.
             std::u32string name = muiDecodeGameText(info->characterName);
-            float nameSize = ui.dp(12.0f);
+            float nameSize = ui.dp(tall ? 18.0f : 12.0f);
             muiDrawTextAligned(name, { inner.x, y, inner.w, lineHeight }, nameSize, theme.accent, MuiAlign::Start, MuiAlign::Center);
             std::u32string badge;
             MuiColor badgeColor = theme.textDim;
@@ -603,7 +688,7 @@ namespace {
             if (!badge.empty()) {
                 float x = inner.x + muiTextWidth(name, nameSize) + ui.dp(8.0f);
                 float room = inner.right() - x;
-                float size = muiFitTextSize(badge, room - ui.dp(10.0f), ui.dp(10.0f), ui.dp(8.0f));
+                float size = muiFitTextSize(badge, room - ui.dp(10.0f), ui.dp(tall ? 13.0f : 10.0f), ui.dp(8.0f));
                 float width = std::min(room, muiTextWidth(badge, size) + ui.dp(10.0f));
                 MuiRect badgeRect = { x, y + ui.dp(1.0f), width, lineHeight - ui.dp(2.0f) };
                 muiStrokeRoundRect(badgeRect, ui.dp(4.0f), ui.dp(1.0f), badgeColor);
@@ -613,27 +698,28 @@ namespace {
             }
             y += lineHeight;
 
-            line(placeOf(*info), 11.0f, theme.text);
-            line(gameDateText(info->gameDay, info->gameMonth, info->gameYear, info->gameTime), 10.0f, theme.textDim);
+            line(placeOf(*info), tall ? 16.0f : 11.0f, theme.text);
+            line(gameDateText(info->gameDay, info->gameMonth, info->gameYear, info->gameTime), tall ? 14.0f : 10.0f, theme.textDim);
 
             std::time_t created = static_cast<std::time_t>(info->created);
             const std::tm* local = created > 0 ? std::localtime(&created) : nullptr;
             if (local != nullptr) {
                 char date[48];
                 std::strftime(date, sizeof(date), "%d.%m.%Y  %H:%M:%S", local);
-                line(muiDecodeUtf8(date), 10.0f, theme.textDim);
+                line(muiDecodeUtf8(date), tall ? 14.0f : 10.0f, theme.textDim);
             }
         } else if (isNew && saving) {
-            line(text(kTextCurrentGame, "Current game"), 12.0f, theme.accent);
+            line(text(kTextCurrentGame, "Current game"), tall ? 18.0f : 12.0f, theme.accent);
         } else if (info != nullptr) {
-            line(titleOf(*info), 12.0f, kDanger);
+            line(titleOf(*info), tall ? 18.0f : 12.0f, kDanger);
         }
 
         // Above the buttons: the description of a new save, making a quick
         // save permanent, or why there's nothing to save to.
-        float actionHeight = ui.dp(39.0f);
+        float actionHeight = ui.dp(tall ? 52.0f : 39.0f);
+        float smallSize = ui.dp(tall ? 15.0f : 12.0f);
         MuiRect action = { inner.x, inner.bottom() - actionHeight, inner.w, actionHeight };
-        MuiRect above = { inner.x, action.y - ui.dp(41.0f), inner.w, ui.dp(35.0f) };
+        MuiRect above = tall ? MuiRect { inner.x, action.y - ui.dp(54.0f), inner.w, ui.dp(44.0f) } : MuiRect { inner.x, action.y - ui.dp(41.0f), inner.w, ui.dp(35.0f) };
 
         if (saving && isNew) {
             muiFillRoundRect(above, ui.dp(5.0f), kBackground);
@@ -642,7 +728,7 @@ namespace {
             // Empty: the place the list will show instead.
             bool empty = description.empty();
             std::u32string value = empty ? muiPlaceText(mapGetCurrentMap(), gElevation) : description;
-            muiDrawTextAligned(value, above.inset(ui.dp(8.0f), 0.0f), ui.dp(12.0f), empty ? theme.textDim : theme.accent, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(value, above.inset(ui.dp(8.0f), 0.0f), smallSize, empty ? theme.textDim : theme.accent, MuiAlign::Start, MuiAlign::Center);
 
             if (ui.touchable("loadsave.description", above)) {
                 descriptionBeforeEdit = description;
@@ -655,16 +741,16 @@ namespace {
                     pendingPermanent = selected;
                 }
             } else {
-                muiDrawTextAligned(text(kTextNoRoom, "No room for a new save"), above, ui.dp(12.0f), theme.textDim, MuiAlign::Center, MuiAlign::Center);
+                muiDrawTextAligned(text(kTextNoRoom, "No room for a new save"), above, smallSize, theme.textDim, MuiAlign::Center, MuiAlign::Center);
             }
         } else if (saving && newSlot == -1) {
-            muiDrawTextAligned(text(kTextNoRoom, "No room for a new save"), above, ui.dp(12.0f), theme.textDim, MuiAlign::Center, MuiAlign::Center);
+            muiDrawTextAligned(text(kTextNoRoom, "No room for a new save"), above, smallSize, theme.textDim, MuiAlign::Center, MuiAlign::Center);
         }
 
         // Delete at the left of the main action (alone for broken saves).
         bool canAct = saving ? newSlot != -1 : info != nullptr && info->state == MobileSaveSlotState::Occupied;
         if (info != nullptr) {
-            float deleteWidth = canAct ? std::min(ui.dp(155.0f), action.w * 0.38f) : action.w;
+            float deleteWidth = canAct ? std::min(ui.dp(tall ? 170.0f : 155.0f), action.w * 0.38f) : action.w;
             MuiRect deleteButton = { action.x, action.y, deleteWidth, action.h };
             bool pressed = false;
             if (ui.touchable("loadsave.delete", deleteButton, &pressed)) {
@@ -672,9 +758,9 @@ namespace {
             }
             muiFillRoundRect(deleteButton, ui.dp(6.0f), pressed ? kDangerPressed : kDangerFill);
             muiStrokeRoundRect(deleteButton, ui.dp(6.0f), ui.dp(1.0f), kDanger);
-            muiDrawTextAligned(text(kTextDelete, "Delete"), deleteButton, ui.dp(13.0f), kDanger, MuiAlign::Center, MuiAlign::Center);
+            muiDrawTextAligned(text(kTextDelete, "Delete"), deleteButton, ui.dp(tall ? 16.0f : 13.0f), kDanger, MuiAlign::Center, MuiAlign::Center);
 
-            action.x = deleteButton.right() + ui.dp(6.0f);
+            action.x = deleteButton.right() + ui.dp(tall ? 10.0f : 6.0f);
             action.w = inner.right() - action.x;
         }
 

@@ -657,7 +657,9 @@ namespace {
         explicit PreferencesScreen(bool inGame);
         ~PreferencesScreen() override;
 
-        bool coversScreen() override { return true; }
+        // From the title menu the window is over its picture.
+        bool coversScreen() override { return !muiUsesWindows() || !inGame; }
+        bool isGameScreen() override { return true; }
         void build(MuiContext& ui) override;
         void back() override;
 
@@ -669,6 +671,8 @@ namespace {
         Values edited;
         // Opened from the game, not the main menu: there's a map to preview.
         bool inGame;
+        // Tablet windows: the roomy sizes (`muiIsTallContent`).
+        bool tall = false;
         Section section = Section::Game;
         bool resetScroll = true;
         // The about section's lines, wrapped for [aboutWidth].
@@ -797,18 +801,19 @@ namespace {
     void PreferencesScreen::build(MuiContext& ui)
     {
         const MuiTheme& theme = muiTheme();
-        muiFillRect(ui.screenRect(), kBackground);
+        // Opaque over the map, or a window over it (the title menu's
+        // picture).
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground, !inGame);
+        const MuiRect& content = frame.content;
 
-        MuiRect content;
-        MuiRect rail;
-        muiDialogLayout(ui, &content, &rail);
-
-        if (muiGameScreenTabs(ui, rail, "prefs", MuiGameScreenTab::None, false) == MuiGameScreenTab::Back) {
+        if (muiGameScreenTabs(ui, frame.tabs, "prefs", MuiGameScreenTab::None, false) == MuiGameScreenTab::Back || frame.tappedOutside) {
             back();
         }
 
-        float gap = ui.dp(8.0f);
-        float listWidth = std::max(ui.dp(130.0f), content.w * 0.22f);
+        // Tablet windows: the roomy sizes.
+        tall = muiIsTallContent(ui, content);
+        float gap = ui.dp(tall ? 12.0f : 8.0f);
+        float listWidth = tall ? std::floor(content.w * 0.26f) : std::max(ui.dp(130.0f), content.w * 0.22f);
         MuiRect list = { content.x, content.y, listWidth, content.h };
         MuiRect panel = { list.right() + gap, content.y, content.right() - list.right() - gap, content.h };
 
@@ -844,7 +849,7 @@ namespace {
 
         muiFillRoundRect(list, ui.dp(7.0f), kPanel);
         int current = static_cast<int>(std::find(shown.begin(), shown.end(), section) - shown.begin());
-        int chosen = muiSectionList(ui, "prefs.sections", list, labels, current, marked);
+        int chosen = muiSectionList(ui, "prefs.sections", list, labels, current, marked, tall);
         if (chosen != current && chosen >= 0 && chosen < static_cast<int>(shown.size())) {
             section = shown[chosen];
             resetScroll = true;
@@ -856,7 +861,7 @@ namespace {
         // Settings over the buttons.
         muiFillRoundRect(panel, ui.dp(7.0f), kPanel);
         muiStrokeRoundRect(panel, ui.dp(7.0f), ui.dp(1.0f), theme.panelBorder);
-        MuiRect inner = panel.inset(ui.dp(8.0f));
+        MuiRect inner = tall ? panel.inset(ui.dp(18.0f), ui.dp(14.0f)) : panel.inset(ui.dp(8.0f));
         if (section == Section::Files) {
             buildFiles(ui, inner);
             return;
@@ -865,12 +870,12 @@ namespace {
             buildAbout(ui, inner);
             return;
         }
-        float buttonHeight = ui.dp(40.0f);
+        float buttonHeight = ui.dp(tall ? 52.0f : 40.0f);
         MuiRect buttons = { inner.x, inner.bottom() - buttonHeight, inner.w, buttonHeight };
         MuiRect rowsRect = { inner.x, inner.y, inner.w, buttons.y - gap - inner.y };
         buildRows(ui, rowsRect);
 
-        float buttonGap = ui.dp(8.0f);
+        float buttonGap = ui.dp(tall ? 12.0f : 8.0f);
         MuiRect reset = { buttons.x, buttons.y, (buttons.w - buttonGap) / 2.0f, buttons.h };
         MuiRect apply = { reset.right() + buttonGap, buttons.y, reset.w, buttons.h };
         if (ui.button("prefs.reset", reset, muiDecodeGameText(muiText(kTextResetAll, "Reset all")))) {
@@ -1115,10 +1120,10 @@ namespace {
 
     void PreferencesScreen::buildRows(MuiContext& ui, const MuiRect& rect)
     {
-        float rowHeight = ui.dp(50.0f);
-        float headerHeight = ui.dp(30.0f);
+        float rowHeight = ui.dp(tall ? 64.0f : 50.0f);
+        float headerHeight = ui.dp(tall ? 36.0f : 30.0f);
         bool showPreview = section == Section::Display && previewValid;
-        float previewSpace = showPreview ? std::min(rect.h * 0.45f, ui.dp(130.0f)) + ui.dp(8.0f) : 0.0f;
+        float previewSpace = showPreview ? std::min(rect.h * 0.45f, ui.dp(tall ? 210.0f : 130.0f)) + ui.dp(tall ? 12.0f : 8.0f) : 0.0f;
 
         float contentHeight = previewSpace;
         for (const Row& row : rows) {
@@ -1170,7 +1175,7 @@ namespace {
         std::u32string label = muiDecodeGameText(muiText(row.textId, row.fallback));
 
         if (row.kind == RowKind::Header) {
-            muiDrawTextAligned(label, { rect.x + ui.dp(4.0f), rect.y + ui.dp(8.0f), rect.w, rect.h - ui.dp(8.0f) }, ui.dp(12.0f), theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(label, { rect.x + ui.dp(4.0f), rect.y + ui.dp(8.0f), rect.w, rect.h - ui.dp(8.0f) }, ui.dp(tall ? 14.0f : 12.0f), theme.textDim, MuiAlign::Start, MuiAlign::Center);
             return;
         }
 
@@ -1179,13 +1184,14 @@ namespace {
         // Label: a dot when changed, the origin badge, a note under it.
         // Choices get more room (several labels side by side).
         float controlWidth = row.kind == RowKind::Choice ? std::min(rect.w * 0.6f, ui.dp(400.0f)) : std::min(rect.w * 0.48f, ui.dp(300.0f));
-        MuiRect control = { rect.right() - controlWidth, rect.y + ui.dp(8.0f), controlWidth, rect.h - ui.dp(16.0f) };
+        float controlInset = ui.dp(tall ? 12.0f : 8.0f);
+        MuiRect control = { rect.right() - controlWidth, rect.y + controlInset, controlWidth, rect.h - controlInset * 2.0f };
         float x = rect.x + ui.dp(4.0f);
         float labelWidth = control.x - x - ui.dp(12.0f);
 
         bool hasNote = row.noteId != -1;
         float labelTop = rect.y + ui.dp(4.0f);
-        float labelHeight = hasNote ? ui.dp(24.0f) : rect.h - ui.dp(8.0f);
+        float labelHeight = hasNote ? ui.dp(tall ? 32.0f : 24.0f) : rect.h - ui.dp(8.0f);
         if (changed(row)) {
             float dot = ui.dp(4.0f);
             muiFillCircle(x + dot, labelTop + labelHeight / 2.0f, dot, kChanged);
@@ -1203,14 +1209,15 @@ namespace {
             badge = U"CE";
         }
 
-        float badgeSize = ui.dp(10.0f);
+        float badgeSize = ui.dp(tall ? 12.0f : 10.0f);
         float badgeWidth = badge.empty() ? 0.0f : muiTextWidth(badge, badgeSize) + ui.dp(10.0f);
-        float labelSize = muiFitTextSize(label, labelRect.w - (badge.empty() ? 0.0f : badgeWidth + ui.dp(6.0f)), ui.dp(14.0f), ui.dp(11.0f));
+        float labelSize = muiFitTextSize(label, labelRect.w - (badge.empty() ? 0.0f : badgeWidth + ui.dp(6.0f)), ui.dp(tall ? 16.0f : 14.0f), ui.dp(11.0f));
         muiDrawTextAligned(label, labelRect, labelSize, theme.text, MuiAlign::Start, MuiAlign::Center);
 
         if (!badge.empty()) {
             float textWidth = muiTextWidth(label, labelSize);
-            MuiRect badgeRect = { labelRect.x + textWidth + ui.dp(6.0f), labelRect.centerY() - ui.dp(9.0f), badgeWidth, ui.dp(18.0f) };
+            float badgeHeight = ui.dp(tall ? 20.0f : 18.0f);
+            MuiRect badgeRect = { labelRect.x + textWidth + ui.dp(6.0f), labelRect.centerY() - badgeHeight / 2.0f, badgeWidth, badgeHeight };
             muiStrokeRoundRect(badgeRect, ui.dp(4.0f), ui.dp(1.0f), badgeColor);
             muiDrawTextAligned(badge, badgeRect, badgeSize, badgeColor, MuiAlign::Center, MuiAlign::Center);
         }
@@ -1218,7 +1225,7 @@ namespace {
         if (hasNote) {
             std::u32string note = muiDecodeGameText(muiText(row.noteId, row.noteFallback));
             MuiRect noteRect = { x, labelRect.bottom(), labelWidth, rect.bottom() - labelRect.bottom() - ui.dp(4.0f) };
-            muiDrawTextAligned(note, noteRect, muiFitTextSize(note, noteRect.w, ui.dp(11.0f), ui.dp(9.0f)), theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(note, noteRect, muiFitTextSize(note, noteRect.w, ui.dp(tall ? 13.0f : 11.0f), ui.dp(9.0f)), theme.textDim, MuiAlign::Start, MuiAlign::Center);
         }
 
         // By its name's text: stays when rows move (automated tests).
@@ -1249,7 +1256,7 @@ namespace {
             break;
         }
         case RowKind::Slider: {
-            float valueWidth = ui.dp(56.0f);
+            float valueWidth = ui.dp(tall ? 64.0f : 56.0f);
             MuiRect track = { control.x + ui.dp(10.0f), control.y, control.w - valueWidth - ui.dp(20.0f), control.h };
             bool dragging = false;
             float newValue = ui.slider(id, track, value, row.minValue, row.maxValue, &dragging);
@@ -1259,7 +1266,7 @@ namespace {
 
             // Numbers and the game's texts (its code page).
             std::u32string text = muiDecodeGameText(row.format(row.get(edited)).c_str());
-            muiDrawTextAligned(text, { control.right() - valueWidth, control.y, valueWidth, control.h }, ui.dp(12.0f), theme.textDim, MuiAlign::End, MuiAlign::Center);
+            muiDrawTextAligned(text, { control.right() - valueWidth, control.y, valueWidth, control.h }, ui.dp(tall ? 14.0f : 12.0f), theme.textDim, MuiAlign::End, MuiAlign::Center);
 
             // The window's samples once the finger lets go.
             if (dragging) {
