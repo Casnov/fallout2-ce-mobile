@@ -42,6 +42,10 @@ namespace {
     constexpr float kWindowTabsSlopDp = 8.0f;
     constexpr Uint8 kWindowAlpha = 247;
 
+    // Content area the screens' tall layouts need, dp.
+    constexpr float kTallMinWidthDp = 680.0f;
+    constexpr float kTallMinHeightDp = 440.0f;
+
     const MuiColor kBackground = muiRgb(0x060A07);
     const MuiColor kReactionGood = muiRgb(0x78B4FF);
     const MuiColor kReactionBad = muiRgb(0xFF6E5E);
@@ -690,12 +694,23 @@ MuiScreenFrame muiScreenFrameLayout(MuiContext& ui)
     return frame;
 }
 
-MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background)
+bool muiIsTallContent(MuiContext& ui, const MuiRect& content)
+{
+    return content.w >= ui.dp(kTallMinWidthDp) && content.h >= ui.dp(kTallMinHeightDp);
+}
+
+MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitle)
 {
     MuiScreenFrame frame = muiScreenFrameLayout(ui);
     if (!frame.windowed) {
         muiFillRect(ui.screenRect(), background);
         return frame;
+    }
+
+    // The title menu's picture instead of the world (the menu itself is
+    // closed under its screens).
+    if (overTitle) {
+        muiDrawTitleArt(ui, ui.screenRect().x);
     }
 
     ui.dim();
@@ -754,14 +769,14 @@ int muiDialogTabs(MuiContext& ui, const MuiRect& column, MuiDialogTab active, bo
     return result;
 }
 
-int muiSectionList(MuiContext& ui, const std::string& idPrefix, const MuiRect& column, const std::vector<std::u32string>& labels, int selected, const std::vector<bool>& marked)
+int muiSectionList(MuiContext& ui, const std::string& idPrefix, const MuiRect& column, const std::vector<std::u32string>& labels, int selected, const std::vector<bool>& marked, bool roomy)
 {
     const MuiTheme& theme = muiTheme();
     ui.panel(column);
 
-    MuiRect inner = column.inset(ui.dp(6.0f));
+    MuiRect inner = column.inset(ui.dp(roomy ? 8.0f : 6.0f));
     float gap = ui.dp(4.0f);
-    float height = std::min(ui.dp(46.0f), (inner.h - gap * (labels.size() - 1)) / std::max<size_t>(labels.size(), 1));
+    float height = std::min(ui.dp(roomy ? 56.0f : 46.0f), (inner.h - gap * (labels.size() - 1)) / std::max<size_t>(labels.size(), 1));
     float radius = ui.dp(theme.radius);
 
     int result = selected;
@@ -778,7 +793,7 @@ int muiSectionList(MuiContext& ui, const std::string& idPrefix, const MuiRect& c
             muiFillRoundRect(rect, radius, on ? theme.buttonPrimary : theme.buttonPressed);
         }
 
-        float padding = ui.dp(12.0f);
+        float padding = ui.dp(roomy ? 16.0f : 12.0f);
         float textX = rect.x + padding;
         if (index < marked.size() && marked[index]) {
             float dot = ui.dp(4.0f);
@@ -787,7 +802,7 @@ int muiSectionList(MuiContext& ui, const std::string& idPrefix, const MuiRect& c
         }
 
         MuiRect textRect = { textX, rect.y, rect.right() - textX - padding, rect.h };
-        float size = muiFitTextSize(labels[index], textRect.w, ui.dp(15.0f), ui.dp(11.0f));
+        float size = muiFitTextSize(labels[index], textRect.w, ui.dp(roomy ? 17.0f : 15.0f), ui.dp(11.0f));
         muiDrawTextAligned(labels[index], textRect, size, on ? theme.buttonPrimaryText : theme.text, MuiAlign::Start, MuiAlign::Center);
     }
 

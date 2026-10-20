@@ -43,11 +43,6 @@ namespace {
     // Drag payload: list index, or slot.
     constexpr int kPayloadSlotBase = 100000;
 
-    // Content area the tall layout (tablet windows, 7" and bigger) needs,
-    // dp; smaller ones (phones) get the three columns.
-    constexpr float kTallMinWidthDp = 680.0f;
-    constexpr float kTallMinHeightDp = 440.0f;
-
     // Tall layout's info rows, dp: the most spaced out ones everything fits
     // with (0 - the font's line).
     constexpr float kInfoRowSteps[] = { 22.0f, 20.0f, 0.0f };
@@ -264,7 +259,7 @@ namespace {
         }
 
         float gap = ui.dp(8.0f);
-        tall = content.w >= ui.dp(kTallMinWidthDp) && content.h >= ui.dp(kTallMinHeightDp);
+        tall = muiIsTallContent(ui, content);
         if (tall) {
             // Items on the left; the character, armor and hands over the
             // summary on the right.

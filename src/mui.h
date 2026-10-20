@@ -324,6 +324,10 @@ void muiMovieScreenRun();
 // Main menu (mui_main_menu.cc, mainmenu.cc): shown while the title menu is.
 // The tapped button is taken by the menu's loop as a `MainMenuOption`.
 void muiMainMenuShow();
+
+// The title menu's picture (fit to the screen's height at its right edge,
+// its left part fading into black up to [fadeRight]) over black.
+void muiDrawTitleArt(MuiContext& ui, float fadeRight);
 // It faded in: taps count from now (not ones made in the dark before).
 void muiMainMenuReady();
 void muiMainMenuHide();

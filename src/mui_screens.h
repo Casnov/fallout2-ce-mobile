@@ -46,12 +46,17 @@ struct MuiScreenFrame {
 };
 
 // Lays out a game screen and draws its background: phones - [background]
-// over the screen; windows - the world dimmed as under the game menu and the
-// window's panel of [background].
-MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background);
+// over the screen; windows - the world (screens of the title menu: its
+// picture, [overTitle]) dimmed as under the game menu and the window's panel
+// of [background].
+MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitle = false);
 
 // The same layout, nothing drawn (`tappedOutside` not set).
 MuiScreenFrame muiScreenFrameLayout(MuiContext& ui);
+
+// Room for the screens' tall layouts (the tablet windows' mockups, 7"
+// tablets too); smaller areas (phones) keep the compact ones.
+bool muiIsTallContent(MuiContext& ui, const MuiRect& content);
 
 // Tab column outside [rect] at its top right (screens with a card of their
 // own size, the elevator).
@@ -101,8 +106,9 @@ void muiDrawCostBadge(MuiContext& ui, const MuiRect& button, const std::u32strin
 // Sections inside one screen (settings): text buttons down [column] (ids
 // "<idPrefix>.<index>"), [selected] highlighted, [marked] ones with a dot
 // (changed). Returns the section tapped, else [selected]. Moving between
-// screens stays with the tab column at the right edge.
-int muiSectionList(MuiContext& ui, const std::string& idPrefix, const MuiRect& column, const std::vector<std::u32string>& labels, int selected, const std::vector<bool>& marked);
+// screens stays with the tab column at the right edge. [roomy] - the tablet
+// windows' sizes.
+int muiSectionList(MuiContext& ui, const std::string& idPrefix, const MuiRect& column, const std::vector<std::u32string>& labels, int selected, const std::vector<bool>& marked, bool roomy = false);
 
 // Where [map] / [elevation] is: "city · map" as the game names them (empty
 // for an unknown map).

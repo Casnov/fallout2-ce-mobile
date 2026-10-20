@@ -58,7 +58,6 @@ namespace {
         int continueSlot = -1;
         std::u32string continuePlace;
 
-        void buildArt(MuiContext& ui, float buttonsRight);
         void buildButtons(MuiContext& ui, const MuiRect& column);
         void buildFooter(MuiContext& ui, const MuiRect& rect);
     };
@@ -90,46 +89,12 @@ namespace {
 
     void MainMenuScreen::build(MuiContext& ui)
     {
-        MuiRect screen = ui.screenRect();
-        muiFillRect(screen, kBackground);
-
         MuiRect safe = ui.safeRect();
         float margin = ui.dp(24.0f);
         float width = std::min(ui.dp(300.0f), safe.w * 0.42f);
         MuiRect column = { safe.x + margin, safe.y + margin, width, safe.h - margin * 2.0f };
-        buildArt(ui, column.right() + margin);
+        muiDrawTitleArt(ui, column.right() + margin);
         buildButtons(ui, column);
-    }
-
-    void MainMenuScreen::buildArt(MuiContext& ui, float buttonsRight)
-    {
-        MuiRect screen = ui.screenRect();
-        // The high resolution menu picture (f2_res.dat) has no button plates.
-        int width;
-        int height;
-        int left = 0;
-        SDL_Texture* texture = muiPictureTexture(InterfaceFrmId("HR_MAINMENU.FRM"), &width, &height);
-        if (texture == nullptr) {
-            texture = muiPictureTexture(FrmId(InterfaceFrameId::MainMenuBackgroundImage), &width, &height);
-            left = kVanillaArtLeft;
-        }
-        if (texture == nullptr || height <= 0 || width <= left) {
-            return;
-        }
-
-        SDL_Rect source = { left, 0, width - left, height };
-        float scale = screen.h / height;
-        MuiRect rect = { screen.right() - source.w * scale, screen.y, source.w * scale, screen.h };
-        muiDrawTexturePart(texture, source, rect);
-
-        // Its left edge fades into the background: a narrow strip, or up to
-        // the buttons when the picture goes under them.
-        float fadeWidth = std::max(rect.w * 0.08f, buttonsRight - rect.x);
-        MuiRect fadeRect = { rect.x, rect.y, std::min(fadeWidth, rect.w), rect.h };
-        muiFillHorizontalGradient(fadeRect, kBackground, kBackground.withAlpha(0));
-        if (rect.x > screen.x) {
-            muiFillRect({ screen.x, screen.y, rect.x - screen.x, screen.h }, kBackground);
-        }
     }
 
     void MainMenuScreen::buildButtons(MuiContext& ui, const MuiRect& column)
@@ -219,6 +184,39 @@ namespace {
     MainMenuScreen* gMainMenuScreen = nullptr;
 
 } // namespace
+
+void muiDrawTitleArt(MuiContext& ui, float fadeRight)
+{
+    MuiRect screen = ui.screenRect();
+    muiFillRect(screen, kBackground);
+
+    // The high resolution menu picture (f2_res.dat) has no button plates.
+    int width;
+    int height;
+    int left = 0;
+    SDL_Texture* texture = muiPictureTexture(InterfaceFrmId("HR_MAINMENU.FRM"), &width, &height);
+    if (texture == nullptr) {
+        texture = muiPictureTexture(FrmId(InterfaceFrameId::MainMenuBackgroundImage), &width, &height);
+        left = kVanillaArtLeft;
+    }
+    if (texture == nullptr || height <= 0 || width <= left) {
+        return;
+    }
+
+    SDL_Rect source = { left, 0, width - left, height };
+    float scale = screen.h / height;
+    MuiRect rect = { screen.right() - source.w * scale, screen.y, source.w * scale, screen.h };
+    muiDrawTexturePart(texture, source, rect);
+
+    // Its left edge fades into the background: a narrow strip, or up to
+    // the buttons when the picture goes under them.
+    float fadeWidth = std::max(rect.w * 0.08f, fadeRight - rect.x);
+    MuiRect fadeRect = { rect.x, rect.y, std::min(fadeWidth, rect.w), rect.h };
+    muiFillHorizontalGradient(fadeRect, kBackground, kBackground.withAlpha(0));
+    if (rect.x > screen.x) {
+        muiFillRect({ screen.x, screen.y, rect.x - screen.x, screen.h }, kBackground);
+    }
+}
 
 void muiMainMenuShow()
 {
