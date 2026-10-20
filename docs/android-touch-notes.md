@@ -617,7 +617,22 @@ every screen on the new scalable UI, visual style/textures later via theme).
   moved 12 dp from where the menu opened).
 - Widgets also: `scroll` (inertial, child ids `<id>.`), `dragSource` /
   `dragging` / `dropped` (drag starts on a sideways move or a 350 ms hold),
-  `slider`, long press in `touchable` (500 ms).
+  `slider`, long press in `touchable` (500 ms). Every scroll area whose
+  content doesn't fit gets a thin bar along its far edge and a light fade
+  at each edge with more beyond; `scroll` keeps them for the frame and
+  `drawScrollMarks` draws them over the content (before `dim`, after each
+  screen's build), touches go through.
+- Item grids take the column count keeping their cells nearest one size
+  (`muiItemCellSize`: 68 dp, 88 in the tablet windows' tall layouts;
+  `muiItemColumns`); barter picks its side columns the same way (4/1/1/4
+  on a 20:9 phone, 3/1/1/3 in a tablet window). The right side of loot and
+  barter tells what is carried like the left: weight / carry weight of
+  critters (red above it), size / capacity of containers
+  (`muiCarriedText`, the game's inventory rule).
+- Tablets: `[touch] tablet_tap_outside` (on by default, the "Close windows
+  by tapping outside" row shown while windows are on) - only the game
+  screens' windows; small panels (game menu, called shot, action list, use
+  item) always close by a tap aside.
 - Dialog tabs (`muiDialogTabs`, right edge, same place on every dialog
   screen): Talk / Barter (traders only) / History. Talk sends `t`, barter `b`,
   history opens the talk screen's review panel.
