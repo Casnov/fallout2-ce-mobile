@@ -3909,8 +3909,10 @@ static void inventoryBuildSummary(InventorySummary* summary)
 
     for (int index = 0; index < 2; index += 1) {
         std::string* lines = summary->hands[index];
+        std::vector<InventoryTextPart>* parts = summary->handParts[index];
         for (int line = 0; line < 3; line++) {
             lines[line].clear();
+            parts[line].clear();
         }
 
         Object* item = itemsInHands[index];
@@ -3921,6 +3923,7 @@ static void inventoryBuildSummary(InventorySummary* summary)
             messageListItem.num = 14;
             if (messageListGetItem(&gInventoryMessageList, &messageListItem)) {
                 lines[0] = messageListItem.text;
+                parts[0] = { { lines[0], false } };
             }
 
             // Unarmed dmg:
@@ -3953,6 +3956,10 @@ static void inventoryBuildSummary(InventorySummary* summary)
                     messageListItem.text,
                     bonusDamage + minDamage,
                     bonusDamage + meleeDamage + maxDamage);
+                parts[1] = {
+                    { messageListItem.text, true },
+                    { std::to_string(bonusDamage + minDamage) + "-" + std::to_string(bonusDamage + meleeDamage + maxDamage), false },
+                };
             }
 
             lines[1] = formattedText;
@@ -3960,6 +3967,7 @@ static void inventoryBuildSummary(InventorySummary* summary)
         }
 
         lines[0] = itemGetName(item);
+        parts[0] = { { lines[0], false } };
 
         ItemType itemType = itemGetType(item);
         if (itemType != ITEM_TYPE_WEAPON) {
@@ -3968,6 +3976,7 @@ static void inventoryBuildSummary(InventorySummary* summary)
                 messageListItem.num = 18;
                 if (messageListGetItem(&gInventoryMessageList, &messageListItem)) {
                     lines[1] = messageListItem.text;
+                    parts[1] = { { lines[1], true } };
                 }
             }
             continue;
@@ -3987,8 +3996,20 @@ static void inventoryBuildSummary(InventorySummary* summary)
             }
         }
 
-        inventoryFormatWeaponDamage(_stack[0], item, hitMode, formattedText, sizeof(formattedText), nullptr);
+        std::string damage;
+        int range = inventoryFormatWeaponDamage(_stack[0], item, hitMode, formattedText, sizeof(formattedText), &damage);
         lines[1] = formattedText;
+        if (!lines[1].empty()) {
+            messageListItem.num = 15; // Dmg:
+            if (messageListGetItem(&gInventoryMessageList, &messageListItem)) {
+                parts[1] = { { messageListItem.text, true }, { damage, false } };
+            }
+            messageListItem.num = 16; // Rng:
+            if (range != -1 && messageListGetItem(&gInventoryMessageList, &messageListItem)) {
+                parts[1].push_back({ messageListItem.text, true });
+                parts[1].push_back({ std::to_string(range), false });
+            }
+        }
 
         if (ammoGetCapacity(item) > 0) {
             const ProtoId ammoTypeProtoId = weaponGetAmmoTypeProtoId(item);
@@ -4003,16 +4024,19 @@ static void inventoryBuildSummary(InventorySummary* summary)
                         int capacity = ammoGetCapacity(item);
                         int quantity = ammoGetQuantity(item);
                         snprintf(formattedText, sizeof(formattedText), "%s %d/%d %s", messageListItem.text, quantity, capacity, ammoName);
+                        parts[2] = { { messageListItem.text, true }, { std::to_string(quantity) + "/" + std::to_string(capacity) + " " + ammoName, false } };
                     } else {
                         int capacity = ammoGetCapacity(item);
                         int quantity = ammoGetQuantity(item);
                         snprintf(formattedText, sizeof(formattedText), "%s %d/%d", messageListItem.text, quantity, capacity);
+                        parts[2] = { { messageListItem.text, true }, { std::to_string(quantity) + "/" + std::to_string(capacity), false } };
                     }
                 }
             } else {
                 int capacity = ammoGetCapacity(item);
                 int quantity = ammoGetQuantity(item);
                 snprintf(formattedText, sizeof(formattedText), "%s %d/%d", messageListItem.text, quantity, capacity);
+                parts[2] = { { std::to_string(quantity) + "/" + std::to_string(capacity), false } };
             }
 
             lines[2] = formattedText;

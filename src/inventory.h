@@ -319,6 +319,12 @@ struct InventoryInfoRow {
     std::string value;
 };
 
+// A label (inventry.msg) or a value of a summary line, to draw them apart.
+struct InventoryTextPart {
+    std::string text;
+    bool label;
+};
+
 // Character summary of the inventory window (texts as the game shows them).
 struct InventorySummary {
     std::string name;
@@ -328,6 +334,9 @@ struct InventorySummary {
     InventoryInfoRow defense[7];
     // Item name (or "No item"), damage/range, ammo of each hand.
     std::string hands[2][3];
+    // The same lines in labels and values (the name is a value, "(Not
+    // worn)" a label).
+    std::vector<InventoryTextPart> handParts[2][3];
     std::string weight;
     bool encumbered;
 };
