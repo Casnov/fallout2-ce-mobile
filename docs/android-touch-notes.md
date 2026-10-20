@@ -591,9 +591,20 @@ every screen on the new scalable UI, visual style/textures later via theme).
   like the game menu's: no band around the window (its 14 dp padding keeps
   the buttons off the edge), only 8 dp past the frameless tabs; the area is
   marked `window.tap_area` for autotests. The elevator keeps its card and
-  puts Back next to it (`muiTabsBeside`). Done so far: inventory, elevator.
-  Screens pick their layout by the content area, not the device: the
-  inventory's tall one (680x440 dp and more: every tablet window) has the
+  puts Back next to it (`muiTabsBeside`). Windows: inventory, character
+  (creation too), Pip-Boy, automap, talk, barter, loot, save/load,
+  settings, the character selector. Screens of the title menu (selector,
+  creation, its load and settings) are windows over its picture
+  (`muiScreenFrame(..., overTitle)`, `muiDrawTitleArt`; the menu itself is
+  closed under them). Creation and talk take no tap outside (Back would
+  cancel the character; talk has none).
+  Screens pick their layout by the content area, not the device
+  (`muiIsTallContent`: 680x440 dp and more - every tablet window, phones
+  never): the roomy sizes of the windows' mockups (bigger rows, buttons,
+  text; settings' sections 56 dp, save rows with thumbnails, character's
+  stats tab as SPECIAL rows over conditions and derived stats in two
+  columns, talk's speaker on top of one list of the reply and the answers,
+  the selector's stats in one column). The inventory's tall one has the
   items on the left and the character, armor and hands over the summary on
   the right in the mockup's proportions, the summary in two columns
   (SPECIAL with `statGetName`'s full names next to hit points, armor class
