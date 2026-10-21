@@ -23,7 +23,7 @@ constexpr float kButton = 44.0f;
 // Top left: menu, quick save/load. Top right: inventory, character, Pip-Boy,
 // map. Top center: indicators. Left edge: skills, highlight, sneak. Bottom
 // left: log. Bottom right:
-// AP/HP, attack modes, swap hands and weapon. Right edge (combat only): end
+// AP/HP, actions (attack modes, reload / use, start combat), the two hands. Right edge (combat only): end
 // turn and end combat, kept between top right and bottom right groups.
 static const HudLayout kLandscapeLayout = {
     8.0f,
@@ -45,7 +45,7 @@ static const HudLayout kLandscapeLayout = {
             {
                 { { HudElementId::Status, kHudFill, 22.0f } },
                 { { HudElementId::Modes, kHudFill, 41.0f } },
-                { { HudElementId::SwapHands, kButton, 60.0f }, { HudElementId::Weapon, 168.0f, 60.0f } },
+                { { HudElementId::HandLeft, 118.0f, 64.0f }, { HudElementId::HandRight, 118.0f, 64.0f } },
             },
             false, 6.0f },
         { HudGroupId::Indicators, HudAnchor::Top, HudFlow::Rows, HudAlign::Center,

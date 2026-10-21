@@ -26,6 +26,10 @@ enum class GameCommandType {
     SwapHands,
     // Active item's action (the bar's item button).
     UseItem,
+    // The active weapon reloaded, its attack mode kept.
+    Reload,
+    // Combat begun without an attack (the game's A key).
+    StartCombat,
     QuickSave,
     QuickLoad,
     // Taken by the combat loop (Space, Enter).

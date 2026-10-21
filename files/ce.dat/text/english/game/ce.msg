@@ -297,6 +297,9 @@
 {387}{}{Auto: tablet layouts in windows where they fit}
 {388}{}{Phone}
 {389}{}{Tablet}
+{390}{}{Start combat}
+{391}{}{Reload}
+{392}{}{Use}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

@@ -297,6 +297,9 @@
 {387}{}{Авто: планшетная в окнах, где помещается}
 {388}{}{Телефонная}
 {389}{}{Планшетная}
+{390}{}{Начать бой}
+{391}{}{Перезарядить}
+{392}{}{Применить}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

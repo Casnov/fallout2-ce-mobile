@@ -74,7 +74,7 @@ namespace {
             }
         }
 
-        for (HudElementId id : { HudElementId::EndTurn, HudElementId::EndCombat, HudElementId::Status, HudElementId::Modes, HudElementId::Weapon }) {
+        for (HudElementId id : { HudElementId::EndTurn, HudElementId::EndCombat, HudElementId::Status, HudElementId::Modes, HudElementId::HandLeft }) {
             if (touchHudGetElementRect(id, &rect) && rect.w > 0.0f) {
                 right = std::min(right, rect.x - gap);
             }

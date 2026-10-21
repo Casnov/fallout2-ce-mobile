@@ -45,7 +45,7 @@ enum class HudGroupId {
     Tools, // skills, highlight, sneak
     Log, // message log button
     Combat, // end turn, end combat
-    Weapon, // status, attack modes, swap hands, weapon
+    Weapon, // status, actions, the two hands
     Indicators, // SNEAK, LEVEL, POISONED, ...
     Count,
 };
@@ -65,9 +65,9 @@ enum class HudElementId {
     EndTurn,
     EndCombat,
     Status, // AP and HP
-    Modes, // attack modes strip
-    SwapHands,
-    Weapon,
+    Modes, // actions strip: attack modes, reload / use, start combat
+    HandLeft, // hand slots (a tap on the other one swaps hands)
+    HandRight,
     Indicators,
     // Party Orders mod: list of its orders.
     PartyOrders,

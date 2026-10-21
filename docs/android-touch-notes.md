@@ -207,15 +207,33 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
     outlined once a second, off clears item outlines. Not the sfall script:
     it made the camera stutter and only worked while held;
   - log.
-- Weapon group (status, modes, swap hands, weapon) sits on a translucent
-  terminal panel (`HudGroupSpec::padding`, framed groups). Weapon button:
-  item inventory art, action name (top right), AP cost (bottom left),
-  crosshair when aimed (bottom right), ammo bar at the right edge; data from
-  `interfaceGetItemButtonInfo`, the same description the bar's item button is
-  drawn from. Attack modes strip: `interfaceGetAvailableItemActions` (same
-  rules as the right click cycle), chips show mode names, aimed modes are a
-  crosshair right after their base mode, reload is an icon; strip width is
-  fixed, overflow shows arrow buttons.
+- Weapon group sits on a translucent terminal panel (`HudGroupSpec::padding`,
+  framed groups) in three rows: status (AP and HP), actions, the two hands.
+  - Hands (`HandLeft`, `HandRight`, `interfaceGetHandInfo`): both always
+    shown, in their places; the active one framed, the other dimmed. A tap
+    on the other one is the bar's swap (free), on the active one nothing; a
+    long press shows the name and ammo ("10mm pistol - 12/12, 10mm JHP") as
+    the other buttons' names. A slot: the item's art (bare hands: fist,
+    boot) and name under it (two lines at most, raised off the bottom edge
+    over the art's lower part), a weapon's rounds (size small, empty red)
+    over the loaded ammo's inventory art beside the art - the ammo's type
+    told by its look.
+  - Actions strip (`buildModes`): in combat the active weapon's attack modes
+    (`interfaceGetAvailableItemActions`, the right click cycle's rules: the
+    game's names, aimed ones a crosshair) with their AP
+    (`interfaceGetItemActionCost`), its reload (only when the game offers
+    it: the magazine not full) and a non-weapon item's use; out of combat,
+    named, "Start combat" (`GameCommandType::StartCombat`, the A key: the
+    bar's weapon button starts combat so too) and the reload or use. Reload
+    (`interfaceReloadCurrentWeapon`) and use act at once, the attack mode
+    kept. Centered while they fit, else the strip scrolls sideways with a
+    position bar and fades, the chosen mode (an empty weapon's reload)
+    brought into view.
+  - Colors as the inventory's: the accent for what is tapped and the icons
+    (heart, lightning, mode names), the values' color for every number (HP,
+    AP, costs, rounds) and the item's name, dim for the secondary (the
+    magazine's size), state colors over them (HP yellow and red, an empty
+    weapon's reload orange, no rounds red); no white.
 - Party orders (Party Orders mod, `mods/party_orders.ini`): button on top of
   the left column, only with the mod installed and a living party member on
   the map. It opens the reusable action list (`muiShowActionList`,
@@ -1265,10 +1283,10 @@ screen).
 ## Attack modes and reload (resolved)
 
 The original hides them in the weapon button's right click (`N` cycles
-primary -> aimed -> secondary -> aimed -> reload). The touch HUD shows them
-as an attack-mode strip next to the weapon button (`touch_hud.cc`: the
-weapon's modes, reload as an icon, fixed width, scrolls sideways), plus
-end turn / end combat, swap hands, sneak and quick save/load buttons.
+primary -> aimed -> secondary -> aimed -> reload), and its weapon button
+starts combat out of it. The touch HUD shows the modes with their AP over
+the two hands in combat only, reload as its own action, and starts combat
+with "Start combat" (the A key), see the weapon group above.
 
 ## Testing
 

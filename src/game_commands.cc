@@ -7,6 +7,7 @@
 #include "actions.h"
 #include "automap.h"
 #include "character_editor.h"
+#include "combat.h"
 #include "debug.h"
 #include "display_monitor.h"
 #include "game.h"
@@ -81,6 +82,10 @@ static const char* gameCommandName(GameCommandType type)
         return "swap hands";
     case GameCommandType::UseItem:
         return "use item";
+    case GameCommandType::Reload:
+        return "reload";
+    case GameCommandType::StartCombat:
+        return "start combat";
     case GameCommandType::QuickSave:
         return "quick save";
     case GameCommandType::QuickLoad:
@@ -164,6 +169,18 @@ void gameCommandExecute(const GameCommand& command, bool isInCombatMode)
     case GameCommandType::UseItem:
         if (interfaceBarEnabled()) {
             _intface_use_item();
+        }
+        break;
+    case GameCommandType::Reload:
+        if (interfaceBarEnabled()) {
+            interfaceReloadCurrentWeapon();
+        }
+        break;
+    case GameCommandType::StartCombat:
+        // As the A key: the bar's weapon button starts combat so too, with
+        // the crosshair the touch controls set on their own.
+        if (interfaceBarEnabled() && !isInCombatMode) {
+            _combat(nullptr);
         }
         break;
     case GameCommandType::QuickSave: {

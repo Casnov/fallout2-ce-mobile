@@ -28,6 +28,8 @@ enum class MuiIcon {
     Aim,
     Reload,
     Fist,
+    // Boot (bare hands' kick).
+    Kick,
     Weight,
     Back,
     // Two-way arrow around the feet: turn the character.

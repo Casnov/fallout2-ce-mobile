@@ -94,6 +94,31 @@ struct InterfaceItemButtonInfo {
 bool interfaceGetItemButtonInfo(InterfaceItemButtonInfo* info);
 bool interfaceGetCurrentItemAmmo(int* quantity, int* capacity);
 
+// CE: Each hand for the touch HUD: its item (none: the bare hand, whose
+// attack - punch, kick - names it), the weapon's magazine.
+struct InterfaceHandInfo {
+    Object* item;
+    // Inventory art of the item, invalid for bare hands.
+    FrmId itemFrmId;
+    // The hand's first attack (text art), invalid for none.
+    InterfaceFrmId attackFrmId;
+    bool disabled;
+    // Rounds and size of a weapon's magazine (capacity 0: none), the type
+    // loaded (invalid: none).
+    int ammoQuantity;
+    int ammoCapacity;
+    ProtoId ammoPid;
+};
+bool interfaceGetHandInfo(Hand hand, InterfaceHandInfo* info);
+
+// CE: AP cost of the current hand's [action] as the item button shows it,
+// -1 without one.
+int interfaceGetItemActionCost(InterfaceItemAction action);
+
+// CE: The current hand's weapon reloaded as the bar's reload action does
+// (in combat for its AP), the attack mode chosen before kept.
+void interfaceReloadCurrentWeapon();
+
 // CE: Active indicator (SNEAK, LEVEL, ..., sfall custom tags) for the touch
 // HUD, in the bar order.
 struct InterfaceIndicator {

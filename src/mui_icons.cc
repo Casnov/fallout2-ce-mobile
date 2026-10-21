@@ -319,6 +319,13 @@ namespace {
         pen.poly({ { -0.36f, 0.08f }, { 0.08f, 0.08f }, { 0.16f, 0.2f } });
     }
 
+    // Boot, toe to the right.
+    void drawKick(const Pen& pen)
+    {
+        pen.poly({ { -0.26f, -0.44f }, { 0.04f, -0.44f }, { 0.04f, 0.02f }, { 0.36f, 0.16f }, { 0.42f, 0.4f }, { -0.26f, 0.4f } }, true);
+        pen.line(-0.26f, 0.26f, 0.42f, 0.26f);
+    }
+
     // Kettlebell.
     void drawWeight(const Pen& pen)
     {
@@ -732,6 +739,9 @@ static void drawIconShapes(MuiIcon icon, float x, float y, float size, float thi
         break;
     case MuiIcon::Fist:
         drawFist(pen);
+        break;
+    case MuiIcon::Kick:
+        drawKick(pen);
         break;
     case MuiIcon::Weight:
         drawWeight(pen);
