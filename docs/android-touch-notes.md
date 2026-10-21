@@ -459,12 +459,20 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
   after talk / barter / review): the game's combat control and
   customization panels in one (`gameDialogGetPartyControlView`,
   `gameDialogQueuePartyControlAction` -> the talk loop,
-  `GAME_DIALOG_PARTY_CONTROL_EVENT`). Under the head the stats (hit
-  points, best skill, carrying, melee damage, AP; level / AC / addict with
-  sfall's PartyMemberExtraInfo) and the weapon and armor cards with "use
-  best" (the panel's own code, `partyMemberUseBestWeapon/Armor`; phones:
-  the stats at the left, the cards over each other at the right); the
-  right column only the combat settings: five dispositions in a row (0
+  `GAME_DIALOG_PARTY_CONTROL_EVENT`). Under the head one panel where talk
+  has the reply's (its name as the reply's header): the stats (hit points,
+  best skill, carrying, melee damage, AP; level / AC / addict with sfall's
+  PartyMemberExtraInfo), a line, the weapon and armor as item cells with
+  their names and "use best" (the panel's own code,
+  `partyMemberUseBestWeapon/Armor`). Windows: the stats in two columns
+  (rows up to 32 dp), the line and the hands at the panel's bottom, so
+  room left over goes between them and the stats; the hands in rows with
+  the button at the right and the
+  weapon's damage / range / ammo and the armor's class
+  (`inventoryGetWeaponParts`, `inventoryGetArmorParts`: the summary's
+  inventry.msg lines, also outside the inventory); phones: the stats at the
+  left of the line, the hands over each other at its right, "Best" under
+  the name. The right column holds only the combat settings: five dispositions in a row (0
   custom .. 4 berserk as the game's buttons: CE's `Disposition` names are
   shifted by one), each as wide as its name, then six settings one per
   row with their values (game\custom.msg), a tap opens the values; they
@@ -613,8 +621,9 @@ every screen on the new scalable UI, visual style/textures later via theme).
   text; settings' sections 56 dp, save rows with thumbnails, character's
   stats tab as SPECIAL rows over conditions and derived stats in two
   columns, talk's speaker and reply in a wider left column (460 dp, the
-  picture about 1.2 times the game's), the party member's stats there in
-  two columns over its weapon and armor cards side by side, the selector's
+  picture about 1.2 times the game's; a picture held back by the height
+  narrows the column to it), the party member's stats there in two
+  columns over its weapon and armor rows, the selector's
   stats in one column). The inventory's tall one has the
   items on the left and the character, armor and hands over the summary on
   the right in the mockup's proportions, the summary in two columns
