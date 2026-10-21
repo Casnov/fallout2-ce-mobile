@@ -1,0 +1,143 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  static-analysis:
+    name: Static analysis
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install
+        run: |
+          sudo apt update
+          sudo apt install cppcheck
+
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: cppcheck
+        run: cppcheck --std=c++17 src/
+
+  code-format:
+    name: Code format check
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Show clang-format version
+        run: |
+          clang-format --version
+
+      - name: clang-format
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "Showing PR labels..."
+            gh pr view ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" --json labels
+            echo "Checking labels on PR..."
+            if gh pr view ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" --json labels --jq '.labels[].name' | grep -q "skip-formatting"; then
+              echo "skip-formatting label found - do not raise error"
+              echo "==============================="
+              find src -type f \( -name \*.cc -o -name \*.h \) | xargs clang-format --dry-run
+              exit 0
+            fi
+            echo "skip-formatting label not found - raise error if formatting is not correct"
+          else
+            echo "Not a PR, do not check labels"
+          fi
+
+          find src -type f \( -name \*.cc -o -name \*.h \) | xargs clang-format --dry-run --Werror
+
+          echo "Code is formatted correctly"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  android:
+    name: Android
+
+    runs-on: ubuntu-latest
+    needs: [ce-dat]
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Cache cmake build
+        uses: actions/cache@v4
+        with:
+          path: os/android/app/.cxx
+          key: android-cmake-v101
+
+      - name: Setup signing config
+        if: env.KEYSTORE_FILE_BASE64 != '' && env.KEYSTORE_PROPERTIES_FILE_BASE64 != ''
+        run: |
+          cd os/android
+          echo "$KEYSTORE_FILE_BASE64" | base64 --decode > debug.keystore
+          echo "$KEYSTORE_PROPERTIES_FILE_BASE64" | base64 --decode > debug-keystore.properties
+        env:
+          KEYSTORE_FILE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_FILE_BASE64 }}
+          KEYSTORE_PROPERTIES_FILE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_PROPERTIES_FILE_BASE64 }}
+
+      - name: Build
+        run: |
+          cd os/android
+          ./gradlew assembleDebug -PabiFilters=armeabi-v7a,arm64-v8a
+
+      - name: Download ce.dat
+        uses: actions/download-artifact@v4
+        with:
+          name: ce-dat
+          path: out/dist
+
+      - name: Package
+        run: |
+          mkdir -p out/dist/fallout2-ce-android-debug
+          cp os/android/app/build/outputs/apk/debug/app-debug.apk out/dist/fallout2-ce-android-debug/fallout2-ce.apk
+          cp out/dist/ce.dat out/dist/fallout2-ce-android-debug/ce.dat
+          cp files/fallout2.cfg out/dist/fallout2-ce-android-debug/EXAMPLE_fallout2.cfg
+          cd out/dist
+          zip -r fallout2-ce-android-debug.zip fallout2-ce-android-debug
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: fallout2-ce-android-debug
+          path: out/dist/fallout2-ce-android-debug.zip
+          retention-days: 7
+
+  # The port: no "continious" release of every platform's untested build;
+  # the builds stay as CI checks (and artifacts), the tested phone APKs are
+  # released by hand.
+  
