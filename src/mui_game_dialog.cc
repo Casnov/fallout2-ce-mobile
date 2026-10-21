@@ -239,6 +239,10 @@ namespace {
         if (tall) {
             left = { content.x, content.y, std::floor(std::min(ui.dp(kTallLeftColumnDp), content.w * 0.53f)), content.h };
             headHeight = std::floor(std::min(left.w * 200.0f / 388.0f, content.h * 0.42f));
+            // A picture held back by the height takes the column with it:
+            // the reply's panel as wide as the picture, the rest to the
+            // right.
+            left.w = std::min(left.w, std::ceil(headHeight * 388.0f / 200.0f));
         } else {
             left = { content.x, content.y, (iconColumn.right() - content.x) * 0.46f, content.h };
             headHeight = std::min(left.w * 200.0f / 388.0f, left.h * 0.6f);
