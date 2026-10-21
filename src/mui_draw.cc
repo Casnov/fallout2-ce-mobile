@@ -170,7 +170,16 @@ namespace {
                 ranges[index].chardata_for_range = atlas->chars[index].data();
             }
 
-            bool packed = stbtt_PackFontRanges(&context, gFontData.data(), 0, ranges, kRangeCount) != 0;
+            // One range a call: stb_truetype (v1.26) gives a character the
+            // font lacks the data of the first one it lacked, by that one's
+            // index - an index into the range it was in, read from the
+            // current range's array (past its end when that's shorter:
+            // 0x2010.. then 0x2030..). In one call that index stays in
+            // its range.
+            bool packed = true;
+            for (int index = 0; index < kRangeCount && packed; index++) {
+                packed = stbtt_PackFontRanges(&context, gFontData.data(), 0, &ranges[index], 1) != 0;
+            }
             stbtt_PackEnd(&context);
 
             if (packed) {

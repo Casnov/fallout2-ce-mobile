@@ -571,7 +571,10 @@ every screen on the new scalable UI, visual style/textures later via theme).
   drawing). Sizes in dp: output px per dp = `hudGetScreenDensity()` *
   `hud_scale`; safe area from HUD metrics (cutout insets).
 - Text: PT Mono (OFL, `files/ce.dat/fonts/`), stb_truetype glyph atlases per
-  pixel size (`third_party/stb`); game texts are decoded by the code page
+  pixel size (`third_party/stb`), each glyph range packed by its own call
+  (stb_truetype 1.26 gives characters the font lacks the first lacking
+  one's data by its index in another range: reads past the array, a crash
+  on the phone 2026-10-21 building an atlas for a new UI size); game texts are decoded by the code page
   of `game_charset.h`: the alphabet from the game's fonts (a Cyrillic or
   Greek font draws the Latin look-alikes as Latin letters), the variant
   from `[system] language`; the fonts win when they disagree (old Russian
