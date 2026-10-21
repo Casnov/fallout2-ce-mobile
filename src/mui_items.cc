@@ -6,6 +6,7 @@
 
 #include "art.h"
 #include "critter.h"
+#include "inventory.h"
 #include "item.h"
 #include "mui_icons.h"
 #include "mui_notify.h"
@@ -174,6 +175,49 @@ void muiNotifyPartyMemberOutOfReach(Object* critter)
     char text[160];
     snprintf(text, sizeof(text), muiText(kTextOutOfReach, "%s is too far away."), critterGetName(critter));
     muiNotify(text, MuiNoticeKind::Warning);
+}
+
+float muiDrawTextParts(const std::vector<InventoryTextPart>& parts, float x, float y, float width, float lineHeight, float size, bool labelOnNewLine, bool draw)
+{
+    const MuiTheme& theme = muiTheme();
+    float space = muiTextWidth(U" ", size);
+    float lineX = 0.0f;
+    float lineY = y;
+    bool lineStart = true;
+    for (size_t index = 0; index < parts.size(); index++) {
+        const InventoryTextPart& part = parts[index];
+        std::u32string text = muiDecodeGameText(part.text.c_str());
+        MuiColor color = part.label ? theme.textDim : theme.text;
+        // The game's spacing: one space after a label, three before one.
+        float gap = lineStart ? 0.0f : (part.label ? space * 3.0f : space);
+        float textWidth = muiTextWidth(text, size);
+        if (!lineStart && ((labelOnNewLine && part.label) || lineX + gap + textWidth > width)) {
+            lineY += lineHeight;
+            lineX = 0.0f;
+            gap = 0.0f;
+            lineStart = true;
+        }
+
+        if (lineStart && textWidth > width) {
+            std::vector<std::u32string> lines = muiWrapText(text, width, size);
+            for (size_t line = 0; line < lines.size(); line++) {
+                if (draw) {
+                    muiDrawTextAligned(lines[line], { x, lineY, width, lineHeight }, size, color, MuiAlign::Start, MuiAlign::Center);
+                }
+                if (line + 1 < lines.size()) {
+                    lineY += lineHeight;
+                }
+            }
+            lineX = lines.empty() ? 0.0f : muiTextWidth(lines.back(), size);
+        } else {
+            if (draw) {
+                muiDrawTextAligned(text, { x + lineX + gap, lineY, textWidth + space, lineHeight }, size, color, MuiAlign::Start, MuiAlign::Center);
+            }
+            lineX += gap + textWidth;
+        }
+        lineStart = false;
+    }
+    return parts.empty() ? 0.0f : lineY + lineHeight - y;
 }
 
 void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pressed)

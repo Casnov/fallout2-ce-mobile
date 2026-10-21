@@ -355,6 +355,14 @@ struct InventoryItemInfo {
 
 void inventoryGetItemInfo(Object* item, InventoryItemInfo* info);
 
+// The summary's lines of [critter]'s weapon (its primary attack): damage
+// (and range), ammo; as labels and values. Also outside the inventory (the
+// party member panel).
+void inventoryGetWeaponParts(Object* critter, Object* item, std::vector<InventoryTextPart>* damage, std::vector<InventoryTextPart>* ammo);
+
+// Armor's armor class as a label and a value.
+void inventoryGetArmorParts(Object* item, std::vector<InventoryTextPart>* parts);
+
 } // namespace fallout
 
 #endif /* INVENTORY_H */

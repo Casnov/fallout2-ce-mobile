@@ -763,54 +763,6 @@ namespace {
         muiPopClip();
     }
 
-    // A summary line's labels dim and values bright, from [x, y] in [width]:
-    // a part goes on the next line where it doesn't fit (one too long for a
-    // line wraps on its own), and with [labelOnNewLine] every label after
-    // the first starts one (the tall layout's column: damage, range, ammo
-    // each on its line). Returns the height; measuring only without [draw].
-    float drawTextParts(const std::vector<InventoryTextPart>& parts, float x, float y, float width, float lineHeight, float size, bool labelOnNewLine, bool draw)
-    {
-        const MuiTheme& theme = muiTheme();
-        float space = muiTextWidth(U" ", size);
-        float lineX = 0.0f;
-        float lineY = y;
-        bool lineStart = true;
-        for (size_t index = 0; index < parts.size(); index++) {
-            const InventoryTextPart& part = parts[index];
-            std::u32string text = muiDecodeGameText(part.text.c_str());
-            MuiColor color = part.label ? theme.textDim : theme.text;
-            // The game's spacing: one space after a label, three before one.
-            float gap = lineStart ? 0.0f : (part.label ? space * 3.0f : space);
-            float textWidth = muiTextWidth(text, size);
-            if (!lineStart && ((labelOnNewLine && part.label) || lineX + gap + textWidth > width)) {
-                lineY += lineHeight;
-                lineX = 0.0f;
-                gap = 0.0f;
-                lineStart = true;
-            }
-
-            if (lineStart && textWidth > width) {
-                std::vector<std::u32string> lines = muiWrapText(text, width, size);
-                for (size_t line = 0; line < lines.size(); line++) {
-                    if (draw) {
-                        muiDrawTextAligned(lines[line], { x, lineY, width, lineHeight }, size, color, MuiAlign::Start, MuiAlign::Center);
-                    }
-                    if (line + 1 < lines.size()) {
-                        lineY += lineHeight;
-                    }
-                }
-                lineX = lines.empty() ? 0.0f : muiTextWidth(lines.back(), size);
-            } else {
-                if (draw) {
-                    muiDrawTextAligned(text, { x + lineX + gap, lineY, textWidth + space, lineHeight }, size, color, MuiAlign::Start, MuiAlign::Center);
-                }
-                lineX += gap + textWidth;
-            }
-            lineStart = false;
-        }
-        return parts.empty() ? 0.0f : lineY + lineHeight - y;
-    }
-
     // Lines of [content] width from [*y]; measuring only adds heights.
     struct InfoWriter {
         const MuiRect& content;
@@ -893,7 +845,7 @@ namespace {
         writer.separator(ui.dp(1.0f), ui.dp(4.0f), theme.panelBorder);
         for (const std::vector<InventoryTextPart>* hand : { summary.handParts[0], summary.handParts[1] }) {
             for (int line = 0; line < 3; line++) {
-                *y += drawTextParts(hand[line], content.x, *y, content.w, muiLineHeight(size), size, false, draw);
+                *y += muiDrawTextParts(hand[line], content.x, *y, content.w, muiLineHeight(size), size, false, draw);
             }
             *y += ui.dp(4.0f);
         }
@@ -966,7 +918,7 @@ namespace {
             float x = hand == 0 ? content.x : rightX;
             float lineY = top;
             for (int line = 0; line < 3; line++) {
-                lineY += drawTextParts(summary.handParts[hand][line], x, lineY, columnWidth, lineHeight, size, true, draw);
+                lineY += muiDrawTextParts(summary.handParts[hand][line], x, lineY, columnWidth, lineHeight, size, true, draw);
             }
             bottom = std::max(bottom, lineY);
         }

@@ -378,7 +378,8 @@ static void _switch_hand(Object* sourceItem, Object** targetSlot, Object** sourc
 static void _adjust_fid();
 static void inventoryRenderSummary();
 static void inventoryBuildSummary(InventorySummary* summary);
-static int inventoryFormatWeaponDamage(Object* critter, Object* item, HitMode hitMode, char* buffer, size_t size, std::string* damageOnly);
+static int inventoryFormatWeaponDamage(MessageList* messages, Object* critter, Object* item, HitMode hitMode, char* buffer, size_t size, std::string* damageOnly);
+static void inventoryWeaponParts(MessageList* messages, Object* critter, Object* item, HitMode hitMode, std::string* damageLine, std::vector<InventoryTextPart>* damage, std::string* ammoLine, std::vector<InventoryTextPart>* ammo);
 static int _inven_from_button(int keyCode, Object** outItem, Object*** outItemSlot, Object** outOwner);
 static void inventoryRenderItemDescription(const char* string);
 static void inventoryDrawCenteredText(unsigned char* buffer, int pitch, int width, int x, int y, const char* text, ColorWithFlags color);
@@ -591,6 +592,11 @@ static int _target_stack_offset[10];
 //
 // 0x59E814 inventry_message_file
 static MessageList gInventoryMessageList;
+
+// inventry.msg for what's shown outside the inventory (the party member
+// panel), loaded on first use and kept.
+static MessageList gInventoryLabelMessageList;
+static bool gInventoryLabelMessageListLoaded = false;
 
 // Current target critter or container for every nesting level (stack).
 // 0x59E81C target_stack
@@ -3996,51 +4002,7 @@ static void inventoryBuildSummary(InventorySummary* summary)
             }
         }
 
-        std::string damage;
-        int range = inventoryFormatWeaponDamage(_stack[0], item, hitMode, formattedText, sizeof(formattedText), &damage);
-        lines[1] = formattedText;
-        if (!lines[1].empty()) {
-            messageListItem.num = 15; // Dmg:
-            if (messageListGetItem(&gInventoryMessageList, &messageListItem)) {
-                parts[1] = { { messageListItem.text, true }, { damage, false } };
-            }
-            messageListItem.num = 16; // Rng:
-            if (range != -1 && messageListGetItem(&gInventoryMessageList, &messageListItem)) {
-                parts[1].push_back({ messageListItem.text, true });
-                parts[1].push_back({ std::to_string(range), false });
-            }
-        }
-
-        if (ammoGetCapacity(item) > 0) {
-            const ProtoId ammoTypeProtoId = weaponGetAmmoTypeProtoId(item);
-
-            formattedText[0] = '\0';
-
-            messageListItem.num = 17; // Ammo:
-            if (messageListGetItem(&gInventoryMessageList, &messageListItem)) {
-                if (ammoTypeProtoId.valid()) {
-                    if (ammoGetQuantity(item) != 0) {
-                        const char* ammoName = protoGetName(ammoTypeProtoId);
-                        int capacity = ammoGetCapacity(item);
-                        int quantity = ammoGetQuantity(item);
-                        snprintf(formattedText, sizeof(formattedText), "%s %d/%d %s", messageListItem.text, quantity, capacity, ammoName);
-                        parts[2] = { { messageListItem.text, true }, { std::to_string(quantity) + "/" + std::to_string(capacity) + " " + ammoName, false } };
-                    } else {
-                        int capacity = ammoGetCapacity(item);
-                        int quantity = ammoGetQuantity(item);
-                        snprintf(formattedText, sizeof(formattedText), "%s %d/%d", messageListItem.text, quantity, capacity);
-                        parts[2] = { { messageListItem.text, true }, { std::to_string(quantity) + "/" + std::to_string(capacity), false } };
-                    }
-                }
-            } else {
-                int capacity = ammoGetCapacity(item);
-                int quantity = ammoGetQuantity(item);
-                snprintf(formattedText, sizeof(formattedText), "%s %d/%d", messageListItem.text, quantity, capacity);
-                parts[2] = { { std::to_string(quantity) + "/" + std::to_string(capacity), false } };
-            }
-
-            lines[2] = formattedText;
-        }
+        inventoryWeaponParts(&gInventoryMessageList, _stack[0], item, hitMode, &lines[1], &parts[1], &lines[2], &parts[2]);
     }
 
     // Total wt:
@@ -4063,7 +4025,7 @@ static void inventoryBuildSummary(InventorySummary* summary)
 // Weapon damage (and range for ranged attacks) with [hitMode] as the summary
 // shows it: "Dmg: 5-12   Rng: 25" (inventry.msg). Returns range, or -1 when
 // the text has no range.
-static int inventoryFormatWeaponDamage(Object* critter, Object* item, HitMode hitMode, char* buffer, size_t size, std::string* damageOnly)
+static int inventoryFormatWeaponDamage(MessageList* messages, Object* critter, Object* item, HitMode hitMode, char* buffer, size_t size, std::string* damageOnly)
 {
     buffer[0] = '\0';
 
@@ -4092,7 +4054,7 @@ static int inventoryFormatWeaponDamage(Object* critter, Object* item, HitMode hi
     int shownRange = -1;
     MessageListItem messageListItem;
     messageListItem.num = 15; // Dmg:
-    if (messageListGetItem(&gInventoryMessageList, &messageListItem)) {
+    if (messageListGetItem(messages, &messageListItem)) {
         if (attackType != 4 && range <= 1) {
             // SFALL: Display bonus damage.
             if (damageModGetBonusHthDamageFix() && damageModGetDisplayBonusDamage()) {
@@ -4108,7 +4070,7 @@ static int inventoryFormatWeaponDamage(Object* critter, Object* item, HitMode hi
         } else {
             MessageListItem rangeMessageListItem;
             rangeMessageListItem.num = 16; // Rng:
-            if (messageListGetItem(&gInventoryMessageList, &rangeMessageListItem)) {
+            if (messageListGetItem(messages, &rangeMessageListItem)) {
                 // SFALL: Display bonus damage.
                 if (damageModGetDisplayBonusDamage()) {
                     // CE: There is a bug in Sfall diplaying wrong damage
@@ -4134,6 +4096,103 @@ static int inventoryFormatWeaponDamage(Object* critter, Object* item, HitMode hi
     }
 
     return shownRange;
+}
+
+// The summary's lines of a weapon held by [critter] with [hitMode]: damage
+// (and range), ammo (none without ammo) - as text and as labels and
+// values.
+static void inventoryWeaponParts(MessageList* messages, Object* critter, Object* item, HitMode hitMode, std::string* damageLine, std::vector<InventoryTextPart>* damage, std::string* ammoLine, std::vector<InventoryTextPart>* ammo)
+{
+    char formattedText[80];
+    std::string damageText;
+    int range = inventoryFormatWeaponDamage(messages, critter, item, hitMode, formattedText, sizeof(formattedText), &damageText);
+    *damageLine = formattedText;
+    damage->clear();
+    MessageListItem messageListItem;
+    if (!damageLine->empty()) {
+        messageListItem.num = 15; // Dmg:
+        if (messageListGetItem(messages, &messageListItem)) {
+            *damage = { { messageListItem.text, true }, { damageText, false } };
+        }
+        messageListItem.num = 16; // Rng:
+        if (range != -1 && messageListGetItem(messages, &messageListItem)) {
+            damage->push_back({ messageListItem.text, true });
+            damage->push_back({ std::to_string(range), false });
+        }
+    }
+
+    ammoLine->clear();
+    ammo->clear();
+    if (ammoGetCapacity(item) > 0) {
+        const ProtoId ammoTypeProtoId = weaponGetAmmoTypeProtoId(item);
+        int capacity = ammoGetCapacity(item);
+        int quantity = ammoGetQuantity(item);
+        std::string count = std::to_string(quantity) + "/" + std::to_string(capacity);
+
+        messageListItem.num = 17; // Ammo:
+        if (messageListGetItem(messages, &messageListItem)) {
+            if (ammoTypeProtoId.valid()) {
+                std::string value = quantity != 0 ? count + " " + protoGetName(ammoTypeProtoId) : count;
+                *ammoLine = std::string(messageListItem.text) + " " + value;
+                *ammo = { { messageListItem.text, true }, { value, false } };
+            }
+        } else {
+            *ammoLine = count;
+            *ammo = { { count, false } };
+        }
+    }
+}
+
+static MessageList* inventoryLabelMessageList()
+{
+    if (!gInventoryLabelMessageListLoaded) {
+        char path[COMPAT_MAX_PATH];
+        snprintf(path, sizeof(path), "%s%s", asc_5186C8, "inventry.msg");
+        if (!messageListInit(&gInventoryLabelMessageList) || !messageListLoad(&gInventoryLabelMessageList, path)) {
+            return nullptr;
+        }
+        gInventoryLabelMessageListLoaded = true;
+    }
+    return &gInventoryLabelMessageList;
+}
+
+void inventoryGetWeaponParts(Object* critter, Object* item, std::vector<InventoryTextPart>* damage, std::vector<InventoryTextPart>* ammo)
+{
+    damage->clear();
+    ammo->clear();
+    MessageList* messages = inventoryLabelMessageList();
+    if (messages == nullptr || item == nullptr || itemGetType(item) != ITEM_TYPE_WEAPON) {
+        return;
+    }
+
+    // As if the critter held the weapon (perks and traits apply), game
+    // functions take it from the hand.
+    Object* savedDude = _inven_dude;
+    Object* savedRightHand = gInventoryRightHandItem;
+    _inven_dude = critter;
+    gInventoryRightHandItem = item;
+
+    std::string damageLine;
+    std::string ammoLine;
+    inventoryWeaponParts(messages, critter, item, HIT_MODE_RIGHT_WEAPON_PRIMARY, &damageLine, damage, &ammoLine, ammo);
+
+    gInventoryRightHandItem = savedRightHand;
+    _inven_dude = savedDude;
+}
+
+void inventoryGetArmorParts(Object* item, std::vector<InventoryTextPart>* parts)
+{
+    parts->clear();
+    MessageList* messages = inventoryLabelMessageList();
+    if (messages == nullptr || item == nullptr || itemGetType(item) != ITEM_TYPE_ARMOR) {
+        return;
+    }
+
+    MessageListItem messageListItem;
+    messageListItem.num = 8; // Armor class
+    if (messageListGetItem(messages, &messageListItem)) {
+        *parts = { { messageListItem.text, true }, { std::to_string(armorGetArmorClass(item)), false } };
+    }
 }
 
 // 0x471D5C display_stats
@@ -5407,7 +5466,7 @@ void inventoryGetItemInfo(Object* item, InventoryItemInfo* info)
 
         char text[80];
         std::string damage;
-        int range = inventoryFormatWeaponDamage(critter, item, HIT_MODE_RIGHT_WEAPON_PRIMARY, text, sizeof(text), &damage);
+        int range = inventoryFormatWeaponDamage(&gInventoryMessageList, critter, item, HIT_MODE_RIGHT_WEAPON_PRIMARY, text, sizeof(text), &damage);
         info->actionPoints = weaponGetActionPointCost(critter, HIT_MODE_RIGHT_WEAPON_PRIMARY, false);
 
         gInventoryRightHandItem = savedRightHand;

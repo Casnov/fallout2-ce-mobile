@@ -13,6 +13,8 @@
 
 namespace fallout {
 
+struct InventoryTextPart;
+
 // Parts shared by the mobile UI game screens (talk, barter, later loot and
 // inventory).
 
@@ -225,6 +227,13 @@ bool muiContainerVolume(Object* owner, int* used, int* capacity);
 
 // Weight above what can be carried.
 constexpr MuiColor kMuiOverLimit = muiRgb(0xFF4A3A);
+
+// A summary line (`InventoryTextPart`s) from [x, y] in [width]: labels
+// dim, values bright; a part goes on the next line where it doesn't fit
+// (one too long for a line wraps on its own), and with [labelOnNewLine]
+// every label after the first starts one. Returns the height; measures
+// only without [draw].
+float muiDrawTextParts(const std::vector<InventoryTextPart>& parts, float x, float y, float width, float lineHeight, float size, bool labelOnNewLine, bool draw);
 
 // Item cell without the count: frame and inventory art (crisp pixels).
 void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pressed);
