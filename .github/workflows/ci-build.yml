@@ -113,7 +113,7 @@ jobs:
       - name: Build
         run: |
           cd os/android
-          ./gradlew assembleDebug -PabiFilters=armeabi-v7a
+          ./gradlew assembleDebug -PabiFilters=armeabi-v7a,arm64-v8a
 
       - name: Download ce.dat
         uses: actions/download-artifact@v4
