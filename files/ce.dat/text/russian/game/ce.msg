@@ -300,6 +300,8 @@
 {390}{}{Начать бой}
 {391}{}{Перезарядить}
 {392}{}{Применить}
+{393}{}{Цена за штуку при торговле}
+{394}{}{Справа вверху у вещи: цена одной в этой сделке}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

@@ -242,10 +242,17 @@ void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pr
     }
 }
 
-void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed)
+void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed, int price)
 {
     const MuiTheme& theme = muiTheme();
     muiDrawItemImage(ui, rect, item, pressed);
+
+    if (price >= 0) {
+        std::string label = "$" + std::to_string(price);
+        float size = ui.dp(10.0f);
+        MuiRect labelRect = { rect.x, rect.y + ui.dp(2.0f), rect.w - ui.dp(4.0f), muiLineHeight(size) };
+        muiDrawTextAligned(muiDecodeUtf8(label.c_str()), labelRect, size, theme.textDim, MuiAlign::End, MuiAlign::Start);
+    }
 
     bool money = ProtoId(item) == ItemProtoTypeId::Money;
     int amount = itemStackAmount(item, quantity);

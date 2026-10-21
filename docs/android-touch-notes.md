@@ -797,6 +797,11 @@ every screen on the new scalable UI, visual style/textures later via theme).
   first clip: the one not full, it goes first), its weight and, in barter,
   its price in this deal (`barterGetItemPrice`, the same formula as the
   table totals). So a single clip shows what lands on the table.
+- Unit price (`[enhancements] barter_unit_price`, a settings row): in a deal
+  with a trader every item cell of the four lists shows at its top right,
+  small and dim, the price the dragged item shows (`barterGetItemPrice` of
+  one: the trader's with the deal's markup, ammo's first clip); not on
+  money (its cell has the sum) nor with a party member.
 - Quantity picker (`mui_quantity.cc`, `muiQuantitySelect`, used by
   `inventoryQuantitySelect`): the stack's cell, name, value, the chosen ones'
   weight and, in a deal with a trader, price (`barterGetMovedQuantity`

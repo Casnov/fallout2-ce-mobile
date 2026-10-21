@@ -14,6 +14,8 @@
 #include "message.h"
 #include "mui_icons.h"
 #include "object.h"
+#include "proto_types.h"
+#include "settings.h"
 #include "stat.h"
 
 namespace fallout {
@@ -106,7 +108,7 @@ namespace {
         }
 
     private:
-        void buildList(MuiContext& ui, int list, int columns, const MuiRect& rect);
+        void buildList(MuiContext& ui, const BarterView& view, int list, int columns, const MuiRect& rect);
         void buildPartyTabs(MuiContext& ui, const BarterView& view, const MuiRect& rect);
         void handleTap(int list, Object* item);
         void openActionMenu(MuiContext& ui, int list, Object* item);
@@ -228,10 +230,10 @@ namespace {
         lists[LIST_BARTERER_TABLE] = muiInventoryItems(view.bartererTable, all);
         lists[LIST_BARTERER] = muiInventoryItems(view.barterer, bartererFilter);
 
-        buildList(ui, LIST_PLAYER, sideColumns, { playerX, listY, sideWidth, listHeight });
-        buildList(ui, LIST_PLAYER_TABLE, 1, { offerX, listY, unit, listHeight });
-        buildList(ui, LIST_BARTERER_TABLE, 1, { requestX, listY, unit, listHeight });
-        buildList(ui, LIST_BARTERER, sideColumns, { bartererX, listY, sideWidth, listHeight });
+        buildList(ui, view, LIST_PLAYER, sideColumns, { playerX, listY, sideWidth, listHeight });
+        buildList(ui, view, LIST_PLAYER_TABLE, 1, { offerX, listY, unit, listHeight });
+        buildList(ui, view, LIST_BARTERER_TABLE, 1, { requestX, listY, unit, listHeight });
+        buildList(ui, view, LIST_BARTERER, sideColumns, { bartererX, listY, sideWidth, listHeight });
 
         // Totals: player's weight and money (and of the shown category), table
         // prices (weights when bartering with a party member).
@@ -325,10 +327,11 @@ namespace {
         }
     }
 
-    void BarterScreen::buildList(MuiContext& ui, int list, int columns, const MuiRect& rect)
+    void BarterScreen::buildList(MuiContext& ui, const BarterView& view, int list, int columns, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
         listRects[list] = rect;
+        bool playerSide = list == LIST_PLAYER || list == LIST_PLAYER_TABLE;
 
         // Table columns are drop targets while dragging from their side.
         int dragPayload;
@@ -385,7 +388,13 @@ namespace {
                 continue;
             }
 
-            muiDrawItemCell(ui, cellRect, items[index].item, items[index].quantity, pressed);
+            // With a trader, the price of one as dragging shows it (money
+            // has its sum).
+            int price = -1;
+            if (!view.partyMemberBarter && settings.enhancements.barter_unit_price && ProtoId(items[index].item) != ItemProtoTypeId::Money) {
+                price = barterGetItemPrice(items[index].item, 1, playerSide);
+            }
+            muiDrawItemCell(ui, cellRect, items[index].item, items[index].quantity, pressed, price);
 
             if (tapped && !scrolling) {
                 handleTap(list, items[index].item);

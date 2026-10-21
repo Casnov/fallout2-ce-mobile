@@ -1533,6 +1533,7 @@ static const DevAutotestStep kDevAutotestQuickSavesSteps[] = {
     { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 40, "q02_menu" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "q03_settings", "menu.settings" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0, -0.45f, 0, 40, "q04_scrolled", "prefs.rows.253" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0, -0.3f, 0, 40, "q04b_scrolled", "prefs.rows.393" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0.15f, 0, 0, 40, "q05_more", "prefs.rows.360" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "q06_applied", "prefs.apply" },
     { DEV_AUTOTEST_ACTION_LOG_SAVES, 16, 0, 0, 1, "q07_saves" },

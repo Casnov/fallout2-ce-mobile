@@ -300,6 +300,8 @@
 {390}{}{Start combat}
 {391}{}{Reload}
 {392}{}{Use}
+{393}{}{Unit prices when trading}
+{394}{}{Top right of an item: the price of one in this deal}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

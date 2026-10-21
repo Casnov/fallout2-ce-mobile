@@ -239,8 +239,9 @@ float muiDrawTextParts(const std::vector<InventoryTextPart>& parts, float x, flo
 void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pressed);
 
 // Item cell: `muiDrawItemImage` and how many of it [quantity] of its stack
-// are (`itemStackAmount`: ammo in rounds, always, as the game shows).
-void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed);
+// are (`itemStackAmount`: ammo in rounds, always, as the game shows), at the
+// top right [price] (barter: of one in the deal; < 0: not shown).
+void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed, int price = -1);
 
 // The dragged item under the finger: its cell ([quantity] of its stack) and,
 // above, its name with how many the least part that moves is (one, ammo's

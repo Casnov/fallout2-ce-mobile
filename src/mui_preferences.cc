@@ -107,6 +107,8 @@ namespace {
     constexpr int kTextLayoutNote = 387;
     constexpr int kTextLayoutPhone = 388;
     constexpr int kTextLayoutTablet = 389;
+    constexpr int kTextBarterUnitPrice = 393;
+    constexpr int kTextBarterUnitPriceNote = 394;
     constexpr int kTextSaveCompatibility = 327;
     constexpr int kTextSaveCompatibilityNote = 328;
     constexpr int kTextSectionFiles = 336;
@@ -209,6 +211,7 @@ namespace {
         bool worldmapFollow;
         bool tacticalView;
         bool saveCompatibility;
+        bool barterUnitPrice;
         int interfaceSize;
         int windows;
         int layout;
@@ -235,6 +238,7 @@ namespace {
         values.worldmapFollow = settings.enhancements.worldmap_follow_party;
         values.tacticalView = settings.enhancements.tactical_view;
         values.saveCompatibility = settings.enhancements.save_compatibility;
+        values.barterUnitPrice = settings.enhancements.barter_unit_price;
         values.interfaceSize = settings.touch.hud_scale;
         values.windows = settings.touch.windows;
         values.layout = settings.touch.layout;
@@ -262,6 +266,7 @@ namespace {
         values.worldmapFollow = EnhancementSettings().worldmap_follow_party;
         values.tacticalView = EnhancementSettings().tactical_view;
         values.saveCompatibility = EnhancementSettings().save_compatibility;
+        values.barterUnitPrice = EnhancementSettings().barter_unit_price;
         values.interfaceSize = TouchSettings().hud_scale;
         values.windows = TouchSettings().windows;
         values.layout = TouchSettings().layout;
@@ -339,6 +344,7 @@ namespace {
         settings.enhancements.worldmap_follow_party = values.worldmapFollow;
         settings.enhancements.tactical_view = values.tacticalView;
         settings.enhancements.save_compatibility = values.saveCompatibility;
+        settings.enhancements.barter_unit_price = values.barterUnitPrice;
         settings.touch.hud_scale = values.interfaceSize;
         settings.touch.windows = values.windows;
         settings.touch.layout = values.layout;
@@ -547,6 +553,12 @@ namespace {
             Row row { Section::Game, RowKind::Toggle, kTextSaveCompatibility, "Save compatibility", Origin::Port, kTextSaveCompatibilityNote, "Marks saves made with other game files or mods" };
             row.get = [](const Values& values) { return values.saveCompatibility ? 1.0f : 0.0f; };
             row.set = [](Values& values, float value) { values.saveCompatibility = value != 0.0f; };
+            rows.push_back(row);
+        }
+        {
+            Row row { Section::Game, RowKind::Toggle, kTextBarterUnitPrice, "Unit prices when trading", Origin::Port, kTextBarterUnitPriceNote, "Top right of an item: the price of one in this deal" };
+            row.get = [](const Values& values) { return values.barterUnitPrice ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.barterUnitPrice = value != 0.0f; };
             rows.push_back(row);
         }
         {

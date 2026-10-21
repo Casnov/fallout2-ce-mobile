@@ -315,6 +315,9 @@ struct EnhancementSettings {
     // Touch controls: the combat's tactical view button (tactical_view.h);
     // whether the view is on is [touch] tactical_view.
     bool tactical_view = true;
+    // Mobile barter with a trader: each item cell shows the price of one in
+    // this deal (`barterGetItemPrice`, as the dragged item shows it).
+    bool barter_unit_price = true;
 };
 
 // CE: Zoomable map view, see world_view.h.
