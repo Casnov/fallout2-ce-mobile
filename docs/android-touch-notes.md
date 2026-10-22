@@ -207,14 +207,15 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
     outlined once a second, off clears item outlines. Not the sfall script:
     it made the camera stutter and only worked while held;
   - log.
-- Weapon group sits on a translucent terminal panel (`HudGroupSpec::padding`,
-  framed groups) in three rows: status (AP and HP), actions, the two hands.
+- Weapon group: the actions over the world, under them a translucent
+  terminal panel (`HudGroupSpec::padding`, framed groups; `looseLines` stand
+  over it) with status (AP and HP) and the two hands.
   - Hands (`HandLeft`, `HandRight`, `interfaceGetHandInfo`): both always
     shown, in their places; the active one framed, the other dimmed. A tap
     on the other one is the bar's swap (free), on the active one nothing; a
     long press shows the name and ammo ("10mm pistol - 12/12, 10mm JHP") as
     the other buttons' names. A slot: the item's art (bare hands: fist,
-    boot) and name under it (two lines at most, raised off the bottom edge
+    boot, named punch and kick) and name under it (two lines at most, raised off the bottom edge
     over the art's lower part), a weapon's rounds (size small, empty red)
     over the loaded ammo's inventory art beside the art - the ammo's type
     told by its look.
@@ -226,9 +227,19 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
     named, "Start combat" (`GameCommandType::StartCombat`, the A key: the
     bar's weapon button starts combat so too) and the reload or use. Reload
     (`interfaceReloadCurrentWeapon`) and use act at once, the attack mode
-    kept. Centered while they fit, else the strip scrolls sideways with a
-    position bar and fades, the chosen mode (an empty weapon's reload)
-    brought into view.
+    kept. Centered over the hands while they fit; wider, their right edge
+    stays at the hands' and they grow left over the world up to the
+    screen's middle, past it they scroll there with a position bar (accent
+    on a dark track, only while scrolling; without it the chips sit on its
+    place, nearer the panel), the chosen mode (an empty weapon's reload)
+    brought into view. A name longer than 72 dp gets smaller, down to 10 dp
+    (the chip wider past that); the AP right after it, the bolt at the top
+    left with the number on its lower right. Unarmed specials are named
+    without "punch" / "kick" (ce.msg 134-145): the hand tells it. A mode
+    and its aimed one stand as a pair: 2 dp apart, their facing corners
+    less round (6 dp between the rest); while
+    the aimed one is chosen its mode is lit like the active hand (framed,
+    its fill).
   - Colors as the inventory's: the accent for what is tapped and the icons
     (heart, lightning, mode names), the values' color for every number (HP,
     AP, costs, rounds) and the item's name, dim for the secondary (the

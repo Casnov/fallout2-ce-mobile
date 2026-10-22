@@ -23,7 +23,8 @@
 {122}{}{CANCEL}
 {123}{}{DONE}
 
-# Attack modes (touch_hud.cc), as on the item button art
+# Attack modes (touch_hud.cc), as on the item button art; unarmed specials
+# without "punch" / "kick" (the hand slot tells it)
 {124}{}{SINGLE}
 {125}{}{BURST}
 {126}{}{THRUST}
@@ -34,18 +35,18 @@
 {131}{}{RELOAD}
 {132}{}{USE}
 {133}{}{USE ON}
-{134}{}{STRONG PUNCH}
-{135}{}{HAMMER PUNCH}
+{134}{}{STRONG}
+{135}{}{HAMMER}
 {136}{}{HAYMAKER}
 {137}{}{JAB}
 {138}{}{PALM STRIKE}
-{139}{}{PIERCING STRIKE}
-{140}{}{STRONG KICK}
-{141}{}{SNAP KICK}
-{142}{}{POWER KICK}
-{143}{}{HIP KICK}
-{144}{}{HOOK KICK}
-{145}{}{PIERCING KICK}
+{139}{}{PIERCING}
+{140}{}{STRONG}
+{141}{}{SNAP}
+{142}{}{POWER}
+{143}{}{HIP}
+{144}{}{HOOK}
+{145}{}{PIERCING}
 
 # Action menu item names (touch_controls.cc), shown while choosing
 {146}{}{Cancel}

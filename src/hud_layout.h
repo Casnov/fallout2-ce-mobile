@@ -45,7 +45,7 @@ enum class HudGroupId {
     Tools, // skills, highlight, sneak
     Log, // message log button
     Combat, // end turn, end combat
-    Weapon, // status, actions, the two hands
+    Weapon, // actions over the panel; on it status, the two hands
     Indicators, // SNEAK, LEVEL, POISONED, ...
     Count,
 };
@@ -98,6 +98,9 @@ struct HudGroupSpec {
     // Space between the group edge and its elements, dp. Groups with
     // padding are drawn on a panel.
     float padding = 0.0f;
+    // The first lines stand over the world above the panel (the weapon
+    // group's actions), a gap from it, no padding of theirs.
+    int looseLines = 0;
 };
 
 struct HudLayout {
@@ -141,6 +144,9 @@ struct HudPlacedGroup {
     HudRect rect;
     // Group is drawn on a panel.
     bool framed;
+    // The panel's rect, relative to group rect: all of it but the loose
+    // lines.
+    HudRect panel;
     std::vector<HudPlacedElement> elements;
 };
 

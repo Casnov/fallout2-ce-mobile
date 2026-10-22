@@ -251,31 +251,40 @@ namespace {
         return std::clamp(static_cast<int>(radius / 2.0f), 3, 12);
     }
 
-    void roundRectOutline(const MuiRect& rect, float radius, std::vector<SDL_FPoint>& points, int segments)
+    // The left corners' radius [left], the right ones' [right].
+    void roundRectOutline(const MuiRect& rect, float left, float right, std::vector<SDL_FPoint>& points, int segments)
     {
-        radius = std::max(std::min(radius, std::min(rect.w, rect.h) / 2.0f), 0.0f);
+        float limit = std::min(rect.w, rect.h) / 2.0f;
+        left = std::max(std::min(left, limit), 0.0f);
+        right = std::max(std::min(right, limit), 0.0f);
 
         struct Corner {
             float cx;
             float cy;
+            float radius;
             float start;
         };
 
         const float pi = 3.14159265f;
         Corner corners[4] = {
-            { rect.x + rect.w - radius, rect.y + radius, -pi / 2.0f },
-            { rect.x + rect.w - radius, rect.y + rect.h - radius, 0.0f },
-            { rect.x + radius, rect.y + rect.h - radius, pi / 2.0f },
-            { rect.x + radius, rect.y + radius, pi },
+            { rect.x + rect.w - right, rect.y + right, right, -pi / 2.0f },
+            { rect.x + rect.w - right, rect.y + rect.h - right, right, 0.0f },
+            { rect.x + left, rect.y + rect.h - left, left, pi / 2.0f },
+            { rect.x + left, rect.y + left, left, pi },
         };
 
         points.clear();
         for (const Corner& corner : corners) {
             for (int step = 0; step <= segments; step++) {
                 float angle = corner.start + (pi / 2.0f) * step / segments;
-                points.push_back({ corner.cx + std::cos(angle) * radius, corner.cy + std::sin(angle) * radius });
+                points.push_back({ corner.cx + std::cos(angle) * corner.radius, corner.cy + std::sin(angle) * corner.radius });
             }
         }
+    }
+
+    void roundRectOutline(const MuiRect& rect, float radius, std::vector<SDL_FPoint>& points, int segments)
+    {
+        roundRectOutline(rect, radius, radius, points, segments);
     }
 
     void fillPolygon(const std::vector<SDL_FPoint>& points, float centerX, float centerY, MuiColor color)
@@ -413,6 +422,23 @@ void muiFillRoundRect(const MuiRect& rect, float radius, MuiColor color)
     std::vector<SDL_FPoint> points;
     roundRectOutline(rect, radius, points, roundRectSegments(radius));
     fillPolygon(points, rect.centerX(), rect.centerY(), color);
+}
+
+void muiFillRoundRect(const MuiRect& rect, float left, float right, MuiColor color)
+{
+    std::vector<SDL_FPoint> points;
+    roundRectOutline(rect, left, right, points, roundRectSegments(std::max(left, right)));
+    fillPolygon(points, rect.centerX(), rect.centerY(), color);
+}
+
+void muiStrokeRoundRect(const MuiRect& rect, float left, float right, float thickness, MuiColor color)
+{
+    int segments = roundRectSegments(std::max(left, right));
+    std::vector<SDL_FPoint> outer;
+    std::vector<SDL_FPoint> inner;
+    roundRectOutline(rect, left, right, outer, segments);
+    roundRectOutline(rect.inset(thickness), std::max(left - thickness, 0.0f), std::max(right - thickness, 0.0f), inner, segments);
+    strokePolygons(outer, inner, color);
 }
 
 void muiStrokeRoundRect(const MuiRect& rect, float radius, float thickness, MuiColor color)

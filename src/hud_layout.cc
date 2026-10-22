@@ -22,9 +22,10 @@ constexpr float kButton = 44.0f;
 //
 // Top left: menu, quick save/load. Top right: inventory, character, Pip-Boy,
 // map. Top center: indicators. Left edge: skills, highlight, sneak. Bottom
-// left: log. Bottom right:
-// AP/HP, actions (attack modes, reload / use, start combat), the two hands. Right edge (combat only): end
-// turn and end combat, kept between top right and bottom right groups.
+// left: log. Bottom right: actions (attack modes, reload / use, start
+// combat) over a panel with AP/HP and the two hands. Right edge (combat
+// only): end turn and end combat, kept between top right and bottom right
+// groups.
 static const HudLayout kLandscapeLayout = {
     8.0f,
     6.0f,
@@ -43,11 +44,11 @@ static const HudLayout kLandscapeLayout = {
             false },
         { HudGroupId::Weapon, HudAnchor::BottomRight, HudFlow::Rows, HudAlign::End,
             {
+                { { HudElementId::Modes, kHudFill, 40.0f } },
                 { { HudElementId::Status, kHudFill, 22.0f } },
-                { { HudElementId::Modes, kHudFill, 41.0f } },
                 { { HudElementId::HandLeft, 118.0f, 64.0f }, { HudElementId::HandRight, 118.0f, 64.0f } },
             },
-            false, 6.0f },
+            false, 6.0f, 1 },
         { HudGroupId::Indicators, HudAnchor::Top, HudFlow::Rows, HudAlign::Center,
             { { { HudElementId::Indicators, 300.0f, 22.0f } } },
             true },
@@ -260,8 +261,15 @@ static HudPlacedGroup hudLayoutPlaceGroupContent(const HudGroupSpec& group, cons
     }
 
     int offset = 0;
+    // Where the panel's lines begin, the loose lines' elements.
+    int panelOffset = 0;
+    size_t looseElements = 0;
     for (size_t lineIndex = 0; lineIndex < group.lines.size(); lineIndex++) {
         const auto& line = group.lines[lineIndex];
+        if (static_cast<int>(lineIndex) == group.looseLines) {
+            panelOffset = offset;
+            looseElements = placed.elements.size();
+        }
         int thickness = lineThicknesses[lineIndex];
         int length = lineLengths[lineIndex];
         int fixedLength = 0;
@@ -318,12 +326,15 @@ static HudPlacedGroup hudLayoutPlaceGroupContent(const HudGroupSpec& group, cons
     }
 
     int padding = hudDpToPixels(metrics, group.padding);
-    for (HudPlacedElement& element : placed.elements) {
+    for (size_t index = 0; index < placed.elements.size(); index++) {
+        HudPlacedElement& element = placed.elements[index];
         element.rect.x += padding;
-        element.rect.y += padding;
+        // Loose lines from the top, the panel a gap under them.
+        element.rect.y += index < looseElements ? 0 : padding;
     }
     placed.rect.width += padding * 2;
     placed.rect.height += padding * 2;
+    placed.panel = { 0, panelOffset, placed.rect.width, placed.rect.height - panelOffset };
 
     return placed;
 }

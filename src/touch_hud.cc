@@ -159,18 +159,19 @@ namespace {
         { InterfaceFrameId::ReloadText, { 131, "RELOAD" } },
         { InterfaceFrameId::UseText, { 132, "USE" } },
         { InterfaceFrameId::UseOnText, { 133, "USE ON" } },
-        { InterfaceFrameId::StrongPunch, { 134, "STRONG PUNCH" } },
-        { InterfaceFrameId::HammerPunch, { 135, "HAMMER PUNCH" } },
+        // Unarmed specials without "punch" / "kick": the hand tells it.
+        { InterfaceFrameId::StrongPunch, { 134, "STRONG" } },
+        { InterfaceFrameId::HammerPunch, { 135, "HAMMER" } },
         { InterfaceFrameId::LightningPunch, { 136, "HAYMAKER" } },
         { InterfaceFrameId::ChopPunch, { 137, "JAB" } },
         { InterfaceFrameId::DragonPunch, { 138, "PALM STRIKE" } },
-        { InterfaceFrameId::ForcePunch, { 139, "PIERCING STRIKE" } },
-        { InterfaceFrameId::StrongKick, { 140, "STRONG KICK" } },
-        { InterfaceFrameId::SnapKick, { 141, "SNAP KICK" } },
-        { InterfaceFrameId::RoundhouseKick, { 142, "POWER KICK" } },
-        { InterfaceFrameId::HipKick, { 143, "HIP KICK" } },
-        { InterfaceFrameId::JumpKick, { 144, "HOOK KICK" } },
-        { InterfaceFrameId::DeathBlossomKick, { 145, "PIERCING KICK" } },
+        { InterfaceFrameId::ForcePunch, { 139, "PIERCING" } },
+        { InterfaceFrameId::StrongKick, { 140, "STRONG" } },
+        { InterfaceFrameId::SnapKick, { 141, "SNAP" } },
+        { InterfaceFrameId::RoundhouseKick, { 142, "POWER" } },
+        { InterfaceFrameId::HipKick, { 143, "HIP" } },
+        { InterfaceFrameId::JumpKick, { 144, "HOOK" } },
+        { InterfaceFrameId::DeathBlossomKick, { 145, "PIERCING" } },
     };
 
     // HUD colors on top of the mobile UI theme.
@@ -595,6 +596,11 @@ namespace {
         sendCommand(info.command);
     }
 
+    std::u32string numberText(int value)
+    {
+        return muiDecodeUtf8(std::to_string(value).c_str());
+    }
+
     // MARK: Status (AP and HP)
 
     // Lightning and AP number, AP bulbs, heart and HP number across the
@@ -606,10 +612,10 @@ namespace {
         }
 
         const MuiTheme& theme = muiTheme();
-        float numberSize = ui.dp(17.0f);
-        float iconSize = ui.dp(15.0f);
-        float gap = ui.dp(5.0f);
-        float bulbGap = ui.dp(2.0f);
+        float numberSize = ui.dp(15.0f);
+        float iconSize = ui.dp(14.0f);
+        float gap = ui.dp(4.0f);
+        float bulbGap = ui.dp(1.0f);
 
         int hp = critterGetHitPoints(gDude);
         int maxHp = critterGetStat(gDude, STAT_MAXIMUM_HIT_POINTS);
@@ -626,29 +632,35 @@ namespace {
         bool showApNumber = isInCombat() && gActionPoints >= 0;
         int bulbCount = std::clamp(gMaxActionPoints, 1, 16);
 
-        std::u32string hpText = muiDecodeUtf8(std::to_string(std::max(hp, 0)).c_str());
-        float apNumberWidth = muiTextWidth(U"10", numberSize);
-        float hpNumberWidth = muiTextWidth(U"000", numberSize);
-
+        // The bolt, the AP number right after it, the bulbs after room for
+        // two digits (they don't move with the number) up to the heart, the
+        // heart just before the HP at the right.
         float x = rect.x + ui.dp(2.0f);
         muiDrawIcon(MuiIcon::ActionPoints, x + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.6f), theme.accent);
         x += iconSize + gap;
 
+        float apNumberWidth = muiTextWidth(U"10", numberSize);
         if (showApNumber) {
-            std::u32string apText = muiDecodeUtf8(std::to_string(gActionPoints).c_str());
-            muiDrawTextAligned(apText, { x, rect.y, apNumberWidth, rect.h }, numberSize, theme.text, MuiAlign::End, MuiAlign::Center);
+            muiDrawTextAligned(numberText(gActionPoints), { x, rect.y, apNumberWidth, rect.h }, numberSize, theme.text, MuiAlign::Start, MuiAlign::Center);
         }
         x += apNumberWidth + gap;
 
-        // HP on the right, bulbs take the rest (up to 9 dp).
+        std::u32string hpText = numberText(std::max(hp, 0));
+        float hpNumberWidth = muiTextWidth(hpText, numberSize);
         float hpNumberX = rect.right() - ui.dp(2.0f) - hpNumberWidth;
         float heartX = hpNumberX - gap - iconSize;
-        muiDrawIcon(MuiIcon::HitPoints, heartX + iconSize / 2.0f, rect.centerY(), iconSize * 0.9f, ui.dp(1.6f), theme.accent);
-        muiDrawTextAligned(hpText, { hpNumberX, rect.y, hpNumberWidth, rect.h }, numberSize, hpColor, MuiAlign::End, MuiAlign::Center);
+        muiDrawIcon(MuiIcon::HitPoints, heartX + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.6f), theme.accent);
+        muiDrawTextAligned(hpText, { hpNumberX, rect.y, hpNumberWidth, rect.h }, numberSize, hpColor, MuiAlign::Start, MuiAlign::Center);
 
+        // Tall bulbs (8 x 13 dp, narrower when many don't fit) spread over
+        // the room, their gaps up to 5 dp.
         float available = heartX - gap * 2.0f - x;
-        float bulbSize = std::clamp((available + bulbGap) / bulbCount - bulbGap, ui.dp(3.0f), ui.dp(9.0f));
-        float bulbY = rect.centerY() - bulbSize / 2.0f;
+        float bulbWidth = std::clamp((available + bulbGap) / bulbCount - bulbGap, ui.dp(3.0f), ui.dp(8.0f));
+        if (bulbCount > 1) {
+            bulbGap = std::clamp((available - bulbWidth * bulbCount) / (bulbCount - 1), bulbGap, ui.dp(5.0f));
+        }
+        float bulbHeight = ui.dp(13.0f);
+        float bulbY = rect.centerY() - bulbHeight / 2.0f;
         for (int index = 0; index < bulbCount; index++) {
             MuiColor color = kBulbEmpty;
             if (gActionPoints == -1) {
@@ -658,17 +670,12 @@ namespace {
             } else if (index < gActionPoints + gBonusActionPoints) {
                 color = kBulbYellow;
             }
-            muiFillRoundRect({ x, bulbY, bulbSize, bulbSize }, ui.dp(2.0f), color);
-            x += bulbSize + bulbGap;
+            muiFillRoundRect({ x, bulbY, bulbWidth, bulbHeight }, ui.dp(2.0f), color);
+            x += bulbWidth + bulbGap;
         }
     }
 
     // MARK: Weapon
-
-    std::u32string numberText(int value)
-    {
-        return muiDecodeUtf8(std::to_string(value).c_str());
-    }
 
     // Hand slot (`HandLeft`, `HandRight`): the item's art and name (bare
     // hands: the attack's icon and name), a weapon's rounds over the loaded
@@ -690,7 +697,11 @@ namespace {
         bool longPressed;
         bool tapped = ui.touchable(widget, rect, &pressed, &longPressed);
 
-        std::u32string name = info.item != nullptr ? muiDecodeGameText(itemGetName(info.item)) : actionName(info.attackFrmId);
+        // Bare hands: punch and kick (the attack modes' names are short,
+        // without them).
+        std::u32string name = info.item != nullptr
+            ? muiDecodeGameText(itemGetName(info.item))
+            : actionName(InterfaceFrmId(hand == HAND_LEFT ? InterfaceFrameId::PunchText : InterfaceFrameId::KickText));
         bool ammo = info.ammoCapacity > 0;
         std::u32string tooltip = name;
         if (ammo) {
@@ -792,10 +803,11 @@ namespace {
     // Actions strip over the hands. In combat: the active weapon's attack
     // modes (the game's names; aimed ones a crosshair) and its reload with
     // their AP, an item's use. Out of combat, named: start combat (the A
-    // key) and the reload or use. Centered while they fit, else it scrolls
-    // sideways with a position bar, the chosen mode (an empty weapon's
-    // reload) brought into view. Reload and use act at once (the bar
-    // reached them as modes of its one button).
+    // key) and the reload or use. Over the world above the panel: centered
+    // over the hands while they fit, else growing left up to the screen's
+    // middle, past it scrolling sideways with a position bar, the chosen
+    // mode (an empty weapon's reload) brought into view. Reload and use act
+    // at once (the bar reached them as modes of its one button).
     void buildModes(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
@@ -858,65 +870,97 @@ namespace {
             }
         }
 
-        // Chips over the top, the position bar's place under them always
-        // (the group keeps its height whatever is shown).
-        float barHeight = ui.dp(3.0f);
-        float barGap = ui.dp(8.0f);
+        // Chips over the top, the position bar under them while they
+        // scroll; else they take its place.
+        float barHeight = ui.dp(4.0f);
+        float barGap = ui.dp(4.0f);
         MuiRect strip = { rect.x, rect.y, rect.w, rect.h - barHeight - barGap };
 
+        // A long name smaller to fit, not below 10 dp (the chip wider then).
+        // The AP right after the name: the bolt at the top left, the number
+        // a bit lower on its right part.
         float textSize = ui.dp(12.0f);
+        float minTextSize = ui.dp(10.0f);
+        float labelWidth = ui.dp(72.0f);
         float costSize = ui.dp(13.0f);
-        float padding = ui.dp(8.0f);
-        float partGap = ui.dp(5.0f);
-        float iconSize = strip.h * 0.5f;
-        float boltSize = ui.dp(11.0f);
+        float boltSize = ui.dp(12.0f);
+        float costIndent = ui.dp(5.0f);
+        float padding = ui.dp(7.0f);
+        float iconGap = ui.dp(3.0f);
+        float costGap = ui.dp(2.0f);
+        float iconSize = std::min(strip.h * 0.5f, ui.dp(16.0f));
+        std::vector<float> labelSizes;
         for (Chip& chip : chips) {
-            float width = 0.0f;
-            int parts = 0;
+            float width = padding * 2.0f;
+            float labelSize = textSize;
             if (chip.icon != MuiIcon::Count) {
                 width += iconSize;
-                parts++;
             }
             if (!chip.label.empty()) {
-                width += muiTextWidth(chip.label, textSize);
-                parts++;
+                labelSize = muiFitTextSize(chip.label, labelWidth, textSize, minTextSize);
+                width += (chip.icon != MuiIcon::Count ? iconGap : 0.0f) + muiTextWidth(chip.label, labelSize);
             }
             if (chip.cost >= 0) {
-                width += boltSize + muiTextWidth(numberText(chip.cost), costSize);
-                parts++;
+                width += (!chip.label.empty() ? costGap : (chip.icon != MuiIcon::Count ? iconGap : 0.0f));
+                width += costIndent + muiTextWidth(numberText(chip.cost), costSize);
             }
-            chip.width = std::min(width + partGap * std::max(parts - 1, 0) + padding * 2.0f, strip.w);
+            chip.width = width;
+            labelSizes.push_back(labelSize);
         }
 
-        float gap = ui.dp(6.0f);
+        // A mode and its aimed one (next to it) as a pair: 2 dp apart, their
+        // facing corners less round; 6 dp between the rest.
+        std::vector<bool> pairStarts;
+        for (size_t index = 0; index < chips.size(); index++) {
+            pairStarts.push_back(chips[index].kind == ChipKind::Mode
+                && chips[index].icon != MuiIcon::Aim
+                && index + 1 < chips.size()
+                && chips[index + 1].kind == ChipKind::Mode
+                && chips[index + 1].icon == MuiIcon::Aim);
+        }
         float total = 0.0f;
         std::vector<float> starts;
         int shownIndex = 0;
         for (size_t index = 0; index < chips.size(); index++) {
-            total += total > 0.0f ? gap : 0.0f;
+            if (index > 0) {
+                total += pairStarts[index - 1] ? ui.dp(2.0f) : ui.dp(6.0f);
+            }
             starts.push_back(total);
             total += chips[index].width;
             if (chips[index].selected || (chips[index].kind == ChipKind::Reload && chips[index].warning)) {
                 shownIndex = static_cast<int>(index);
             }
         }
-        bool overflow = total > strip.w;
+
+        // Centered over the hands while they fit; wider, their right edge
+        // stays at the hands' and they grow left over the world, up to the
+        // screen's middle - past it they scroll there.
+        MuiRect screen = ui.screenRect();
+        float widest = std::max(strip.right() - (screen.x + screen.w / 2.0f), strip.w);
+        float viewWidth = std::clamp(total, strip.w, widest);
+        MuiRect view = { strip.right() - viewWidth, strip.y, viewWidth, strip.h };
+        bool overflow = total > view.w;
+
+        // Without the bar they sit down on its place, nearer the panel.
+        if (!overflow) {
+            view.y = rect.bottom() - view.h;
+        }
 
         // A finger moves them sideways; a mode chosen anew (the weapon
         // switched, combat begun, the magazine emptied) is brought into view
-        // once. Its own track and fades.
-        float offset = ui.scrollHorizontal("hud.mode", strip, total, false);
+        // once.
+        float offset = ui.scrollHorizontal("hud.mode", view, total, false);
         int shownKey = (((static_cast<int>(current) * 64 + static_cast<int>(chips.size())) * 2 + (combat ? 1 : 0)) * 2) + (empty ? 1 : 0);
         if (shownKey != gModeShownKey && !chips.empty()) {
             gModeShownKey = shownKey;
-            float maxOffset = std::max(total - strip.w, 0.0f);
+            float maxOffset = std::max(total - view.w, 0.0f);
             float start = starts[shownIndex];
             float end = start + chips[shownIndex].width;
             float wanted = offset;
             if (start < offset) {
                 wanted = start;
-            } else if (end > offset + strip.w) {
-                wanted = end - strip.w;
+            } else if (end > offset + view.w) {
+                wanted = end - view.w;
             }
             if (wanted != offset) {
                 offset = std::clamp(wanted, 0.0f, maxOffset);
@@ -924,20 +968,19 @@ namespace {
             }
         }
 
-        // Centered while they fit.
-        float left = overflow ? strip.x - offset : strip.x + (strip.w - total) / 2.0f;
+        float left = overflow ? view.x - offset : view.x + (view.w - total) / 2.0f;
 
-        muiPushClip(strip);
+        muiPushClip(view);
         for (size_t index = 0; index < chips.size(); index++) {
             const Chip& chip = chips[index];
-            MuiRect chipRect = { left + starts[index], strip.y, chip.width, strip.h };
-            if (chipRect.right() <= strip.x || chipRect.x >= strip.right()) {
+            MuiRect chipRect = { left + starts[index], view.y, chip.width, view.h };
+            if (chipRect.right() <= view.x || chipRect.x >= view.right()) {
                 continue;
             }
 
             // Only its visible part takes touches.
-            float touchLeft = std::max(chipRect.x, strip.x);
-            float touchRight = std::min(chipRect.right(), strip.right());
+            float touchLeft = std::max(chipRect.x, view.x);
+            float touchRight = std::min(chipRect.right(), view.right());
             MuiRect touchRect = { touchLeft, chipRect.y, touchRight - touchLeft, chipRect.h };
             if (chip.modeIndex >= 0) {
                 gModeChips[chip.modeIndex].rect = touchRect;
@@ -947,29 +990,44 @@ namespace {
             bool tapped = ui.touchable("hud.mode." + std::to_string(index), touchRect, &pressed);
 
             // The name and the lightning as the HUD's icons, the AP as the
-            // inventory's values.
-            MuiColor fill = pressed ? theme.buttonPressed : (chip.selected ? theme.buttonPrimary : theme.button);
-            MuiColor border = chip.selected || pressed ? theme.accent : (chip.warning ? kWarning : theme.buttonBorder);
+            // inventory's values. A mode whose aimed one is chosen is lit as
+            // the active hand: framed, its fill.
+            bool parent = pairStarts[index] && chips[index + 1].selected;
+            MuiColor fill = pressed ? theme.buttonPressed : (chip.selected ? theme.buttonPrimary : (parent ? kActiveHand : theme.button));
+            MuiColor border = chip.selected || pressed || parent ? theme.accent : (chip.warning ? kWarning : theme.buttonBorder);
             MuiColor color = chip.selected && !pressed ? theme.buttonPrimaryText : (chip.warning ? kWarning : theme.accent);
             MuiColor costColor = chip.selected && !pressed ? theme.buttonPrimaryText : (chip.warning ? kWarning : theme.text);
-            muiFillRoundRect(chipRect, ui.dp(6.0f), fill);
-            muiStrokeRoundRect(chipRect, ui.dp(6.0f), ui.dp(chip.warning ? 2.0f : 1.0f), border);
+            float round = ui.dp(6.0f);
+            float facing = ui.dp(3.0f);
+            float leftRound = index > 0 && pairStarts[index - 1] ? facing : round;
+            float rightRound = pairStarts[index] ? facing : round;
+            muiFillRoundRect(chipRect, leftRound, rightRound, fill);
+            muiStrokeRoundRect(chipRect, leftRound, rightRound, ui.dp(chip.warning || parent ? 2.0f : 1.0f), border);
 
             float x = chipRect.x + padding;
             if (chip.icon != MuiIcon::Count) {
                 muiDrawIcon(chip.icon, x + iconSize / 2.0f, chipRect.centerY(), iconSize, ui.dp(1.6f), color);
-                x += iconSize + partGap;
+                x += iconSize;
             }
             if (!chip.label.empty()) {
-                float width = muiTextWidth(chip.label, textSize);
-                muiDrawTextAligned(chip.label, { x, chipRect.y, width, chipRect.h }, textSize, color, MuiAlign::Start, MuiAlign::Center);
-                x += width + partGap;
+                x += chip.icon != MuiIcon::Count ? iconGap : 0.0f;
+                float width = muiTextWidth(chip.label, labelSizes[index]);
+                muiDrawTextAligned(chip.label, { x, chipRect.y, width, chipRect.h }, labelSizes[index], color, MuiAlign::Start, MuiAlign::Center);
+                x += width;
             }
             if (chip.cost >= 0) {
-                muiDrawIcon(MuiIcon::ActionPoints, x + boltSize / 2.0f, chipRect.centerY(), boltSize, ui.dp(1.4f), color);
-                x += boltSize;
+                x += !chip.label.empty() ? costGap : (chip.icon != MuiIcon::Count ? iconGap : 0.0f);
+                muiDrawIcon(MuiIcon::ActionPoints, x + boltSize / 2.0f - ui.dp(1.0f), chipRect.centerY() - ui.dp(4.0f), boltSize, ui.dp(1.4f), color);
+
+                // The number over the bolt's lower right, cut out of it by
+                // the chip's fill.
                 std::u32string cost = numberText(chip.cost);
-                muiDrawTextAligned(cost, { x, chipRect.y, muiTextWidth(cost, costSize), chipRect.h }, costSize, costColor, MuiAlign::Start, MuiAlign::Center);
+                float costWidth = muiTextWidth(cost, costSize);
+                MuiRect costRect = { x + costIndent, chipRect.centerY() - costSize / 2.0f + ui.dp(2.5f), costWidth, costSize };
+                float edge = ui.dp(1.0f);
+                muiDrawTextAligned(cost, { costRect.x - edge, costRect.y, costRect.w, costRect.h }, costSize, fill, MuiAlign::Start, MuiAlign::Center);
+                muiDrawTextAligned(cost, { costRect.x, costRect.y - edge, costRect.w, costRect.h }, costSize, fill, MuiAlign::Start, MuiAlign::Center);
+                muiDrawTextAligned(cost, costRect, costSize, costColor, MuiAlign::Start, MuiAlign::Center);
             }
 
             if (tapped && gEnabled) {
@@ -989,28 +1047,16 @@ namespace {
                 }
             }
         }
-
-        // The edges with chips beyond them fade into the panel.
-        if (overflow) {
-            float fade = ui.dp(28.0f);
-            MuiColor clear = kPanelColor.withAlpha(0);
-            MuiColor solid = kPanelColor.withAlpha(235);
-            if (offset > 0.5f) {
-                muiFillHorizontalGradient({ strip.x, strip.y, fade, strip.h }, solid, clear);
-            }
-            if (offset < total - strip.w - 0.5f) {
-                muiFillHorizontalGradient({ strip.right() - fade, strip.y, fade, strip.h }, clear, solid);
-            }
-        }
         muiPopClip();
 
-        // Where the visible part is in the whole list (not touchable): the
-        // track always, its thumb when the chips don't fit.
-        MuiRect track = { strip.x, strip.bottom() + barGap, strip.w, barHeight };
-        muiFillRoundRect(track, barHeight / 2.0f, theme.buttonBorder.withAlpha(70));
+        // Where the visible part is in the whole list (not touchable), only
+        // while they scroll: the accent thumb on a dark track, seen over the
+        // world.
         if (overflow) {
-            float thumbWidth = std::max(track.w * strip.w / total, ui.dp(16.0f));
-            float maxOffset = total - strip.w;
+            MuiRect track = { view.x, strip.bottom() + barGap, view.w, barHeight };
+            muiFillRoundRect(track, barHeight / 2.0f, kPanelColor);
+            float thumbWidth = std::max(track.w * view.w / total, ui.dp(16.0f));
+            float maxOffset = total - view.w;
             float thumbX = track.x + (track.w - thumbWidth) * std::clamp(offset / maxOffset, 0.0f, 1.0f);
             muiFillRoundRect({ thumbX, track.y, thumbWidth, track.h }, barHeight / 2.0f, theme.accent);
         }
@@ -1459,10 +1505,16 @@ namespace {
                 continue;
             }
 
-            // Terminal panel under the group.
+            // Terminal panel under the group (its loose lines over it).
             if (group.framed) {
-                muiFillRoundRect(groupRect, ui.dp(theme.radius), kPanelColor);
-                muiStrokeRoundRect(groupRect, ui.dp(theme.radius), ui.dp(theme.borderWidth), theme.panelBorder);
+                MuiRect panel = {
+                    groupRect.x + group.panel.x,
+                    groupRect.y + group.panel.y,
+                    static_cast<float>(group.panel.width),
+                    static_cast<float>(group.panel.height),
+                };
+                muiFillRoundRect(panel, ui.dp(theme.radius), kPanelColor);
+                muiStrokeRoundRect(panel, ui.dp(theme.radius), ui.dp(theme.borderWidth), theme.panelBorder);
             }
 
             for (const HudPlacedElement& element : group.elements) {

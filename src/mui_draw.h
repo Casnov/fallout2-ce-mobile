@@ -68,6 +68,9 @@ SDL_Renderer* muiDrawGetRenderer();
 void muiFillRect(const MuiRect& rect, MuiColor color);
 void muiFillRoundRect(const MuiRect& rect, float radius, MuiColor color);
 void muiStrokeRoundRect(const MuiRect& rect, float radius, float thickness, MuiColor color);
+// Corners rounded by [left] at the left, [right] at the right.
+void muiFillRoundRect(const MuiRect& rect, float left, float right, MuiColor color);
+void muiStrokeRoundRect(const MuiRect& rect, float left, float right, float thickness, MuiColor color);
 // [rect] shading from [left] at its left edge to [right] at its right one.
 void muiFillHorizontalGradient(const MuiRect& rect, MuiColor left, MuiColor right);
 // [rect] shading between the colors of its corners.
