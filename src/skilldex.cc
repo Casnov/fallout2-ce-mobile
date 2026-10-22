@@ -125,7 +125,7 @@ static SkilldexRC skilldexChooseMobile(Object* target)
         { SKILL_LOCKPICK, MuiIcon::Lockpick },
         { SKILL_STEAL, MuiIcon::Steal },
         { SKILL_TRAPS, MuiIcon::Traps },
-        { SKILL_FIRST_AID, MuiIcon::FilterDrugs },
+        { SKILL_FIRST_AID, MuiIcon::Stimpak },
         { SKILL_DOCTOR, MuiIcon::Doctor },
         { SKILL_SCIENCE, MuiIcon::Science },
         { SKILL_REPAIR, MuiIcon::Repair },

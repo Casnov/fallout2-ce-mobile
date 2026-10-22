@@ -152,7 +152,7 @@ namespace {
         }
         muiFillRoundRect(close, ui.dp(6.0f), closePressed ? theme.buttonPressed : theme.button);
         muiStrokeRoundRect(close, ui.dp(6.0f), ui.dp(1.0f), theme.buttonBorder);
-        muiDrawIcon(MuiIcon::Cancel, close.centerX(), close.centerY(), close.h * 0.45f, ui.dp(2.0f), theme.accent);
+        muiDrawIcon(MuiIcon::Cancel, close.centerX(), close.centerY(), close.h * 0.45f, theme.accent);
 
         std::u32string name = muiDecodeGameText(objectGetName(critter));
         MuiRect nameRect = { inner.x, inner.y, close.x - inner.x - ui.dp(8.0f), headerHeight };

@@ -20,6 +20,46 @@ namespace fallout {
 
 namespace {
 
+    // Turn hint under the figure (graphics, not an icon: a thin line however
+    // wide): the front of a wide flat ellipse, heads at both ends pointing
+    // sideways, centered at ([x], [y]) in a [size] square.
+    void drawTurnHint(float x, float y, float size, float thickness, MuiColor color)
+    {
+        constexpr float kPi = 3.14159265f;
+        constexpr float kRadiusX = 0.8f;
+        constexpr float kRadiusY = 0.3f;
+        constexpr float kCenterY = -0.2f;
+        constexpr float kFrom = 55.0f;
+        constexpr float kTo = 125.0f;
+        auto point = [&](float px, float py) {
+            return SDL_FPoint { x + px * size, y + py * size };
+        };
+
+        std::vector<SDL_FPoint> points;
+        for (int step = 0; step <= 12; step++) {
+            float angle = (kFrom + (kTo - kFrom) * step / 12.0f) * kPi / 180.0f;
+            points.push_back(point(std::cos(angle) * kRadiusX, kCenterY + std::sin(angle) * kRadiusY));
+        }
+        muiDrawPolyline(points, thickness, color);
+
+        for (float end : { kFrom, kTo }) {
+            float angle = end * kPi / 180.0f;
+            float px = std::cos(angle) * kRadiusX;
+            float py = kCenterY + std::sin(angle) * kRadiusY;
+            float direction = end == kFrom ? -1.0f : 1.0f;
+            float tangentX = -std::sin(angle) * kRadiusX * direction;
+            float tangentY = std::cos(angle) * kRadiusY * direction;
+            float length = std::sqrt(tangentX * tangentX + tangentY * tangentY);
+            tangentX /= length;
+            tangentY /= length;
+            float head = 0.14f;
+            muiDrawPolyline({ point(px - tangentX * head - tangentY * head * 0.8f, py - tangentY * head + tangentX * head * 0.8f),
+                                point(px, py),
+                                point(px - tangentX * head + tangentY * head * 0.8f, py - tangentY * head - tangentX * head * 0.8f) },
+                thickness, color);
+        }
+    }
+
     // Texts in `game\ce.msg`.
     constexpr int kTextDrop = 147;
     constexpr int kTextDropAll = 156;
@@ -325,7 +365,7 @@ namespace {
         drawFlash(ui, rect, flash.target == FlashTarget::Header);
 
         float iconSize = rect.h * 0.5f;
-        muiDrawIcon(MuiIcon::Back, rect.x + ui.dp(8.0f) + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.8f), theme.accent);
+        muiDrawIcon(MuiIcon::Back, rect.x + ui.dp(8.0f) + iconSize / 2.0f, rect.centerY(), iconSize, theme.accent);
 
         // Container name, while dragging - where the item goes.
         Object* owner = target ? view.critter : view.container;
@@ -402,7 +442,7 @@ namespace {
                 MuiIcon icon = itemGetType(item) == ITEM_TYPE_CONTAINER ? MuiIcon::Inventory : MuiIcon::Reload;
                 float iconSize = cell * 0.26f;
                 muiFillCircle(cellRect.x + iconSize * 0.9f, cellRect.y + iconSize * 0.9f, iconSize * 0.8f, theme.buttonPrimary);
-                muiDrawIcon(icon, cellRect.x + iconSize * 0.9f, cellRect.y + iconSize * 0.9f, iconSize, ui.dp(1.5f), theme.buttonPrimaryText);
+                muiDrawIcon(icon, cellRect.x + iconSize * 0.9f, cellRect.y + iconSize * 0.9f, iconSize, theme.buttonPrimaryText);
             }
 
             if (longPressed && !scrolling) {
@@ -422,7 +462,7 @@ namespace {
         // Every filter, "All" too: the bottom always tells what the shown
         // items weigh (the total with what is worn and held is on the right).
         float iconSize = ui.dp(tall ? 20.0f : 15.0f);
-        muiDrawIcon(MuiIcon::Weight, rect.x + iconSize / 2.0f + ui.dp(2.0f), rect.centerY(), iconSize, ui.dp(1.5f), theme.textDim);
+        muiDrawIcon(MuiIcon::Weight, rect.x + iconSize / 2.0f + ui.dp(2.0f), rect.centerY(), iconSize, theme.textDim);
         MuiRect weightRect = { rect.x + iconSize + ui.dp(8.0f), rect.y, rect.w * 0.4f, rect.h };
         muiDrawTextAligned(number(muiItemsWeight(items)), weightRect, ui.dp(tall ? 17.0f : 14.0f), theme.textDim, MuiAlign::Start, MuiAlign::Center);
 
@@ -549,7 +589,7 @@ namespace {
         float turnSize = figure.w * 0.55f;
         float turnHeight = turnSize * 0.3f;
         // The ellipse's lowest point is 0.1 of the icon below its center.
-        muiDrawIcon(MuiIcon::Turn, figure.centerX(), figure.bottom() - ui.dp(10.0f) - turnSize * 0.1f, turnSize, ui.dp(1.8f), turning ? theme.accent : theme.textDim);
+        drawTurnHint(figure.centerX(), figure.bottom() - ui.dp(10.0f) - turnSize * 0.1f, turnSize, ui.dp(1.8f), turning ? theme.accent : theme.textDim);
 
         // One scale for all directions (fits the tallest), so the figure
         // keeps its size while turning; wide frames (spear) may cross the
@@ -586,7 +626,7 @@ namespace {
             float iconX = figure.x + iconSize * 0.9f;
             float iconY = figure.y + iconSize * 0.9f;
             muiFillCircle(iconX, iconY, iconSize * 0.8f, theme.buttonPrimary);
-            muiDrawIcon(MuiIcon::Use, iconX, iconY, iconSize, ui.dp(1.5f), theme.buttonPrimaryText);
+            muiDrawIcon(MuiIcon::Use, iconX, iconY, iconSize, theme.buttonPrimaryText);
         }
 
         drawFlash(ui, figure, flash.target == FlashTarget::Figure);
@@ -616,7 +656,7 @@ namespace {
             if (y + lineHeight > bottom) {
                 break;
             }
-            muiDrawIcon(stat.icon, x + iconSize / 2.0f, y + lineHeight / 2.0f, iconSize, ui.dp(1.5f), theme.accent);
+            muiDrawIcon(stat.icon, x + iconSize / 2.0f, y + lineHeight / 2.0f, iconSize, theme.accent);
             muiDrawTextAligned(stat.value, { x + iconSize + iconGap, y, width, lineHeight }, textSize, stat.color, MuiAlign::Start, MuiAlign::Center);
             y += lineHeight;
         }
@@ -655,7 +695,7 @@ namespace {
             muiFillRoundRect(rect, ui.dp(5.0f), theme.button);
             muiStrokeRoundRect(rect, ui.dp(5.0f), ui.dp(1.0f), theme.buttonBorder);
             MuiIcon icon = slot == InventorySlot::Armor ? MuiIcon::FilterArmor : MuiIcon::Use;
-            muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.w * 0.34f, ui.dp(1.6f), theme.buttonBorder);
+            muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.w * 0.34f, theme.buttonBorder);
         } else {
             muiDrawItemCell(ui, rect, item, 1, pressed || item == selected);
 
@@ -704,7 +744,7 @@ namespace {
             muiFillRoundRect(rect, ui.dp(6.0f), kDropZone);
             muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(2.0f), kWarning);
             float iconSize = ui.dp(34.0f);
-            muiDrawIcon(MuiIcon::Drop, rect.centerX(), rect.centerY() - iconSize * 0.4f, iconSize, ui.dp(2.2f), kWarning);
+            muiDrawIcon(MuiIcon::Drop, rect.centerX(), rect.centerY() - iconSize * 0.4f, iconSize, kWarning);
             MuiRect label = { rect.x, rect.centerY() + iconSize * 0.4f, rect.w, muiLineHeight(ui.dp(14.0f)) };
             muiDrawTextAligned(muiDecodeGameText(muiText(kTextDrop, "Drop")), label, ui.dp(14.0f), kWarning, MuiAlign::Center, MuiAlign::Center);
             return;
@@ -964,7 +1004,7 @@ namespace {
             float lineHeight = std::max(muiLineHeight(size), writer.rowHeight);
             if (draw) {
                 float iconSize = size * 0.9f;
-                muiDrawIcon(MuiIcon::ActionPoints, content.x + iconSize / 2.0f, *y + lineHeight / 2.0f, iconSize, ui.dp(1.4f), theme.textDim);
+                muiDrawIcon(MuiIcon::ActionPoints, content.x + iconSize / 2.0f, *y + lineHeight / 2.0f, iconSize, theme.textDim);
                 muiDrawTextAligned(number(info.actionPoints), { content.x, *y, content.w, lineHeight }, size, theme.text, MuiAlign::End, MuiAlign::Center);
             }
             *y += lineHeight;

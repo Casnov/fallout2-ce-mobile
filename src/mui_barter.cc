@@ -136,7 +136,7 @@ namespace {
         float gap = ui.dp(5.0f);
         float width = iconSize + gap + muiTextWidth(text, size);
         float x = horizontal == MuiAlign::Center ? rect.centerX() - width / 2.0f : (horizontal == MuiAlign::End ? rect.right() - width : rect.x);
-        muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.3f), color);
+        muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, rect.centerY(), iconSize, color);
         muiDrawTextAligned(text, { x + iconSize + gap, rect.y, width, rect.h }, size, color, MuiAlign::Start, MuiAlign::Center);
     }
 

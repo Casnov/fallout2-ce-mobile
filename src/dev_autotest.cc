@@ -41,6 +41,7 @@
 #include "mouse.h"
 #include "movie.h"
 #include "mui.h"
+#include "mui_icons.h"
 #include "object.h"
 #include "party_member.h"
 #include "perf_monitor.h"
@@ -460,6 +461,9 @@ enum DevAutotestAction {
     // After `MUI_TAP_OUTSIDE_WINDOW`: FAIL when it tapped and widget `widget`
     // is still shown; when it didn't, the screen is closed with Back.
     DEV_AUTOTEST_ACTION_MUI_CHECK_CLOSED,
+    // Shows every mobile UI icon (`MuiIcon`) named, from icon [c] on, [a] dp
+    // big (a dev screen over the game, for icon work).
+    DEV_AUTOTEST_ACTION_ICON_SHEET,
 };
 
 struct DevAutotestStep {
@@ -477,6 +481,54 @@ struct DevAutotestStep {
 };
 
 static void devAutotestLog(const char* format, ...);
+
+// `MuiIcon` names, in its order.
+static const char* const kDevIconNames[] = {
+    "Menu", "QuickSave", "QuickLoad", "Inventory", "Character", "Pipboy", "Map", "Skills", "Highlight", "Sneak", "Log",
+    "EndTurn", "EndCombat", "ActionPoints", "HitPoints", "Aim", "Reload", "Fist", "Kick", "Weight", "Back",
+    "PartyOrders", "Holster", "Regroup", "Spread", "Burst", "AutoLoot", "Lockpick", "Steal", "Traps", "Doctor",
+    "Science", "Repair", "Target", "Talk", "Barter", "Review", "FilterAll", "FilterWeapons", "FilterWeaponsAndAmmo",
+    "FilterArmor", "Stimpak", "FilterAmmo", "FilterMisc", "Cancel", "Drop", "Look", "Rotate", "Use", "Unload", "Push",
+    "Plus", "Minus", "Edit", "Play", "Pause", "Stop", "Expand", "Collapse", "TacticalView",
+};
+static_assert(sizeof(kDevIconNames) / sizeof(kDevIconNames[0]) == static_cast<size_t>(MuiIcon::Count), "an icon without a name");
+
+// The icons on the HUD's panel color, each over its name, in a grid.
+class DevIconSheetScreen : public MuiScreen {
+public:
+    float size = 24.0f;
+    int first = 0;
+
+    bool coversScreen() override { return true; }
+
+    void build(MuiContext& ui) override
+    {
+        const MuiTheme& theme = muiTheme();
+        MuiRect screen = ui.screenRect();
+        muiFillRect(screen, muiRgb(0x0B120D));
+
+        float nameSize = ui.dp(9.0f);
+        float cellWidth = ui.dp(std::max(size * 1.5f, 72.0f));
+        float cellHeight = ui.dp(size + 8.0f) + muiLineHeight(nameSize) + ui.dp(4.0f);
+        MuiRect area = ui.safeRect().inset(ui.dp(8.0f));
+        int columns = std::max(static_cast<int>(area.w / cellWidth), 1);
+        int count = static_cast<int>(MuiIcon::Count);
+        for (int index = first; index < count; index++) {
+            int slot = index - first;
+            MuiRect cell = { area.x + (slot % columns) * cellWidth, area.y + (slot / columns) * cellHeight, cellWidth, cellHeight };
+            if (cell.bottom() > area.bottom()) {
+                break;
+            }
+            float iconY = cell.y + ui.dp(4.0f) + ui.dp(size) / 2.0f;
+            muiDrawIcon(static_cast<MuiIcon>(index), cell.centerX(), iconY, ui.dp(size), theme.accent);
+            std::u32string name = muiDecodeUtf8(kDevIconNames[index]);
+            MuiRect nameRect = { cell.x, cell.bottom() - muiLineHeight(nameSize) - ui.dp(2.0f), cell.w, muiLineHeight(nameSize) };
+            muiDrawTextAligned(name, nameRect, muiFitTextSize(name, cell.w - ui.dp(4.0f), nameSize, ui.dp(6.0f)), theme.textDim, MuiAlign::Center, MuiAlign::Center);
+        }
+    }
+};
+
+static DevIconSheetScreen* gDevIconSheet = nullptr;
 static void devAutotestCheckDudeRoundTrip();
 
 static const DevAutotestStep kDevAutotestSteps[] = {
@@ -705,6 +757,16 @@ static const DevAutotestStep kDevAutotestTacticalSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_TACTICAL, 0, 1, 0, 1, "v19_hidden_kept" },
     { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 60, "v20_next_combat" },
     { DEV_AUTOTEST_ACTION_CHECK_TACTICAL, 1, 1, 0, 1, "v21_shown_again" },
+};
+
+// Every icon at the UI's sizes: small (labels, weights), chips and buttons,
+// the radial menu's.
+static const DevAutotestStep kDevAutotestIconsSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "i00_start" },
+    { DEV_AUTOTEST_ACTION_ICON_SHEET, 16, 0, 0, 10, "i01_16" },
+    { DEV_AUTOTEST_ACTION_ICON_SHEET, 24, 0, 0, 10, "i02_24" },
+    { DEV_AUTOTEST_ACTION_ICON_SHEET, 40, 0, 0, 10, "i03_40" },
+    { DEV_AUTOTEST_ACTION_ICON_SHEET, 40, 0, 36, 10, "i04_40b" },
 };
 
 // Combat: the critter picked (its outline pulses: two frames apart), then a
@@ -3087,6 +3149,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "tactical") == 0) {
         gDevAutotestSteps = kDevAutotestTacticalSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestTacticalSteps) / sizeof(kDevAutotestTacticalSteps[0]);
+    } else if (strcmp(name, "icons") == 0) {
+        gDevAutotestSteps = kDevAutotestIconsSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestIconsSteps) / sizeof(kDevAutotestIconsSteps[0]);
     } else if (strcmp(name, "photos") == 0) {
         gDevAutotestSteps = kDevAutotestPhotosSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPhotosSteps) / sizeof(kDevAutotestPhotosSteps[0]);
@@ -3819,6 +3884,15 @@ void devAutotestTick()
                 settings.touch.hud_scale, settings.world_view.filter);
             break;
         }
+        case DEV_AUTOTEST_ACTION_ICON_SHEET:
+            if (gDevIconSheet == nullptr) {
+                gDevIconSheet = new DevIconSheetScreen();
+                muiPush(gDevIconSheet);
+            }
+            gDevIconSheet->size = step->a;
+            gDevIconSheet->first = static_cast<int>(step->c);
+            devAutotestLog("  icons %.0f dp, from %d\n", step->a, gDevIconSheet->first);
+            break;
         case DEV_AUTOTEST_ACTION_LOG_SAVES: {
             lsgMobileRefreshSlots();
             int count = 0;

@@ -478,9 +478,9 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
 - SDL render batching is on (`SDL_HINT_RENDER_BATCHING`): naming the
   render driver ("opengl" on desktop) turned it off, every draw went to the
   driver alone. Android picks GLES2 without the name, so it batched already.
-- Icons (`mui_icons.cc`) are drawn once per size and thickness into white
-  textures (premultiplied alpha) and tinted when drawn: they were most of
-  the HUD's time. HUD build on a Mac: 1 ms -> 0.19 ms (batching + icons).
+- Icons (`mui_icons.cc`) are rasterized once per size into white textures
+  (premultiplied alpha) and tinted when drawn: they were most of the HUD's
+  time. HUD build on a Mac: 1 ms -> 0.19 ms (batching + icons).
   Menus (inventory, loot, dialog, barter, Pip-Boy, options...) pause the
   world as in the original (`isoDisable`), only drawing is skipped under
   covering mobile screens.
@@ -572,7 +572,16 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
 - Icons (`mui_icons.cc`, `muiDrawIcon`): HUD buttons, AP/HP, modes, dialog
   tabs, item filters and the radial action menu use drawn line icons in the
   theme colors, no game art or abbreviations. Long press on a HUD button
-  shows its name instead of acting.
+  shows its name instead of acting. The set is SVG on a 24 unit grid, the
+  same as the design board's: a subset (path with all commands, circle,
+  rect with rx, g with translate / scale / rotate, class "f" filled), round
+  caps and joins, strokes 1.8 of 24 at every size; strokes become their
+  segments' quads and round caps, rasterized antialiased by stb_truetype's
+  glyph rasterizer (`muiRasterizeContours`). Simple shapes, as if drawn on
+  an old terminal, one recognizable form each: a stimpak syringe for first
+  aid, the doctor's bag for chems, cartridges for ammo, a cuirass for armor,
+  a chip for science, the game's flattened hexes for the tactical view. Dev scenario `icons` shows them
+  all at 16, 24 and 40 dp, named.
 - Status: AP always like on the bar (empty out of combat, red on others'
   turn, number on dude's turn) and HP (colors as on the bar), with bolt and
   heart icons.

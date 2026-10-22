@@ -127,7 +127,7 @@ namespace {
 
     const PartyOrder kPartyOrders[] = {
         { "SETTINGS|HolsterOrderKey", MuiIcon::Holster, { 161, "Holster weapons" } },
-        { "SETTINGS|HealingOrderKey", MuiIcon::FilterDrugs, { 162, "Heal yourselves" } },
+        { "SETTINGS|HealingOrderKey", MuiIcon::Stimpak, { 162, "Heal yourselves" } },
         { "SETTINGS|LootingOrderKey", MuiIcon::Inventory, { 163, "Loot bodies" } },
         { "SETTINGS|RegroupOrderKey", MuiIcon::Regroup, { 164, "Regroup" } },
         { "SETTINGS|SpreadOrderKey", MuiIcon::Spread, { 165, "Spread out" } },
@@ -470,7 +470,7 @@ namespace {
         MuiRect hint = { safe.centerX() - width / 2.0f, safe.y + ui.dp(38.0f), width, height };
         muiFillRoundRect(hint, ui.dp(6.0f), kPanelColor);
         muiStrokeRoundRect(hint, ui.dp(6.0f), ui.dp(1.0f), theme.accent);
-        muiDrawIcon(MuiIcon::Target, hint.x + padding + iconSize / 2.0f, hint.centerY(), iconSize, ui.dp(1.6f), theme.accent);
+        muiDrawIcon(MuiIcon::Target, hint.x + padding + iconSize / 2.0f, hint.centerY(), iconSize, theme.accent);
         muiDrawTextAligned(name, { hint.x + padding + iconSize + ui.dp(8.0f), hint.y, width, hint.h }, size, theme.text, MuiAlign::Start, MuiAlign::Center);
     }
 
@@ -551,14 +551,13 @@ namespace {
         drawPanel(ui, rect, fill, border);
 
         float iconSize = std::min(rect.h * 0.5f, ui.dp(22.0f));
-        float thickness = ui.dp(1.8f);
         if (rect.w > rect.h * 1.5f) {
             float iconX = rect.x + ui.dp(8.0f) + iconSize / 2.0f;
-            muiDrawIcon(info.icon, iconX, rect.centerY(), iconSize * 0.8f, thickness, color);
+            muiDrawIcon(info.icon, iconX, rect.centerY(), iconSize * 0.8f, color);
             MuiRect labelRect = { iconX + iconSize / 2.0f + ui.dp(2.0f), rect.y, rect.right() - iconX - iconSize / 2.0f - ui.dp(4.0f), rect.h };
             drawLabel(ui, labelRect, muiDecodeGameText(text(info.name)), color, 13.0f);
         } else {
-            muiDrawIcon(info.icon, rect.centerX(), rect.centerY(), iconSize, thickness, color);
+            muiDrawIcon(info.icon, rect.centerX(), rect.centerY(), iconSize, color);
         }
 
         if (unavailable) {
@@ -636,7 +635,7 @@ namespace {
         // two digits (they don't move with the number) up to the heart, the
         // heart just before the HP at the right.
         float x = rect.x + ui.dp(2.0f);
-        muiDrawIcon(MuiIcon::ActionPoints, x + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.6f), theme.accent);
+        muiDrawIcon(MuiIcon::ActionPoints, x + iconSize / 2.0f, rect.centerY(), iconSize, theme.accent);
         x += iconSize + gap;
 
         float apNumberWidth = muiTextWidth(U"10", numberSize);
@@ -649,7 +648,7 @@ namespace {
         float hpNumberWidth = muiTextWidth(hpText, numberSize);
         float hpNumberX = rect.right() - ui.dp(2.0f) - hpNumberWidth;
         float heartX = hpNumberX - gap - iconSize;
-        muiDrawIcon(MuiIcon::HitPoints, heartX + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.6f), theme.accent);
+        muiDrawIcon(MuiIcon::HitPoints, heartX + iconSize / 2.0f, rect.centerY(), iconSize, theme.accent);
         muiDrawTextAligned(hpText, { hpNumberX, rect.y, hpNumberWidth, rect.h }, numberSize, hpColor, MuiAlign::Start, MuiAlign::Center);
 
         // Tall bulbs (8 x 13 dp, narrower when many don't fit) spread over
@@ -751,7 +750,7 @@ namespace {
             }
         } else {
             float iconSize = std::min(art.h, ui.dp(28.0f));
-            muiDrawIcon(hand == HAND_LEFT ? MuiIcon::Fist : MuiIcon::Kick, art.centerX(), art.centerY(), iconSize, ui.dp(1.6f), theme.accent.withAlpha(alpha));
+            muiDrawIcon(hand == HAND_LEFT ? MuiIcon::Fist : MuiIcon::Kick, art.centerX(), art.centerY(), iconSize, theme.accent.withAlpha(alpha));
         }
 
         if (ammo) {
@@ -1006,7 +1005,7 @@ namespace {
 
             float x = chipRect.x + padding;
             if (chip.icon != MuiIcon::Count) {
-                muiDrawIcon(chip.icon, x + iconSize / 2.0f, chipRect.centerY(), iconSize, ui.dp(1.6f), color);
+                muiDrawIcon(chip.icon, x + iconSize / 2.0f, chipRect.centerY(), iconSize, color);
                 x += iconSize;
             }
             if (!chip.label.empty()) {
@@ -1017,7 +1016,7 @@ namespace {
             }
             if (chip.cost >= 0) {
                 x += !chip.label.empty() ? costGap : (chip.icon != MuiIcon::Count ? iconGap : 0.0f);
-                muiDrawIcon(MuiIcon::ActionPoints, x + boltSize / 2.0f - ui.dp(1.0f), chipRect.centerY() - ui.dp(4.0f), boltSize, ui.dp(1.4f), color);
+                muiDrawIcon(MuiIcon::ActionPoints, x + boltSize / 2.0f - ui.dp(1.0f), chipRect.centerY() - ui.dp(4.0f), boltSize, color);
 
                 // The number over the bolt's lower right, cut out of it by
                 // the chip's fill.

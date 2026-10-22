@@ -767,7 +767,7 @@ namespace {
                 pendingValue = videos[video].movie;
             }
             muiFillCircle(play.centerX(), play.centerY(), buttonSize / 2.0f, pressed ? theme.buttonPressed : theme.buttonPrimary);
-            muiDrawIcon(MuiIcon::Play, play.centerX() + ui.dp(2.0f), play.centerY(), buttonSize * 0.42f, ui.dp(2.0f), theme.buttonPrimaryText);
+            muiDrawIcon(MuiIcon::Play, play.centerX() + ui.dp(2.0f), play.centerY(), buttonSize * 0.42f, theme.buttonPrimaryText);
 
             std::u32string label = ceText(kTextPlay, "Play");
             muiDrawTextAligned(label, { inner.x, screen.bottom() + ui.dp(8.0f), inner.w, controlsHeight }, ui.dp(13.0f), theme.textDim, MuiAlign::Center, MuiAlign::Center);
@@ -799,7 +799,7 @@ namespace {
         bool tapped = ui.touchable(id, rect, &pressed);
         muiFillRoundRect(rect, ui.dp(6.0f), pressed ? theme.buttonPressed : theme.button);
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
-        muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.h * 0.46f, ui.dp(2.0f), theme.accent);
+        muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.h * 0.46f, theme.accent);
         if (tapped) {
             _gsound_red_butt_press(-1, 0);
         }

@@ -118,7 +118,7 @@ namespace {
             float lineY = y + ui.dp(8.0f);
             float lineHeight = muiLineHeight(infoSize);
             float centerY = lineY + lineHeight / 2.0f;
-            muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, centerY, iconSize, ui.dp(1.3f), theme.textDim);
+            muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, centerY, iconSize, theme.textDim);
             x += iconSize + ui.dp(4.0f);
             muiDrawTextAligned(weight, { x, lineY, infoWidth, lineHeight }, infoSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
             if (!cost.empty()) {

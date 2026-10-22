@@ -24,7 +24,8 @@ namespace {
         MuiIcon::FilterWeapons,
         MuiIcon::FilterWeaponsAndAmmo,
         MuiIcon::FilterArmor,
-        MuiIcon::FilterDrugs,
+        // Medkits, chems: as the doctor's bag.
+        MuiIcon::Doctor,
         MuiIcon::FilterAmmo,
         MuiIcon::FilterMisc,
     };
@@ -87,8 +88,8 @@ void muiItemFilterRow(MuiContext& ui, const std::string& id, const MuiRect& rect
         muiFillRoundRect(button, ui.dp(5.0f), fill);
         muiStrokeRoundRect(button, ui.dp(5.0f), ui.dp(1.0f), active ? theme.accent : theme.buttonBorder);
 
-        float size = std::min(button.w, button.h) * 0.52f;
-        muiDrawIcon(kFilterIcons[index], button.centerX(), button.centerY(), size, ui.dp(1.6f), color);
+        float size = std::min(button.w, button.h) * 0.6f;
+        muiDrawIcon(kFilterIcons[index], button.centerX(), button.centerY(), size, color);
 
         // Firearms only: a dot in the corner.
         if (active && filter == MuiItemFilter::Weapons && state->gunsOnly) {
@@ -302,7 +303,7 @@ void muiDrawDraggedItem(MuiContext& ui, Object* item, int quantity, int price)
     x += gap;
     text(amount, theme.textDim);
     x += gap;
-    muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, bubble.centerY(), iconSize, ui.dp(1.3f), theme.textDim);
+    muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, bubble.centerY(), iconSize, theme.textDim);
     x += iconSize + ui.dp(4.0f);
     text(weight, theme.text);
     if (!cost.empty()) {

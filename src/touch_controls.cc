@@ -1226,7 +1226,7 @@ void RadialMenuScreen::build(MuiContext& ui)
         ui.mark("radial." + std::to_string(gRadialMenu.items[index]), { x - buttonRadius, y - buttonRadius, buttonRadius * 2.0f, buttonRadius * 2.0f });
 
         MuiColor iconColor = highlighted ? theme.buttonText : theme.accent;
-        muiDrawIcon(radialMenuIcon(gRadialMenu.items[index]), x, y, buttonRadius * 0.9f, ui.dp(2.2f), iconColor.withAlpha(alpha));
+        muiDrawIcon(radialMenuIcon(gRadialMenu.items[index]), x, y, buttonRadius * 0.9f, iconColor.withAlpha(alpha));
 
         if (highlighted) {
             highlightedX = x;

@@ -92,7 +92,7 @@ namespace {
         MuiIcon::FilterWeapons,
         MuiIcon::Spread,
         MuiIcon::Target,
-        MuiIcon::FilterDrugs,
+        MuiIcon::Stimpak,
     };
 
     std::u32string partyText(int id, const char* fallback)
@@ -572,7 +572,7 @@ namespace {
         } else {
             muiFillRoundRect(cell, ui.dp(5.0f), theme.button);
             muiStrokeRoundRect(cell, ui.dp(5.0f), ui.dp(1.0f), theme.buttonBorder);
-            muiDrawIcon(weapon ? MuiIcon::Use : MuiIcon::FilterArmor, cell.centerX(), cell.centerY(), std::min(cellSize * 0.45f, ui.dp(44.0f)), ui.dp(1.6f), theme.buttonBorder);
+            muiDrawIcon(weapon ? MuiIcon::Use : MuiIcon::FilterArmor, cell.centerX(), cell.centerY(), std::min(cellSize * 0.45f, ui.dp(44.0f)), theme.buttonBorder);
         }
 
         float gap = ui.dp(row ? 14.0f : 8.0f);
@@ -728,7 +728,7 @@ namespace {
             muiFillRoundRect(row, ui.dp(8.0f), pressed ? theme.buttonPressed : theme.button);
             muiStrokeRoundRect(row, ui.dp(8.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
 
-            muiDrawIcon(kPartySettingIcons[setting], row.x + padding + iconSize / 2.0f, row.centerY(), iconSize, ui.dp(1.8f), theme.accent);
+            muiDrawIcon(kPartySettingIcons[setting], row.x + padding + iconSize / 2.0f, row.centerY(), iconSize, theme.accent);
 
             MuiRect text = { textX, row.y, textWidth, row.h };
             std::u32string name = muiDecodeGameText(gameDialogPartyControlSettingName(setting));
@@ -1208,7 +1208,7 @@ bool muiTabButton(MuiContext& ui, const std::string& id, const MuiRect& rect, Mu
     MuiColor iconColor = active && !pressed ? theme.buttonPrimaryText : theme.accent;
     muiFillRoundRect(rect, ui.dp(theme.radius), fill);
     muiStrokeRoundRect(rect, ui.dp(theme.radius), ui.dp(theme.borderWidth), pressed || active ? theme.accent : theme.buttonBorder);
-    muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.w * 0.46f, ui.dp(2.2f), iconColor);
+    muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.w * 0.46f, iconColor);
 
     if (tapped && !active) {
         if (sound) {

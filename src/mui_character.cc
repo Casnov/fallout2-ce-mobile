@@ -486,7 +486,7 @@ namespace {
         muiFillRoundRect(rect, ui.dp(6.0f), pressed ? theme.buttonPressed : theme.button);
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
         MuiColor color = enabled ? theme.accent : theme.accent.withAlpha(80);
-        muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.h * 0.46f, ui.dp(2.0f), color);
+        muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.h * 0.46f, color);
         return tapped;
     }
 
@@ -528,7 +528,7 @@ namespace {
 
         float cursor = rect.x + padding;
         if (hasIcon) {
-            muiDrawIcon(icon, cursor + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.6f), color);
+            muiDrawIcon(icon, cursor + iconSize / 2.0f, rect.centerY(), iconSize, color);
             cursor += iconSize + ui.dp(5.0f);
         }
         muiDrawTextAligned(text, { cursor, rect.y, rect.right() - cursor, rect.h }, size, color, MuiAlign::Start, MuiAlign::Center);

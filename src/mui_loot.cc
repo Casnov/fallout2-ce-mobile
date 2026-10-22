@@ -129,7 +129,7 @@ namespace {
         }
         muiFillRoundRect(back, ui.dp(theme.radius), backPressed ? theme.buttonPressed : theme.button);
         muiStrokeRoundRect(back, ui.dp(theme.radius), ui.dp(theme.borderWidth), backPressed ? theme.accent : theme.buttonBorder);
-        muiDrawIcon(MuiIcon::Back, back.centerX(), back.centerY(), back.w * 0.46f, ui.dp(2.2f), theme.accent);
+        muiDrawIcon(MuiIcon::Back, back.centerX(), back.centerY(), back.w * 0.46f, theme.accent);
 
         lists[SIDE_LEFT] = muiInventoryItems(view.leftOwner, filters[SIDE_LEFT]);
         lists[SIDE_RIGHT] = muiInventoryItems(view.rightOwner, filters[SIDE_RIGHT]);
@@ -264,7 +264,7 @@ namespace {
         muiFillRoundRect(rect, ui.dp(5.0f), pressed ? theme.buttonPressed : theme.button);
         muiStrokeRoundRect(rect, ui.dp(5.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
         float iconSize = rect.h * 0.5f;
-        muiDrawIcon(MuiIcon::Back, rect.x + ui.dp(8.0f) + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.8f), theme.accent);
+        muiDrawIcon(MuiIcon::Back, rect.x + ui.dp(8.0f) + iconSize / 2.0f, rect.centerY(), iconSize, theme.accent);
         MuiRect label = { rect.x + iconSize + ui.dp(16.0f), rect.y, rect.w - iconSize - ui.dp(20.0f), rect.h };
         muiPushClip(label);
         muiDrawTextAligned(muiDecodeGameText(objectGetName(container)), label, ui.dp(14.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
@@ -367,12 +367,12 @@ namespace {
         float volumeWidth = volume.empty() ? 0.0f : iconSize + iconGap + muiTextWidth(volume, textSize);
         float partsGap = volume.empty() ? 0.0f : ui.dp(14.0f);
         float weightX = side == SIDE_LEFT ? rect.x + edge : rect.right() - edge - volumeWidth - partsGap - weightWidth;
-        muiDrawIcon(MuiIcon::Weight, weightX + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.5f), theme.textDim);
+        muiDrawIcon(MuiIcon::Weight, weightX + iconSize / 2.0f, rect.centerY(), iconSize, theme.textDim);
         MuiRect weightRect = { weightX + iconSize + iconGap, rect.y, weightWidth, rect.h };
         muiDrawTextAligned(weight, weightRect, textSize, over ? kMuiOverLimit : theme.textDim, MuiAlign::Start, MuiAlign::Center);
         if (!volume.empty()) {
             float volumeX = rect.right() - edge - volumeWidth;
-            muiDrawIcon(MuiIcon::Inventory, volumeX + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.5f), theme.textDim);
+            muiDrawIcon(MuiIcon::Inventory, volumeX + iconSize / 2.0f, rect.centerY(), iconSize, theme.textDim);
             muiDrawTextAligned(volume, { volumeX + iconSize + iconGap, rect.y, volumeWidth, rect.h }, textSize, used > capacity ? kMuiOverLimit : theme.textDim, MuiAlign::Start, MuiAlign::Center);
         }
 
@@ -415,7 +415,7 @@ namespace {
 
         // Back icon points left; "Give all" points right.
         if (primary) {
-            muiDrawIcon(MuiIcon::Back, arrowX, button.centerY(), arrowSize, ui.dp(1.6f), color);
+            muiDrawIcon(MuiIcon::Back, arrowX, button.centerY(), arrowSize, color);
         } else {
             float half = arrowSize / 2.0f;
             float y = button.centerY();
