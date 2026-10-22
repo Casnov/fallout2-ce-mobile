@@ -268,6 +268,10 @@ void muiDrawDraggedItem(MuiContext& ui, Object* item, int quantity, int price)
 {
     const MuiTheme& theme = muiTheme();
 
+    // The lists' scroll marks first (they'd come after the screen's build):
+    // the item goes over them.
+    ui.drawScrollMarks();
+
     float size = ui.dp(64.0f);
     MuiRect cell = { ui.pointerX() - size / 2.0f, ui.pointerY() - size * 1.1f, size, size };
     muiDrawItemCell(ui, cell, item, quantity, true);
