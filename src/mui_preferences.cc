@@ -109,6 +109,12 @@ namespace {
     constexpr int kTextLayoutTablet = 389;
     constexpr int kTextBarterUnitPrice = 393;
     constexpr int kTextBarterUnitPriceNote = 394;
+    constexpr int kTextGroupText = 395;
+    constexpr int kTextGroupSaves = 396;
+    constexpr int kTextGroupSpeed = 397;
+    constexpr int kTextGroupOnScreen = 398;
+    constexpr int kTextGroupMessages = 399;
+    constexpr int kTextGroupInterface = 400;
     constexpr int kTextSaveCompatibility = 327;
     constexpr int kTextSaveCompatibilityNote = 328;
     constexpr int kTextSectionFiles = 336;
@@ -526,6 +532,7 @@ namespace {
         choice(Section::Game, kTextGameDifficulty, "Game difficulty", { kMessageEasy, kMessageNormal, kMessageHard }, &PreferenceValues::gameDifficulty);
         choice(Section::Game, kTextViolenceLevel, "Violence level", { kMessageNone, kMessageMinimal, kMessageNormal, kMessageMaximumBlood }, &PreferenceValues::violenceLevel);
         choice(Section::Game, kTextRunning, "Running", { kMessageNormal, kMessageAlways }, &PreferenceValues::running);
+        header(Section::Game, kTextGroupText, "Text");
         preferenceToggle(Section::Game, kTextSubtitles, "Subtitles", &PreferenceValues::subtitles);
         preferenceToggle(Section::Game, kTextLanguageFilter, "Language filter", &PreferenceValues::languageFilter);
         {
@@ -542,7 +549,13 @@ namespace {
             row.set = [](Values& values, float value) { values.preferences.textBaseDelay = std::round((7.0 - value) * 10.0) / 10.0; };
             rows.push_back(row);
         }
-        header(Section::Game, kTextConvenience, "Convenience");
+        {
+            Row row { Section::Game, RowKind::Toggle, kTextKarmaChanges, "Karma change messages", Origin::Ce, kTextKarmaChangesNote, "In the log: \"You gained 5 karma.\"" };
+            row.get = [](const Values& values) { return values.karmaChanges ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.karmaChanges = value != 0.0f; };
+            rows.push_back(row);
+        }
+        header(Section::Game, kTextGroupSaves, "Saves");
         {
             Row row { Section::Game, RowKind::Toggle, kTextMainMenuContinue, "Continue in the main menu", Origin::Port, kTextMainMenuContinueNote, "Loads the save made last" };
             row.get = [](const Values& values) { return values.mainMenuContinue ? 1.0f : 0.0f; };
@@ -553,12 +566,6 @@ namespace {
             Row row { Section::Game, RowKind::Toggle, kTextSaveCompatibility, "Save compatibility", Origin::Port, kTextSaveCompatibilityNote, "Marks saves made with other game files or mods" };
             row.get = [](const Values& values) { return values.saveCompatibility ? 1.0f : 0.0f; };
             row.set = [](Values& values, float value) { values.saveCompatibility = value != 0.0f; };
-            rows.push_back(row);
-        }
-        {
-            Row row { Section::Game, RowKind::Toggle, kTextBarterUnitPrice, "Unit prices when trading", Origin::Port, kTextBarterUnitPriceNote, "Top right of an item: the price of one in this deal" };
-            row.get = [](const Values& values) { return values.barterUnitPrice ? 1.0f : 0.0f; };
-            row.set = [](Values& values, float value) { values.barterUnitPrice = value != 0.0f; };
             rows.push_back(row);
         }
         {
@@ -574,13 +581,14 @@ namespace {
             row.set = [](Values& values, float value) { values.quickSaves = static_cast<int>(std::lround(value / 10.0f)) * 10; };
             rows.push_back(row);
         }
+        header(Section::Game, kTextConvenience, "Convenience");
         toggle(Section::Game, kTextAutoOpenDoors, "Open unlocked doors on the way", Origin::Ce, &Values::autoOpenDoors);
         toggle(Section::Game, kTextWalkWhenSneaking, "Walk instead of leaving sneak", Origin::Ce, &Values::walkWhenSneaking);
         toggle(Section::Game, kTextFastAmmoLoad, "Fast ammo loading", Origin::Ce, &Values::fastAmmoLoad);
         {
-            Row row { Section::Game, RowKind::Toggle, kTextKarmaChanges, "Karma change messages", Origin::Ce, kTextKarmaChangesNote, "In the log: \"You gained 5 karma.\"" };
-            row.get = [](const Values& values) { return values.karmaChanges ? 1.0f : 0.0f; };
-            row.set = [](Values& values, float value) { values.karmaChanges = value != 0.0f; };
+            Row row { Section::Game, RowKind::Toggle, kTextBarterUnitPrice, "Unit prices when trading", Origin::Port, kTextBarterUnitPriceNote, "Top right of an item: the price of one in this deal" };
+            row.get = [](const Values& values) { return values.barterUnitPrice ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.barterUnitPrice = value != 0.0f; };
             rows.push_back(row);
         }
         header(Section::Game, kTextPartyMembers, "Party members");
@@ -590,6 +598,7 @@ namespace {
 
         // Combat.
         choice(Section::Combat, kTextCombatDifficulty, "Combat difficulty", { kMessageWimpy, kMessageNormal, kMessageRough }, &PreferenceValues::combatDifficulty);
+        header(Section::Combat, kTextGroupSpeed, "Speed");
         {
             Row row { Section::Combat, RowKind::Slider, kTextCombatSpeed, "Combat speed" };
             row.minValue = 0.0f;
@@ -606,15 +615,13 @@ namespace {
             row.set = [](Values& values, float value) { values.allAnimations = value != 0.0f; };
             rows.push_back(row);
         }
+        header(Section::Combat, kTextGroupOnScreen, "On screen");
         {
             Row row { Section::Combat, RowKind::Toggle, kTextTacticalView, "Tactical view", Origin::Port, kTextTacticalViewNote, "Combat button: see-through figures, tiles and where you can walk" };
             row.get = [](const Values& values) { return values.tacticalView ? 1.0f : 0.0f; };
             row.set = [](Values& values, float value) { values.tacticalView = value != 0.0f; };
             rows.push_back(row);
         }
-        preferenceToggle(Section::Combat, kTextCombatLooks, "Combat looks", &PreferenceValues::combatLooks);
-        choice(Section::Combat, kTextCombatMessages, "Combat messages", { kMessageVerbose, kMessageBrief }, &PreferenceValues::combatMessages);
-        preferenceToggle(Section::Combat, kTextCombatTaunts, "Combat taunts", &PreferenceValues::combatTaunts);
         choice(Section::Combat, kTextTargetHighlight, "Target highlight", { kMessageOff, kMessageOn, kMessageTargetingOnly }, &PreferenceValues::targetHighlight);
         {
             Row row { Section::Combat, RowKind::Toggle, kTextBonusDamage, "Bonus damage in the stats", Origin::Ce, kTextBonusDamageNote, "Weapon damage with the bonus damage perks" };
@@ -623,6 +630,10 @@ namespace {
             rows.push_back(row);
         }
 
+        header(Section::Combat, kTextGroupMessages, "Messages");
+        preferenceToggle(Section::Combat, kTextCombatLooks, "Combat looks", &PreferenceValues::combatLooks);
+        choice(Section::Combat, kTextCombatMessages, "Combat messages", { kMessageVerbose, kMessageBrief }, &PreferenceValues::combatMessages);
+        preferenceToggle(Section::Combat, kTextCombatTaunts, "Combat taunts", &PreferenceValues::combatTaunts);
         // Sound.
         volume(kTextMasterVolume, "Master volume", &PreferenceValues::masterVolume, Sample::SoundEffect);
         volume(kTextMusicVolume, "Music and movies", &PreferenceValues::musicVolume, Sample::None);
@@ -640,6 +651,16 @@ namespace {
             rows.push_back(row);
         }
         preferenceToggle(Section::Display, kTextItemHighlight, "Item highlight", &PreferenceValues::itemHighlight);
+        {
+            Row row { Section::Display, RowKind::Choice, kTextMapFilter, "Map smoothing", Origin::Port };
+            row.options = { kTextFilterNearest, kTextFilterLinear, kTextFilterSharp };
+            row.optionsFromCe = true;
+            row.get = [](const Values& values) { return static_cast<float>(values.mapFilter); };
+            row.set = [](Values& values, float value) { values.mapFilter = static_cast<int>(value); };
+            rows.push_back(row);
+        }
+
+        header(Section::Display, kTextGroupInterface, "Interface");
         {
             Row row { Section::Display, RowKind::Slider, kTextInterfaceSize, "Interface size", Origin::Port };
             row.minValue = static_cast<float>(kInterfaceSizeMin);
@@ -690,15 +711,6 @@ namespace {
             row.set = [](Values& values, float value) { values.worldmapFollow = value != 0.0f; };
             rows.push_back(row);
         }
-        {
-            Row row { Section::Display, RowKind::Choice, kTextMapFilter, "Map smoothing", Origin::Port };
-            row.options = { kTextFilterNearest, kTextFilterLinear, kTextFilterSharp };
-            row.optionsFromCe = true;
-            row.get = [](const Values& values) { return static_cast<float>(values.mapFilter); };
-            row.set = [](Values& values, float value) { values.mapFilter = static_cast<int>(value); };
-            rows.push_back(row);
-        }
-
         return rows;
     }
 
@@ -767,6 +779,11 @@ namespace {
         void buildAbout(MuiContext& ui, const MuiRect& rect);
         void runFilesAction(FilesAction action);
         void buildRow(MuiContext& ui, size_t index, const MuiRect& rect);
+        // A row's height in a list [width] wide: the label's line, its note
+        // wrapped under it.
+        float rowHeight(MuiContext& ui, const Row& row, float width) const;
+        float lineHeight(MuiContext& ui, const Row& row) const;
+        float noteSize(MuiContext& ui) const;
     };
 
     PreferencesScreen::PreferencesScreen(bool inGame)
@@ -1174,15 +1191,13 @@ namespace {
 
     void PreferencesScreen::buildRows(MuiContext& ui, const MuiRect& rect)
     {
-        float rowHeight = ui.dp(tall ? 64.0f : 50.0f);
-        float headerHeight = ui.dp(tall ? 36.0f : 30.0f);
         bool showPreview = section == Section::Display && previewValid;
         float previewSpace = showPreview ? std::min(rect.h * 0.45f, ui.dp(tall ? 210.0f : 130.0f)) + ui.dp(tall ? 12.0f : 8.0f) : 0.0f;
 
         float contentHeight = previewSpace;
         for (const Row& row : rows) {
             if (row.section == section && (!row.shown || row.shown(edited))) {
-                contentHeight += row.kind == RowKind::Header ? headerHeight : rowHeight;
+                contentHeight += rowHeight(ui, row, rect.w);
             }
         }
 
@@ -1211,7 +1226,7 @@ namespace {
                 continue;
             }
 
-            float height = row.kind == RowKind::Header ? headerHeight : rowHeight;
+            float height = rowHeight(ui, row, rect.w);
             MuiRect rowRect = { rect.x, y, rect.w, height };
             if (rowRect.bottom() >= rect.y && rowRect.y <= rect.bottom()) {
                 buildRow(ui, index, rowRect);
@@ -1222,30 +1237,68 @@ namespace {
         muiPopClip();
     }
 
+    float PreferencesScreen::rowHeight(MuiContext& ui, const Row& row, float width) const
+    {
+        if (row.kind == RowKind::Header) {
+            return ui.dp(tall ? 44.0f : 36.0f);
+        }
+
+        float height = lineHeight(ui, row);
+        if (row.noteId != -1) {
+            std::u32string note = muiDecodeGameText(muiText(row.noteId, row.noteFallback));
+            float size = noteSize(ui);
+            size_t lines = std::max(muiWrapText(note, width - ui.dp(8.0f), size).size(), static_cast<size_t>(1));
+            height += lines * muiLineHeight(size) + ui.dp(tall ? 10.0f : 8.0f);
+        }
+        return height;
+    }
+
+    float PreferencesScreen::lineHeight(MuiContext& ui, const Row& row) const
+    {
+        // A bit lower over a note.
+        return ui.dp(tall ? 64.0f : 50.0f) - (row.noteId != -1 ? ui.dp(6.0f) : 0.0f);
+    }
+
+    float PreferencesScreen::noteSize(MuiContext& ui) const
+    {
+        return ui.dp(tall ? 13.0f : 12.0f);
+    }
+
     void PreferencesScreen::buildRow(MuiContext& ui, size_t index, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
         Row& row = rows[index];
         std::u32string label = muiDecodeGameText(muiText(row.textId, row.fallback));
 
+        // A group of the section's settings: its name bright, room above.
         if (row.kind == RowKind::Header) {
-            muiDrawTextAligned(label, { rect.x + ui.dp(4.0f), rect.y + ui.dp(8.0f), rect.w, rect.h - ui.dp(8.0f) }, ui.dp(tall ? 14.0f : 12.0f), theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(label, { rect.x + ui.dp(4.0f), rect.y + ui.dp(10.0f), rect.w, rect.h - ui.dp(10.0f) }, ui.dp(tall ? 15.0f : 13.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
             return;
         }
 
         muiFillRect({ rect.x, rect.bottom() - ui.dp(1.0f), rect.w, ui.dp(1.0f) }, kRowLine);
 
-        // Label: a dot when changed, the origin badge, a note under it.
-        // Choices get more room (several labels side by side).
-        float controlWidth = row.kind == RowKind::Choice ? std::min(rect.w * 0.6f, ui.dp(400.0f)) : std::min(rect.w * 0.48f, ui.dp(300.0f));
+        // The label and the control on the first line (a dot when changed,
+        // the origin badge), the note under both across the row, wrapped.
+        // Choices get more room (several labels side by side), a switch
+        // only its own.
+        float line = lineHeight(ui, row);
+        float controlWidth;
+        if (row.kind == RowKind::Choice) {
+            controlWidth = std::min(rect.w * 0.6f, ui.dp(400.0f));
+        } else if (row.kind == RowKind::Toggle) {
+            controlWidth = ui.dp(52.0f);
+        } else {
+            controlWidth = std::min(rect.w * 0.48f, ui.dp(300.0f));
+        }
         float controlInset = ui.dp(tall ? 12.0f : 8.0f);
-        MuiRect control = { rect.right() - controlWidth, rect.y + controlInset, controlWidth, rect.h - controlInset * 2.0f };
+        MuiRect control = { rect.right() - controlWidth, rect.y + controlInset, controlWidth, line - controlInset * 2.0f };
         float x = rect.x + ui.dp(4.0f);
         float labelWidth = control.x - x - ui.dp(12.0f);
 
         bool hasNote = row.noteId != -1;
-        float labelTop = rect.y + ui.dp(4.0f);
-        float labelHeight = hasNote ? ui.dp(tall ? 32.0f : 24.0f) : rect.h - ui.dp(8.0f);
+        float labelTop = rect.y;
+        float labelHeight = line;
         if (changed(row)) {
             float dot = ui.dp(4.0f);
             muiFillCircle(x + dot, labelTop + labelHeight / 2.0f, dot, kChanged);
@@ -1278,8 +1331,13 @@ namespace {
 
         if (hasNote) {
             std::u32string note = muiDecodeGameText(muiText(row.noteId, row.noteFallback));
-            MuiRect noteRect = { x, labelRect.bottom(), labelWidth, rect.bottom() - labelRect.bottom() - ui.dp(4.0f) };
-            muiDrawTextAligned(note, noteRect, muiFitTextSize(note, noteRect.w, ui.dp(tall ? 13.0f : 11.0f), ui.dp(9.0f)), theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            float size = noteSize(ui);
+            float noteLine = muiLineHeight(size);
+            float y = rect.y + line;
+            for (const std::u32string& text : muiWrapText(note, rect.w - ui.dp(8.0f), size)) {
+                muiDrawTextAligned(text, { rect.x + ui.dp(4.0f), y, rect.w - ui.dp(8.0f), noteLine }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+                y += noteLine;
+            }
         }
 
         // By its name's text: stays when rows move (automated tests).
