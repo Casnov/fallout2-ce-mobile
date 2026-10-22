@@ -13,12 +13,25 @@
 #include "kb.h"
 #include "mui_icons.h"
 #include "object.h"
+#include "proto.h"
 #include "proto_types.h"
 #include "stat.h"
 
 namespace fallout {
 
 namespace {
+
+    // What dropping the dragged item on a target does, in its top left
+    // corner: a small round button as the HUD's (its fill and border, the
+    // icon bright).
+    void drawDropBadge(MuiContext& ui, float x, float y, float iconSize, MuiIcon icon)
+    {
+        const MuiTheme& theme = muiTheme();
+        float radius = iconSize * 0.8f;
+        muiFillCircle(x, y, radius, theme.button);
+        muiStrokeCircle(x, y, radius, ui.dp(1.5f), theme.buttonBorder);
+        muiDrawIcon(icon, x, y, iconSize, theme.accent);
+    }
 
     // Turn hint under the figure (graphics, not an icon: a thin line however
     // wide): the front of a wide flat ellipse, heads at both ends pointing
@@ -73,6 +86,8 @@ namespace {
     const MuiColor kDropZone = muiRgb(0x1A2A10);
     const MuiColor kWarning = muiRgb(0xFFB000);
     const MuiColor kEncumbered = kMuiOverLimit;
+    // An empty magazine's count, red as on the HUD.
+    const MuiColor kAmmoEmpty = muiRgb(0xFF4A3A);
 
     // Glow over what an action changed, ms.
     constexpr unsigned int kFlashMs = 800;
@@ -188,6 +203,9 @@ namespace {
         MuiRect listRect;
         MuiRect figureRect;
         MuiRect slotRects[3];
+        // The list's cell size: drop badges are as big on the hands and the
+        // figure.
+        float listCell = 0.0f;
         MuiRect infoRect;
         MuiRect crumbRect;
 
@@ -397,6 +415,7 @@ namespace {
         MuiRect area = rect.inset(gap);
         int columns = muiItemColumns(ui, area.w, gap, tall);
         float cell = (area.w - gap * (columns - 1)) / columns;
+        listCell = cell;
         int rows = (static_cast<int>(items.size()) + columns - 1) / columns;
         float contentHeight = rows * (cell + gap);
 
@@ -441,8 +460,7 @@ namespace {
                 muiStrokeRoundRect(cellRect, ui.dp(5.0f), ui.dp(2.0f), theme.accent);
                 MuiIcon icon = itemGetType(item) == ITEM_TYPE_CONTAINER ? MuiIcon::Inventory : MuiIcon::Reload;
                 float iconSize = cell * 0.26f;
-                muiFillCircle(cellRect.x + iconSize * 0.9f, cellRect.y + iconSize * 0.9f, iconSize * 0.8f, theme.buttonPrimary);
-                muiDrawIcon(icon, cellRect.x + iconSize * 0.9f, cellRect.y + iconSize * 0.9f, iconSize, theme.buttonPrimaryText);
+                drawDropBadge(ui, cellRect.x + iconSize * 0.9f, cellRect.y + iconSize * 0.9f, iconSize, icon);
             }
 
             if (longPressed && !scrolling) {
@@ -622,11 +640,9 @@ namespace {
         Object* dragged = draggedItem(ui, view, &draggedSlot);
         if (view.container == nullptr && view.critter == gDude && inventoryCanUseOnSelf(dragged)) {
             muiStrokeRoundRect(figure.inset(-ui.dp(2.0f)), ui.dp(8.0f), ui.dp(2.0f), theme.accent);
-            float iconSize = ui.dp(18.0f);
-            float iconX = figure.x + iconSize * 0.9f;
-            float iconY = figure.y + iconSize * 0.9f;
-            muiFillCircle(iconX, iconY, iconSize * 0.8f, theme.buttonPrimary);
-            muiDrawIcon(MuiIcon::Use, iconX, iconY, iconSize, theme.buttonPrimaryText);
+            // As big as on list items, whatever the figure's size.
+            float iconSize = listCell > 0.0f ? listCell * 0.26f : ui.dp(18.0f);
+            drawDropBadge(ui, figure.x + iconSize * 0.9f, figure.y + iconSize * 0.9f, iconSize, MuiIcon::Use);
         }
 
         drawFlash(ui, figure, flash.target == FlashTarget::Figure);
@@ -699,22 +715,59 @@ namespace {
         } else {
             muiDrawItemCell(ui, rect, item, 1, pressed || item == selected);
 
-            // Loaded ammo.
+            // Loaded rounds over the art at the bottom right (it keeps its
+            // size), in a row: the loaded ammo's art, the count (empty red)
+            // with the magazine's size small.
             int capacity = itemGetType(item) == ITEM_TYPE_WEAPON ? ammoGetCapacity(item) : 0;
             if (capacity > 0) {
-                float barWidth = ui.dp(4.0f);
-                MuiRect bar = { rect.right() - barWidth - ui.dp(5.0f), rect.y + ui.dp(6.0f), barWidth, rect.h - ui.dp(12.0f) };
-                muiFillRoundRect(bar, ui.dp(2.0f), muiRgb(0x2A342C));
-                float ratio = std::clamp(static_cast<float>(ammoGetQuantity(item)) / capacity, 0.0f, 1.0f);
-                if (ratio > 0.0f) {
-                    muiFillRoundRect({ bar.x, bar.bottom() - bar.h * ratio, bar.w, bar.h * ratio }, ui.dp(2.0f), theme.accent);
+                int quantity = ammoGetQuantity(item);
+                std::u32string count = number(quantity);
+                std::u32string size = U"/" + number(capacity);
+                float countSize = ui.dp(20.0f);
+                float sizeSize = ui.dp(12.0f);
+                float countWidth = muiTextWidth(count, countSize);
+                float sizeWidth = muiTextWidth(size, sizeSize);
+                float lineHeight = muiLineHeight(countSize);
+                float right = rect.right() - ui.dp(6.0f);
+                float top = rect.bottom() - ui.dp(4.0f) - lineHeight;
+                MuiRect sizeRect = { right - sizeWidth, top + ui.dp(3.0f), sizeWidth, lineHeight };
+                MuiRect countRect = { sizeRect.x - countWidth, top, countWidth, lineHeight };
+
+                ProtoId ammoPid = weaponGetAmmoTypeProtoId(item);
+                Proto* proto;
+                if (ammoPid.valid() && protoGetProto(ammoPid, &proto) != -1) {
+                    int width;
+                    int height;
+                    SDL_Texture* texture = muiArtTexture(FrmId(proto->item.inventoryFid), 0, &width, &height);
+                    if (texture != nullptr) {
+                        float artWidth = ui.dp(25.0f);
+                        float artHeight = ui.dp(16.0f);
+                        MuiRect box = { countRect.x - ui.dp(4.0f) - artWidth, countRect.centerY() - artHeight / 2.0f, artWidth, artHeight };
+                        MuiRect art = muiFitRect(box, static_cast<float>(width), static_cast<float>(height));
+                        // Next to the count, not in the middle of the box.
+                        art.x = box.right() - art.w;
+                        muiDrawTexture(texture, art);
+                    }
+                }
+
+                MuiColor countColor = quantity == 0 ? kAmmoEmpty : theme.text;
+                float shadow = ui.dp(1.0f);
+                for (float offset : { shadow, 0.0f }) {
+                    bool isShadow = offset > 0.0f;
+                    muiDrawTextAligned(count, { countRect.x + offset, countRect.y + offset, countRect.w, countRect.h }, countSize, isShadow ? muiRgb(0x000000, 200) : countColor, MuiAlign::Start, MuiAlign::Center);
+                    muiDrawTextAligned(size, { sizeRect.x + offset, sizeRect.y + offset, sizeRect.w, sizeRect.h }, sizeSize, isShadow ? muiRgb(0x000000, 200) : theme.textDim, MuiAlign::Start, MuiAlign::Center);
                 }
             }
         }
 
+        // Ammo onto the weapon in the hand loads it, an item into the bag in
+        // it goes in: the badge as on list items, over the active dot.
+        bool onto = target && item != nullptr && inventoryCanDropOnto(dragged, item);
         if (active) {
             muiStrokeRoundRect(rect, ui.dp(5.0f), ui.dp(2.0f), theme.accent);
-            muiFillCircle(rect.x + ui.dp(8.0f), rect.y + ui.dp(8.0f), ui.dp(3.0f), theme.accent);
+            if (!onto) {
+                muiFillCircle(rect.x + ui.dp(8.0f), rect.y + ui.dp(8.0f), ui.dp(3.0f), theme.accent);
+            }
         }
 
         drawFlash(ui, rect, (flash.target == FlashTarget::Slot && flash.slot == slot) || (flash.target == FlashTarget::Item && item != nullptr && flash.item == item));
@@ -722,8 +775,12 @@ namespace {
         // Target: loading ammo or putting into a container in the hand is
         // shown like on list items.
         if (target) {
-            bool onto = item != nullptr && inventoryCanDropOnto(dragged, item);
             muiStrokeRoundRect(rect.inset(-ui.dp(2.0f)), ui.dp(6.0f), ui.dp(2.0f), onto ? theme.accent : theme.buttonPrimary);
+            if (onto) {
+                float iconSize = (listCell > 0.0f ? listCell : rect.w) * 0.26f;
+                MuiIcon icon = itemGetType(item) == ITEM_TYPE_CONTAINER ? MuiIcon::Inventory : MuiIcon::Reload;
+                drawDropBadge(ui, rect.x + iconSize * 0.9f, rect.y + iconSize * 0.9f, iconSize, icon);
+            }
         }
 
         if (longPressed) {
