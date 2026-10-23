@@ -115,6 +115,10 @@ namespace {
     constexpr int kTextGroupOnScreen = 398;
     constexpr int kTextGroupMessages = 399;
     constexpr int kTextGroupInterface = 400;
+    constexpr int kTextFont = 401;
+    constexpr int kTextFontNote = 402;
+    constexpr int kTextFontClassic = 403;
+    constexpr int kTextFontModern = 404;
     constexpr int kTextSaveCompatibility = 327;
     constexpr int kTextSaveCompatibilityNote = 328;
     constexpr int kTextSectionFiles = 336;
@@ -173,6 +177,7 @@ namespace {
         { "LodePNG - zlib License", "licenses\\lodepng.txt" },
         { "stb_truetype, stb_vorbis - MIT / Public Domain", "licenses\\stb.txt" },
         { "fpattern", "licenses\\fpattern.txt" },
+        { "Fallout Classic Dialog - MIT License", "fonts\\FalloutClassicDialog-LICENSE.txt" },
         { "PT Mono - SIL Open Font License 1.1", "fonts\\OFL.txt" },
     };
 
@@ -222,6 +227,7 @@ namespace {
         int windows;
         int layout;
         bool windowsTapOutside;
+        int font;
         int mapFilter;
         bool autoOpenDoors;
         bool walkWhenSneaking;
@@ -249,6 +255,7 @@ namespace {
         values.windows = settings.touch.windows;
         values.layout = settings.touch.layout;
         values.windowsTapOutside = settings.touch.windows_tap_outside;
+        values.font = settings.touch.font;
         values.mapFilter = settings.world_view.filter;
         values.autoOpenDoors = settings.qol.auto_open_doors;
         values.walkWhenSneaking = settings.qol.walk_when_sneaking;
@@ -277,6 +284,7 @@ namespace {
         values.windows = TouchSettings().windows;
         values.layout = TouchSettings().layout;
         values.windowsTapOutside = TouchSettings().windows_tap_outside;
+        values.font = TouchSettings().font;
         values.mapFilter = WorldViewSettings().filter;
         QolSettings qol;
         values.autoOpenDoors = qol.auto_open_doors;
@@ -355,6 +363,8 @@ namespace {
         settings.touch.windows = values.windows;
         settings.touch.layout = values.layout;
         settings.touch.windows_tap_outside = values.windowsTapOutside;
+        // The text is made again in it (`muiTextWidth`, `muiDrawText`).
+        settings.touch.font = values.font;
         settings.world_view.filter = values.mapFilter;
         worldViewSetFilter(values.mapFilter);
         settings.qol.auto_open_doors = values.autoOpenDoors;
@@ -661,6 +671,14 @@ namespace {
         }
 
         header(Section::Display, kTextGroupInterface, "Interface");
+        {
+            Row row { Section::Display, RowKind::Choice, kTextFont, "Font", Origin::Port, kTextFontNote, "Classic: the game's dialog font redrawn" };
+            row.options = { kTextFontClassic, kTextFontModern };
+            row.optionsFromCe = true;
+            row.get = [](const Values& values) { return static_cast<float>(values.font); };
+            row.set = [](Values& values, float value) { values.font = static_cast<int>(value); };
+            rows.push_back(row);
+        }
         {
             Row row { Section::Display, RowKind::Slider, kTextInterfaceSize, "Interface size", Origin::Port };
             row.minValue = static_cast<float>(kInterfaceSizeMin);

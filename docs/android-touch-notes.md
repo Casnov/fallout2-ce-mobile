@@ -608,7 +608,20 @@ every screen on the new scalable UI, visual style/textures later via theme).
   original 8-bit UI and movies (`SDL_RenderSetLogicalSize(0, 0)` while
   drawing). Sizes in dp: output px per dp = `hudGetScreenDensity()` *
   `hud_scale`; safe area from HUD metrics (cutout insets).
-- Text: PT Mono (OFL, `files/ce.dat/fonts/`), stb_truetype glyph atlases per
+- Text (`[touch] font`, Settings → Display): classic - Fallout Classic
+  Dialog (MIT, a redrawing of the game's dialog font `font1.aaf`, with
+  Latin, Western / Central European and Cyrillic letters; the dashes,
+  quotes, ellipsis, numero and a few more added from its own glyphs,
+  `docs-private/fonts/addglyphs.py`), the default; modern - PT Mono (OFL).
+  Both in `files/ce.dat/fonts/`. Characters the classic one lacks come from
+  PT Mono, glyph by glyph; a line is the font's ascent and descent without
+  its line gap, so both fonts sit the same in the screens' layouts (their
+  cap and x heights at a size match). In a Cyrillic game the classic
+  font's glyphs are 0.9 of the size, centered in the line: its Russian
+  texts ran 8% wider than PT Mono's (ce.msg 11%), Latin ones as wide
+  (English, German, French, Polish ce.msg and game texts: 0-2%). The game's own fonts (9-24 px
+  bitmaps of 256 characters in the player's files) aren't used: they scale
+  only as pixels. stb_truetype glyph atlases per
   pixel size (`third_party/stb`), each glyph range packed by its own call
   (stb_truetype 1.26 gives characters the font lacks the first lacking
   one's data by its index in another range: reads past the array, a crash

@@ -14,6 +14,7 @@
 #include "debug.h"
 #include "game_charset.h"
 #include "mui_icons.h"
+#include "settings.h"
 #include "svga.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -24,8 +25,23 @@ namespace fallout {
 
 namespace {
 
-    // Font shipped in ce.dat (PT Mono, OFL, see fonts/OFL.txt).
-    constexpr const char* kFontPath = "fonts\\PTM55FT.ttf";
+    // Fonts shipped in ce.dat: the classic one (Fallout Classic Dialog, the
+    // game's dialog font redrawn, MIT, fonts/FalloutClassicDialog-LICENSE.txt)
+    // and the modern one (PT Mono, OFL, fonts/OFL.txt). Characters the
+    // classic one lacks come from the modern one.
+    constexpr const char* kFontPaths[] = {
+        "fonts\\FalloutClassicDialog.ttf",
+        "fonts\\PTM55FT.ttf",
+    };
+    constexpr int kFontCount = sizeof(kFontPaths) / sizeof(kFontPaths[0]);
+    constexpr int kModernFont = 1;
+
+    // The classic font's glyphs at this much of a size in a Cyrillic game:
+    // its Russian texts run 8% wider than PT Mono's (the UI's 11%), Latin
+    // ones as wide (English, German, French, Polish: 0-2%), so it takes
+    // about the same room (a bit less, chosen on the phone). The line stays
+    // the size's.
+    constexpr float kClassicCyrillicScale = 0.9f;
 
     // Glyph ranges packed into atlases: ASCII, Latin-1, Latin Extended-A,
     // Cyrillic, general punctuation, currency and letterlike symbols.
@@ -60,10 +76,18 @@ namespace {
 
     SDL_Renderer* gRenderer = nullptr;
 
-    std::vector<unsigned char> gFontData;
-    stbtt_fontinfo gFontInfo;
-    bool gFontLoaded = false;
-    bool gFontLoadFailed = false;
+    struct Font {
+        std::vector<unsigned char> data;
+        stbtt_fontinfo info;
+        bool loaded = false;
+        bool failed = false;
+    };
+
+    Font gFonts[kFontCount];
+
+    // `[touch] font` the atlases are made with, the classic font's scale.
+    int gFontChoice = 0;
+    float gClassicScale = 1.0f;
 
     // By pixel size.
     std::map<int, std::unique_ptr<FontAtlas>> gAtlases;
@@ -102,49 +126,75 @@ namespace {
 
     std::vector<SDL_Vertex> gVertices;
 
-    bool loadFont()
+    Font* loadFont(int index)
     {
-        if (gFontLoaded) {
-            return true;
+        Font& font = gFonts[index];
+        if (font.loaded) {
+            return &font;
         }
 
-        if (gFontLoadFailed) {
-            return false;
+        if (font.failed) {
+            return nullptr;
         }
 
-        File* stream = fileOpen(kFontPath, "rb");
+        const char* path = kFontPaths[index];
+        File* stream = fileOpen(path, "rb");
         if (stream == nullptr) {
-            debugPrint("MUI: can't open font %s\n", kFontPath);
-            gFontLoadFailed = true;
-            return false;
+            debugPrint("MUI: can't open font %s\n", path);
+            font.failed = true;
+            return nullptr;
         }
 
         int size = fileGetSize(stream);
-        gFontData.resize(size);
-        size_t read = fileRead(gFontData.data(), 1, size, stream);
+        font.data.resize(size);
+        size_t read = fileRead(font.data.data(), 1, size, stream);
         fileClose(stream);
 
-        if (static_cast<int>(read) != size || !stbtt_InitFont(&gFontInfo, gFontData.data(), stbtt_GetFontOffsetForIndex(gFontData.data(), 0))) {
-            debugPrint("MUI: can't read font %s\n", kFontPath);
-            gFontLoadFailed = true;
-            return false;
+        if (static_cast<int>(read) != size || !stbtt_InitFont(&font.info, font.data.data(), stbtt_GetFontOffsetForIndex(font.data.data(), 0))) {
+            debugPrint("MUI: can't read font %s\n", path);
+            font.failed = true;
+            return nullptr;
         }
 
-        gFontLoaded = true;
-        return true;
+        font.loaded = true;
+        return &font;
+    }
+
+    // The chosen font, the modern one when the classic one can't be read.
+    Font* mainFont()
+    {
+        Font* font = loadFont(gFontChoice == 1 ? kModernFont : 0);
+        return font != nullptr ? font : loadFont(kModernFont);
     }
 
     FontAtlas* atlasForSize(float size)
     {
+        // The font setting or the game's alphabet (known once its fonts
+        // are) changed: the text is made again.
+        float classicScale = gameCharsetIsCyrillic() ? kClassicCyrillicScale : 1.0f;
+        if (settings.touch.font != gFontChoice || classicScale != gClassicScale) {
+            for (auto& entry : gAtlases) {
+                if (entry.second->texture != nullptr) {
+                    SDL_DestroyTexture(entry.second->texture);
+                }
+            }
+            gAtlases.clear();
+            gFontChoice = settings.touch.font;
+            gClassicScale = classicScale;
+        }
+
         int pixelSize = std::max(static_cast<int>(std::lround(size)), 6);
         auto it = gAtlases.find(pixelSize);
         if (it != gAtlases.end()) {
             return it->second.get();
         }
 
-        if (gRenderer == nullptr || !loadFont()) {
+        Font* main = mainFont();
+        if (gRenderer == nullptr || main == nullptr) {
             return nullptr;
         }
+        Font* fallback = main != &gFonts[kModernFont] ? loadFont(kModernFont) : nullptr;
+        float glyphSize = fallback != nullptr ? pixelSize * gClassicScale : static_cast<float>(pixelSize);
 
         auto atlas = std::make_unique<FontAtlas>();
 
@@ -160,25 +210,48 @@ namespace {
 
             stbtt_PackSetOversampling(&context, 2, 1);
 
-            stbtt_pack_range ranges[kRangeCount];
-            for (int index = 0; index < kRangeCount; index++) {
-                atlas->chars[index].assign(kGlyphRanges[index].count, stbtt_packedchar {});
-                ranges[index].font_size = static_cast<float>(pixelSize);
-                ranges[index].first_unicode_codepoint_in_range = kGlyphRanges[index].first;
-                ranges[index].array_of_unicode_codepoints = nullptr;
-                ranges[index].num_chars = kGlyphRanges[index].count;
-                ranges[index].chardata_for_range = atlas->chars[index].data();
-            }
-
-            // One range a call: stb_truetype (v1.26) gives a character the
-            // font lacks the data of the first one it lacked, by that one's
-            // index - an index into the range it was in, read from the
-            // current range's array (past its end when that's shorter:
+            // Each range's characters from the main font, the ones it
+            // lacks from the fallback (when that has them), each part of a
+            // range its own call: stb_truetype (v1.26) gives a character
+            // the font lacks the data of the first one it lacked, by that
+            // one's index - an index into the range it was in, read from
+            // the current range's array (past its end when that's shorter:
             // 0x2010.. then 0x2030..). In one call that index stays in
             // its range.
             bool packed = true;
             for (int index = 0; index < kRangeCount && packed; index++) {
-                packed = stbtt_PackFontRanges(&context, gFontData.data(), 0, &ranges[index], 1) != 0;
+                const GlyphRange& range = kGlyphRanges[index];
+                atlas->chars[index].assign(range.count, stbtt_packedchar {});
+
+                std::vector<int> own;
+                std::vector<int> borrowed;
+                for (int codepoint = range.first; codepoint < range.first + range.count; codepoint++) {
+                    bool lacks = stbtt_FindGlyphIndex(&main->info, codepoint) == 0;
+                    if (lacks && fallback != nullptr && stbtt_FindGlyphIndex(&fallback->info, codepoint) != 0) {
+                        borrowed.push_back(codepoint);
+                    } else {
+                        own.push_back(codepoint);
+                    }
+                }
+
+                for (int part = 0; part < 2 && packed; part++) {
+                    std::vector<int>& codepoints = part == 0 ? own : borrowed;
+                    Font* font = part == 0 ? main : fallback;
+                    if (codepoints.empty()) {
+                        continue;
+                    }
+
+                    std::vector<stbtt_packedchar> chars(codepoints.size());
+                    stbtt_pack_range pack {};
+                    pack.font_size = glyphSize;
+                    pack.array_of_unicode_codepoints = codepoints.data();
+                    pack.num_chars = static_cast<int>(codepoints.size());
+                    pack.chardata_for_range = chars.data();
+                    packed = stbtt_PackFontRanges(&context, font->data.data(), 0, &pack, 1) != 0;
+                    for (size_t at = 0; at < codepoints.size(); at++) {
+                        atlas->chars[index][codepoints[at] - range.first] = chars[at];
+                    }
+                }
             }
             stbtt_PackEnd(&context);
 
@@ -208,13 +281,18 @@ namespace {
         SDL_SetTextureBlendMode(atlas->texture, SDL_BLENDMODE_BLEND);
         SDL_SetTextureScaleMode(atlas->texture, SDL_ScaleModeLinear);
 
-        float scale = stbtt_ScaleForPixelHeight(&gFontInfo, static_cast<float>(pixelSize));
+        // A line is the main font's ascent and descent at the size, without
+        // its line gap: both fonts sit in a line the same way (the same cap
+        // and x heights at a size), the screens' layouts fit either. Smaller
+        // glyphs are centered in it.
+        float scale = stbtt_ScaleForPixelHeight(&main->info, static_cast<float>(pixelSize));
+        float glyphScale = stbtt_ScaleForPixelHeight(&main->info, glyphSize);
         int ascent;
         int descent;
         int lineGap;
-        stbtt_GetFontVMetrics(&gFontInfo, &ascent, &descent, &lineGap);
-        atlas->ascent = ascent * scale;
-        atlas->lineHeight = (ascent - descent + lineGap) * scale;
+        stbtt_GetFontVMetrics(&main->info, &ascent, &descent, &lineGap);
+        atlas->lineHeight = (ascent - descent) * scale;
+        atlas->ascent = ascent * glyphScale + (atlas->lineHeight - (ascent - descent) * glyphScale) / 2.0f;
 
         FontAtlas* result = atlas.get();
         gAtlases[pixelSize] = std::move(atlas);

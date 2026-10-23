@@ -309,6 +309,10 @@
 {398}{}{На экране}
 {399}{}{Сообщения}
 {400}{}{Интерфейс}
+{401}{}{Шрифт}
+{402}{}{Классический: шрифт диалогов игры, перерисованный}
+{403}{}{Классический}
+{404}{}{Современный}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

@@ -411,6 +411,7 @@ void initSettingsRegistry(bool isMapper)
     SETTING_P(windows, clamp(0, 2));
     SETTING_P(layout, clamp(0, 2));
     SETTING(windows_tap_outside);
+    SETTING_P(font, clamp(0, 1));
 #undef SECT
 
 #define SECT world_view

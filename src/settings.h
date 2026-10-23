@@ -363,6 +363,9 @@ struct TouchSettings {
     // A tap on the world outside a window closes it (the game screens'
     // windows; small panels always close so).
     bool windows_tap_outside = true;
+    // Mobile UI's font: 0 - classic (the game's dialog font redrawn), 1 -
+    // modern (PT Mono).
+    int font = 0;
 };
 
 struct MapperSettings {

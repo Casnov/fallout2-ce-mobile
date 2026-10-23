@@ -1057,6 +1057,11 @@ const char* gameCharsetName()
     return current()->name;
 }
 
+bool gameCharsetIsCyrillic()
+{
+    return current()->alphabet == Alphabet::Cyrillic;
+}
+
 const char* gameCharsetUiLanguage()
 {
     return gCharset != nullptr ? gUiLanguage.c_str() : settings.system.language.c_str();

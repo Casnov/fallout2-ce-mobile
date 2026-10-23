@@ -59,7 +59,7 @@ A release build is signed with your own key: point the Gradle property `fallout2
 
 ## License
 
-The engine is under the [Sustainable Use License](LICENSE.md), as upstream: free, non-commercial distribution only, with the license and notices kept. Third-party components: SDL 2, zlib, LodePNG (zlib license), libarchive (BSD), liblzma from XZ Utils (0BSD), stb (MIT / public domain), fpattern, PT Mono font (SIL OFL 1.1). The app shows all of them in Settings → About.
+The engine is under the [Sustainable Use License](LICENSE.md), as upstream: free, non-commercial distribution only, with the license and notices kept. Third-party components: SDL 2, zlib, LodePNG (zlib license), libarchive (BSD), liblzma from XZ Utils (0BSD), stb (MIT / public domain), fpattern, Fallout Classic Dialog font (MIT), PT Mono font (SIL OFL 1.1). The app shows all of them in Settings → About.
 
 Credits: Alexander Batalov and the Fallout 2 CE contributors for the engine; the sfall, RPU and Inventory Filter authors, whose features are reimplemented here by their behavior (no code taken).
 

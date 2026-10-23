@@ -28,6 +28,9 @@ unsigned char gameCharsetEncode(char32_t codepoint);
 // The code page's Windows name ("windows-1251").
 const char* gameCharsetName();
 
+// The game's texts are in a Cyrillic alphabet.
+bool gameCharsetIsCyrillic();
+
 // The language of the mobile UI's texts (`game\ce.msg`): the game's, when
 // its texts are in it; otherwise the device's when its alphabet is the
 // texts', or English.
