@@ -67,6 +67,8 @@ namespace {
     private:
         // The save Continue loads, -1 - none (or the button is off).
         int continueSlot = -1;
+        // Load game only when there's a save to load (as Continue).
+        bool hasSaves = false;
         std::u32string continuePlace;
 
         void buildButtons(MuiContext& ui, const MuiRect& column);
@@ -76,6 +78,7 @@ namespace {
     MainMenuScreen::MainMenuScreen()
     {
         modal = true;
+        hasSaves = lsgMobileNewestSlot() != -1;
 
         if (settings.enhancements.main_menu_continue) {
             continueSlot = lsgMobileNewestSlot();
@@ -127,7 +130,7 @@ namespace {
         float smallHeight = ui.dp(38.0f);
         float footerHeight = ui.dp(30.0f);
 
-        float height = (continueSlot != -1 ? continueHeight + gap : 0.0f) + (buttonHeight + gap) * 3.0f + smallHeight;
+        float height = (continueSlot != -1 ? continueHeight + gap : 0.0f) + (buttonHeight + gap) * (hasSaves ? 3.0f : 2.0f) + smallHeight;
         float y = column.y + std::max((column.h - footerHeight - height) / 2.0f, 0.0f);
 
         if (continueSlot != -1) {
@@ -160,6 +163,9 @@ namespace {
             { "mainmenu.settings", kTextSettings, "Settings", MAIN_MENU_OPTIONS },
         };
         for (const Button& button : buttons) {
+            if (button.choice == MAIN_MENU_LOAD_GAME && !hasSaves) {
+                continue;
+            }
             if (ui.button(button.id, { column.x, y, column.w, buttonHeight }, muiDecodeGameText(muiText(button.textId, button.fallback)))) {
                 choice = button.choice;
             }
