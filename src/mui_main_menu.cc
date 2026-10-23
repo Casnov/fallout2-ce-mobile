@@ -8,15 +8,15 @@
 
 #include "art.h"
 #include "fps_limiter.h"
-#include "input.h"
-#include "mui_draw.h"
-#include "svga.h"
 #include "game.h"
+#include "input.h"
 #include "loadsave.h"
 #include "mainmenu.h"
 #include "message.h"
+#include "mui_draw.h"
 #include "platform_compat.h"
 #include "settings.h"
+#include "svga.h"
 #include "version.h"
 
 namespace fallout {
@@ -25,7 +25,6 @@ namespace {
 
     // The buttons going away before a screen opens in windows.
     constexpr unsigned int kLeaveMs = 150;
-
 
     const MuiColor kBackground = muiRgb(0x000000);
 
