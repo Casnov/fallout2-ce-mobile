@@ -8,6 +8,7 @@
 #include "object.h"
 #include "proto_types.h"
 #include "stat_defs.h"
+#include "window_defs.h"
 #include "worldmap.h"
 #include <setjmp.h>
 
@@ -296,6 +297,17 @@ inline HitLocation programStackPopEnum(Program* program)
 }
 
 template <>
+inline MapElevation programStackPopEnum(Program* program)
+{
+    int elevation = programStackPopInteger(program);
+    if (!elevationIsValid(elevation)) {
+        programPrintError("invalid elevation %d", elevation);
+    }
+
+    return static_cast<MapElevation>(elevation);
+}
+
+template <>
 inline CriticalHitDataMember programStackPopEnum(Program* program)
 {
     int criticalHitDataMember = programStackPopInteger(program);
@@ -449,6 +461,17 @@ inline VisitedState programStackPopEnum(Program* program)
     }
 
     return static_cast<VisitedState>(visited);
+}
+
+template <>
+inline TextAlignment programStackPopEnum(Program* program)
+{
+    int textAlignment = programStackPopInteger(program);
+    if (!textAlignmentIsValid(textAlignment)) {
+        programPrintError("invalid text alignment %d", textAlignment);
+    }
+
+    return static_cast<TextAlignment>(textAlignment);
 }
 
 void programReturnStackPushValue(Program* program, ProgramValue& programValue);

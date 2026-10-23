@@ -203,7 +203,7 @@ typedef struct AnimationDescription {
         // - ANIM_KIND_MOVE_TO_TILE_STRAIGHT
         struct {
             int tile;
-            int elevation;
+            MapElevation elevation;
         };
 
         // ANIM_KIND_SET_FID
@@ -333,10 +333,10 @@ static bool canUseDoor(Object* critter, Object* door);
 static int _idist(int a1, int a2, int a3, int a4);
 static int _tile_idistance(int tile1, int tile2);
 static int animateMoveObjectToObject(Object* from, Object* to, int actionPoints, AnimationType anim, int animationSequenceIndex);
-static int animateMoveObjectToTile(Object* obj, int tile, int elev, int actionPoints, AnimationType anim, int animationSequenceIndex);
-static int _anim_move(Object* obj, int tile, int elev, int a3, AnimationType anim, int a5, int animationSequenceIndex);
-static int animateMoveObjectToTileStraight(Object* obj, int tile, int elevation, AnimationType anim, int animationSequenceIndex, int flags);
-static int _anim_move_on_stairs(Object* obj, int tile, int elevation, AnimationType anim, int animationSequenceIndex);
+static int animateMoveObjectToTile(Object* obj, int tile, MapElevation elev, int actionPoints, AnimationType anim, int animationSequenceIndex);
+static int _anim_move(Object* obj, int tile, MapElevation elev, int a3, AnimationType anim, int a5, int animationSequenceIndex);
+static int animateMoveObjectToTileStraight(Object* obj, int tile, MapElevation elevation, AnimationType anim, int animationSequenceIndex, int flags);
+static int _anim_move_on_stairs(Object* obj, int tile, MapElevation elevation, AnimationType anim, int animationSequenceIndex);
 static int _check_for_falling(Object* obj, AnimationType anim, int a3);
 static void _object_move(int index);
 static void _object_straight_move(int index);
@@ -345,7 +345,7 @@ static void _object_anim_compact();
 static int actionRotate(Object* obj, int delta, int animationSequenceIndex);
 static int _anim_hide(Object* object, int animationSequenceIndex);
 static int animationChangeFrmId(Object* obj, int animationSequenceIndex, const FrmId& frmId);
-static int _check_gravity(int tile, int elevation);
+static int _check_gravity(int tile, MapElevation elevation);
 static unsigned int animationComputeTicksPerFrame(Object* object, const FrmId& frmId);
 static bool animationIsSpedUpInCombat(Object* object);
 
@@ -758,7 +758,7 @@ int animationRegisterRunToObject(Object* owner, Object* destination, int actionP
 }
 
 // 0x414294
-int animationRegisterMoveToTile(Object* owner, int tile, int elevation, int actionPoints, int delay)
+int animationRegisterMoveToTile(Object* owner, int tile, MapElevation elevation, int actionPoints, int delay)
 {
     if (_check_registry(owner) == -1 || actionPoints == 0) {
         _anim_cleanup();
@@ -792,7 +792,7 @@ int animationRegisterMoveToTile(Object* owner, int tile, int elevation, int acti
 }
 
 // 0x414394
-int animationRegisterRunToTile(Object* owner, int tile, int elevation, int actionPoints, int delay)
+int animationRegisterRunToTile(Object* owner, int tile, MapElevation elevation, int actionPoints, int delay)
 {
     if (_check_registry(owner) == -1 || actionPoints == 0) {
         _anim_cleanup();
@@ -842,7 +842,7 @@ int animationRegisterRunToTile(Object* owner, int tile, int elevation, int actio
 }
 
 // 0x4145D0
-int animationRegisterMoveToTileStraight(Object* object, int tile, int elevation, AnimationType anim, int delay)
+int animationRegisterMoveToTileStraight(Object* object, int tile, MapElevation elevation, AnimationType anim, int delay)
 {
     if (_check_registry(object) == -1) {
         _anim_cleanup();
@@ -877,7 +877,7 @@ int animationRegisterMoveToTileStraight(Object* object, int tile, int elevation,
 }
 
 // 0x4146C4
-int animationRegisterMoveToTileStraightAndWaitForComplete(Object* owner, int tile, int elevation, AnimationType anim, int delay)
+int animationRegisterMoveToTileStraightAndWaitForComplete(Object* owner, int tile, MapElevation elevation, AnimationType anim, int delay)
 {
     if (_check_registry(owner) == -1) {
         _anim_cleanup();
@@ -1669,7 +1669,7 @@ static int _anim_set_end(int animationSequenceIndex)
             destroyedOwners[destroyedOwnersLength++] = owner;
 
             Rect rect;
-            int elevation = owner->elevation;
+            MapElevation elevation = owner->elevation;
             objectDestroy(owner, &rect);
             tileWindowRefreshRect(&rect, elevation);
         }
@@ -2294,9 +2294,9 @@ static int animateMoveObjectToObject(Object* from, Object* to, int actionPoints,
 }
 
 // 0x41695C
-int _make_stair_path(Object* object, int from, int fromElevation, int to, int toElevation, StraightPathNode* a6, Object** obstaclePtr)
+int _make_stair_path(Object* object, int from, MapElevation fromElevation, int to, MapElevation toElevation, StraightPathNode* a6, Object** obstaclePtr)
 {
-    int elevation = fromElevation;
+    MapElevation elevation = fromElevation;
     if (elevation > toElevation) {
         elevation = toElevation;
     }
@@ -2473,7 +2473,7 @@ int _make_stair_path(Object* object, int from, int fromElevation, int to, int to
 }
 
 // 0x416CFC
-static int animateMoveObjectToTile(Object* obj, int tile, int elev, int actionPoints, AnimationType anim, int animationSequenceIndex)
+static int animateMoveObjectToTile(Object* obj, int tile, MapElevation elev, int actionPoints, AnimationType anim, int animationSequenceIndex)
 {
     int index = _anim_move(obj, tile, elev, -1, anim, 0, animationSequenceIndex);
     if (index == -1) {
@@ -2506,7 +2506,7 @@ static int animateMoveObjectToTile(Object* obj, int tile, int elev, int actionPo
 }
 
 // 0x416DFC
-static int _anim_move(Object* obj, int tile, int elev, int a3, AnimationType anim, int a5, int animationSequenceIndex)
+static int _anim_move(Object* obj, int tile, MapElevation elev, int a3, AnimationType anim, int a5, int animationSequenceIndex)
 {
     if (gAnimationCurrentSad == ANIMATION_SAD_LIST_CAPACITY) {
         return -1;
@@ -2545,7 +2545,7 @@ static int _anim_move(Object* obj, int tile, int elev, int a3, AnimationType ani
 }
 
 // 0x416F54
-static int animateMoveObjectToTileStraight(Object* obj, int tile, int elevation, AnimationType anim, int animationSequenceIndex, int flags)
+static int animateMoveObjectToTileStraight(Object* obj, int tile, MapElevation elevation, AnimationType anim, int animationSequenceIndex, int flags)
 {
     if (gAnimationCurrentSad == ANIMATION_SAD_LIST_CAPACITY) {
         return -1;
@@ -2588,7 +2588,7 @@ static int animateMoveObjectToTileStraight(Object* obj, int tile, int elevation,
 }
 
 // 0x41712C
-static int _anim_move_on_stairs(Object* obj, int tile, int elevation, AnimationType anim, int animationSequenceIndex)
+static int _anim_move_on_stairs(Object* obj, int tile, MapElevation elevation, AnimationType anim, int animationSequenceIndex)
 {
     if (gAnimationCurrentSad == ANIMATION_SAD_LIST_CAPACITY) {
         return -1;
@@ -3492,9 +3492,9 @@ void animationStop()
 }
 
 // 0x418708
-static int _check_gravity(int tile, int elevation)
+static int _check_gravity(int tile, MapElevation elevation)
 {
-    for (; elevation > 0; elevation--) {
+    for (; elevation > ELEVATION_FIRST; elevation--) {
         int x;
         int y;
         tileToScreenXY(tile, &x, &y);

@@ -1694,7 +1694,7 @@ static int inventoryMessageListInit()
     if (!messageListInit(&gInventoryMessageList))
         return -1;
 
-    snprintf(path, sizeof(path), "%s%s", asc_5186C8, "inventry.msg");
+    snprintf(path, sizeof(path), "%s%s", gGameMsgPath, "inventry.msg");
     if (!messageListLoad(&gInventoryMessageList, path))
         return -1;
 
@@ -4147,7 +4147,7 @@ static MessageList* inventoryLabelMessageList()
 {
     if (!gInventoryLabelMessageListLoaded) {
         char path[COMPAT_MAX_PATH];
-        snprintf(path, sizeof(path), "%s%s", asc_5186C8, "inventry.msg");
+        snprintf(path, sizeof(path), "%s%s", gGameMsgPath, "inventry.msg");
         if (!messageListInit(&gInventoryLabelMessageList) || !messageListLoad(&gInventoryLabelMessageList, path)) {
             return nullptr;
         }

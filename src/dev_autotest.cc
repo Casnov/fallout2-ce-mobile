@@ -3554,7 +3554,7 @@ void devAutotestTick()
         }
         case DEV_AUTOTEST_ACTION_LOG_CRITTERS:
             // `a` - 1: every elevation (with the critters' scripts).
-            for (int elevation = 0; elevation < ELEVATION_COUNT; elevation++) {
+            for (MapElevation elevation = ELEVATION_FIRST; elevation < ELEVATION_COUNT; elevation++) {
                 if (step->a == 0 && elevation != gDude->elevation) {
                     continue;
                 }
@@ -3577,7 +3577,7 @@ void devAutotestTick()
             Object* critter = nullptr;
             // The dude's elevation first, then the others.
             for (int pass = 0; pass <= ELEVATION_COUNT && critter == nullptr; pass++) {
-                int elevation = pass == 0 ? gDude->elevation : pass - 1;
+                MapElevation elevation = pass == 0 ? gDude->elevation : static_cast<MapElevation>(pass - 1);
                 for (Object* object = objectFindFirstAtElevation(elevation); object != nullptr; object = objectFindNextAtElevation()) {
                     if (object->pid == pid) {
                         critter = object;
@@ -3924,7 +3924,7 @@ void devAutotestTick()
             name[sizeof(name) - 1] = '\0';
             MapTransition transition;
             transition.map = wmMapMatchNameToIdx(name);
-            transition.elevation = static_cast<int>(step->a);
+            transition.elevation = static_cast<MapElevation>(static_cast<int>(step->a));
             transition.tile = static_cast<int>(step->b);
             transition.rotation = ROTATION_NE;
             devAutotestLog("  map %d now, to %s (%d), party %d\n", static_cast<int>(gMapHeader.index), step->widget,
@@ -4757,7 +4757,7 @@ void devAutotestTick()
             // another one (here it would block the tiles itself, it walks to
             // the dude to attack him).
             if (member != nullptr) {
-                objectSetLocation(member, member->tile, (gDude->elevation + 1) % ELEVATION_COUNT, nullptr);
+                objectSetLocation(member, member->tile, static_cast<MapElevation>((gDude->elevation + 1) % ELEVATION_COUNT), nullptr);
             }
             _partyMemberSyncPosition();
             Object* blocker = nullptr;

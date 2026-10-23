@@ -22,6 +22,7 @@
 #include "text_font.h"
 #include "touch.h"
 #include "widget.h"
+#include "window_defs.h"
 #include "window_manager.h"
 
 // Managed window API layer.
@@ -66,7 +67,7 @@ typedef struct ManagedButton {
     int procs[MANAGED_BUTTON_MOUSE_EVENT_COUNT];
     int rightProcs[MANAGED_BUTTON_RIGHT_MOUSE_EVENT_COUNT];
     ManagedButtonMouseEventCallback* mouseEventCallback;
-    ManagedButtonMouseEventCallback* rightMouseEventCallback;
+    ManagedButtonRightMouseEventCallback* rightMouseEventCallback;
     void* mouseEventCallbackUserData;
     void* rightMouseEventCallbackUserData;
 } ManagedButton;
@@ -547,7 +548,7 @@ void _doButtonOn(int btn, int keyCode)
 }
 
 // 0x4B6F68
-void scriptWindowDispatchButtonMouseEvent(int btn, int mouseEvent)
+void scriptWindowDispatchButtonMouseEvent(int btn, ManagedButtonMouseEvent mouseEvent)
 {
     int win = _win_last_button_winID();
     if (win == -1) {
@@ -607,7 +608,7 @@ void _doRightButtonPress(int btn, int keyCode)
 // NOTE: Unused.
 //
 // 0x4B704C
-void scriptWindowDispatchButtonRightMouseEvent(int btn, int mouseEvent)
+void scriptWindowDispatchButtonRightMouseEvent(int btn, ManagedButtonRightMouseEvent mouseEvent)
 {
     int win = _win_last_button_winID();
     if (win == -1) {
@@ -1097,7 +1098,7 @@ int _popWindow()
 }
 
 // 0x4B8414
-void windowPrintBuf(int win, char* string, int stringLength, int width, int maxY, int x, int y, ColorWithFlags color, int textAlignment)
+void windowPrintBuf(int win, char* string, int stringLength, int width, int maxY, int x, int y, ColorWithFlags color, TextAlignment textAlignment)
 {
     if (y + fontGetLineHeight() > maxY) {
         return;
@@ -1128,11 +1129,6 @@ void windowPrintBuf(int win, char* string, int stringLength, int width, int maxY
     fontDrawText(backgroundBuffer, stringCopy, stringWidth, stringWidth, color);
 
     switch (textAlignment) {
-    case TEXT_ALIGNMENT_LEFT:
-        if (stringWidth < width) {
-            width = stringWidth;
-        }
-        break;
     case TEXT_ALIGNMENT_RIGHT:
         if (stringWidth <= width) {
             x += (width - stringWidth);
@@ -1147,6 +1143,11 @@ void windowPrintBuf(int win, char* string, int stringLength, int width, int maxY
             width = stringWidth;
         } else {
             backgroundBufferPtr = backgroundBuffer + (stringWidth - width) / 2;
+        }
+        break;
+    default:
+        if (stringWidth < width) {
+            width = stringWidth;
         }
         break;
     }
@@ -1255,7 +1256,7 @@ void windowFreeWordList(char** substringList, int substringListLength)
 // Renders multiline string in the specified bounding box.
 //
 // 0x4B8854
-void windowWrapLineWithSpacing(int win, char* string, int width, int height, int x, int y, ColorWithFlags color, int textAlignment, int spacing)
+void windowWrapLineWithSpacing(int win, char* string, int width, int height, int x, int y, ColorWithFlags color, TextAlignment textAlignment, int spacing)
 {
     if (string == nullptr) {
         return;
@@ -1275,13 +1276,13 @@ void windowWrapLineWithSpacing(int win, char* string, int width, int height, int
 // Renders multiline string in the specified bounding box.
 //
 // 0x4B88FC
-void windowWrapLine(int win, char* string, int width, int height, int x, int y, ColorWithFlags color, int textAlignment)
+void windowWrapLine(int win, char* string, int width, int height, int x, int y, ColorWithFlags color, TextAlignment textAlignment)
 {
     windowWrapLineWithSpacing(win, string, width, height, x, y, color, textAlignment, 0);
 }
 
 // 0x4B8920
-bool scriptWindowPrintRect(char* string, int wrapWidth, int textAlignment)
+bool scriptWindowPrintRect(char* string, int wrapWidth, TextAlignment textAlignment)
 {
     if (gCurrentManagedWindowIndex == -1) {
         return false;
@@ -1299,7 +1300,7 @@ bool scriptWindowPrintRect(char* string, int wrapWidth, int textAlignment)
 }
 
 // 0x4B89B0
-bool scriptWindowFormatMessage(char* string, int x, int y, int width, int height, int textAlignment)
+bool scriptWindowFormatMessage(char* string, int x, int y, int width, int height, TextAlignment textAlignment)
 {
     if (gCurrentManagedWindowIndex == -1) {
         return false;
@@ -1982,7 +1983,7 @@ bool scriptWindowAddButtonCfunc(const char* buttonName, ManagedButtonMouseEventC
 // NOTE: Unused.
 //
 // 0x4BA2B4
-bool scriptWindowAddButtonRightCfunc(const char* buttonName, ManagedButtonMouseEventCallback* callback, void* userData)
+bool scriptWindowAddButtonRightCfunc(const char* buttonName, ManagedButtonRightMouseEventCallback* callback, void* userData)
 {
     if (gCurrentManagedWindowIndex == -1) {
         return false;

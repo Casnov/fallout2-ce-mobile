@@ -25,6 +25,7 @@
 #include "text_font.h"
 #include "tile.h"
 #include "win32.h"
+#include "window_manager.h"
 #include "window_manager_private.h"
 #include "world_view.h"
 
@@ -593,7 +594,10 @@ void handleWindowSizeChanged()
 {
     movieHandleRendererReset();
     destroyRenderer();
-    createRenderer(screenGetWidth(), screenGetHeight());
+    if (createRenderer(screenGetWidth(), screenGetHeight())) {
+        // Repaint the newly created texture surface, just as on a window expose.
+        windowRefreshAll(&_scr_size);
+    }
     if (gSdlSurface != nullptr) {
         screenConvertRect(0, 0, gSdlSurface->w, gSdlSurface->h);
     }

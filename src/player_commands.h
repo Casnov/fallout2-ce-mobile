@@ -18,11 +18,11 @@ namespace fallout {
 // Object at a map point (world view coordinates, see world_view.h) as the
 // game picks it under the mouse: the topmost of [objectType] (-1 - any),
 // roofs covering the point hide objects under them.
-Object* playerObjectAt(int worldX, int worldY, ObjectType objectType, bool includeDude, int elevation);
+Object* playerObjectAt(int worldX, int worldY, ObjectType objectType, bool includeDude, MapElevation elevation);
 
 // Object the primary action at a map point goes to: the object there, or an
 // outlined item behind a wall, scenery or misc object.
-Object* playerPrimaryTargetAt(int worldX, int worldY, int elevation);
+Object* playerPrimaryTargetAt(int worldX, int worldY, MapElevation elevation);
 
 // Primary action on an object (left click in arrow mode): pick up an item,
 // use scenery, talk to or loot a critter, turn dude, look at the rest.

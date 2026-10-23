@@ -1346,7 +1346,7 @@ namespace {
 
     void clearHighlight()
     {
-        for (int elevation = 0; elevation < ELEVATION_COUNT; elevation++) {
+        for (MapElevation elevation = ELEVATION_FIRST; elevation < ELEVATION_COUNT; elevation++) {
             for (Object* object = objectFindFirstAtElevation(elevation); object != nullptr; object = objectFindNextAtElevation()) {
                 auto it = gHighlighted.find(object);
                 if (it != gHighlighted.end() && object->outline == it->second) {

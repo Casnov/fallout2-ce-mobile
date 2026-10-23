@@ -88,7 +88,7 @@ namespace {
                 MessageList names;
                 if (messageListInit(&names)) {
                     char path[COMPAT_MAX_PATH];
-                    snprintf(path, sizeof(path), "%smap.msg", asc_5186C8);
+                    snprintf(path, sizeof(path), "%smap.msg", gGameMsgPath);
                     if (messageListLoad(&names, path)) {
                         continuePlace = muiPlaceText(info.map, info.elevation, &names);
                     }
