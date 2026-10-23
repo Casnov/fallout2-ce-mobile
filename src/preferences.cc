@@ -1385,14 +1385,16 @@ int doPreferences(bool animated)
     // Mobile UI: its settings screen instead of the window. It covers the
     // screen, so the main menu's palette fades are set at once.
     if (muiIsEnabled()) {
-        if (animated) {
+        // In windows the menu wasn't faded (`mainMenuBeginSubscreen`).
+        bool restorePalette = animated && !muiUsesWindows();
+        if (restorePalette) {
             colorPaletteLoad("color.pal");
             paletteSetEntries(_cmap);
         }
 
         muiPreferencesScreenRun(!animated);
 
-        if (animated) {
+        if (restorePalette) {
             paletteSetEntries(gPaletteBlack);
         }
         return 0;

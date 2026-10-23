@@ -770,6 +770,7 @@ void muiDrawIcon(MuiIcon icon, float x, float y, float size, MuiColor color)
     }
 
     // Premultiplied: the tint's alpha scales the color too.
+    color.a = static_cast<Uint8>(color.a * muiLayerAlpha());
     SDL_SetTextureColorMod(entry->texture, color.r * color.a / 255, color.g * color.a / 255, color.b * color.a / 255);
     SDL_SetTextureAlphaMod(entry->texture, color.a);
 

@@ -608,6 +608,15 @@ every screen on the new scalable UI, visual style/textures later via theme).
   original 8-bit UI and movies (`SDL_RenderSetLogicalSize(0, 0)` while
   drawing). Sizes in dp: output px per dp = `hudGetScreenDensity()` *
   `hud_scale`; safe area from HUD metrics (cutout insets).
+- Motion: `muiRunModal`'s windows (dialogs, the action list, quantity,
+  use item) fade in in 160 ms (dialogs also rise 12 dp) and out in 120 ms,
+  not touchable meanwhile (`muiSetLayerAlpha`); notices come in from 8 dp
+  above in 150 ms; Android's "Remove animations" (animator duration scale
+  0, `muiReduceMotion`) turns these off. The game's black fades stay where
+  time passes (skills, books, encounters); menus' and loading's are a third
+  as long (`[enhancements] fast_menu_fades`). The UI fades with the picture
+  (`muiSceneFadeBegin`, from `paletteFadeTo`), and after a fade to black the
+  next screen fades in (250 ms) unless the game's own fade brings it back.
 - Text (`[touch] font`, Settings → Display): classic - Fallout Classic
   Dialog (MIT, a redrawing of the game's dialog font `font1.aaf`, with
   Latin, Western / Central European and Cyrillic letters; the dashes,

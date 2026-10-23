@@ -399,6 +399,7 @@ void initSettingsRegistry(bool isMapper)
     SETTING(tactical_view);
     SETTING(save_compatibility);
     SETTING(barter_unit_price);
+    SETTING(fast_menu_fades);
 #undef SECT
 
 #define SECT touch

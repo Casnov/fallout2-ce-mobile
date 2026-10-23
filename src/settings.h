@@ -318,6 +318,10 @@ struct EnhancementSettings {
     // Mobile barter with a trader: each item cell shows the price of one in
     // this deal (`barterGetItemPrice`, as the dragged item shows it).
     bool barter_unit_price = true;
+    // Fades of menus and loading (main menu, loading a save, character
+    // creation) a third as long. Fades meaning time passes (skills, books,
+    // encounters) and the splash's stay.
+    bool fast_menu_fades = true;
 };
 
 // CE: Zoomable map view, see world_view.h.

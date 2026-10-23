@@ -1432,7 +1432,9 @@ namespace {
 
     bool HudScreen::isActive()
     {
-        if (!hudVisible()) {
+        // Leaving the game (Exit confirmed, death): the HUD doesn't come back
+        // for the frames before the main menu.
+        if (!hudVisible() || _game_user_wants_to_quit != GAME_QUIT_REQUEST_NONE) {
             gElementRects.clear();
             gModeChips.clear();
             return false;

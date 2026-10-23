@@ -666,6 +666,8 @@ void renderPresent()
 
     PerfFrame perf;
     perfMonitorMark(&perf.start);
+    // Black: screens fading in show it, not the last color drawn.
+    SDL_SetRenderDrawColor(gSdlRenderer, 0, 0, 0, 255);
     SDL_RenderClear(gSdlRenderer);
     // CE: Under a mobile UI screen covering everything the map and the
     // game's screen would be drawn only to be painted over.

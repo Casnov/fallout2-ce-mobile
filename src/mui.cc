@@ -6,6 +6,10 @@
 #include <deque>
 #include <vector>
 
+#ifdef __ANDROID__
+#include <jni.h>
+#endif
+
 #include "dev_autotest.h"
 #include "game.h"
 #include "game_charset.h"
@@ -52,6 +56,7 @@ namespace {
     std::u32string gTextInput;
 
     constexpr unsigned int kAppearDurationMs = 160;
+    constexpr unsigned int kCloseDurationMs = 120;
     constexpr const char* kDragActiveId = "#drag";
 
     enum class PointerEventType {
@@ -328,12 +333,70 @@ const MuiTheme& muiTheme()
 
 float MuiContext::appear() const
 {
-    if (current == nullptr) {
+    if (current == nullptr || muiReduceMotion()) {
         return 1.0f;
+    }
+
+    // Going away: the same way back.
+    if (current->closeTime != 0) {
+        unsigned int elapsed = now - current->closeTime;
+        return 1.0f - std::min(static_cast<float>(elapsed) / kCloseDurationMs, 1.0f);
     }
 
     unsigned int elapsed = now - current->openTime;
     return std::min(static_cast<float>(elapsed) / kAppearDurationMs, 1.0f);
+}
+
+bool muiReduceMotion()
+{
+#ifdef __ANDROID__
+    // Asked once a second: the player may change it while playing.
+    static unsigned int checked = 0;
+    static bool reduce = false;
+    unsigned int now = SDL_GetTicks();
+    if (checked != 0 && now - checked < 1000) {
+        return reduce;
+    }
+    checked = now != 0 ? now : 1;
+
+    // Settings.Global.getFloat(activity.getContentResolver(),
+    // "animator_duration_scale", 1).
+    JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+    jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+    if (env == nullptr || activity == nullptr) {
+        return reduce;
+    }
+
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID getResolver = env->GetMethodID(activityClass, "getContentResolver", "()Landroid/content/ContentResolver;");
+    jclass globalClass = env->FindClass("android/provider/Settings$Global");
+    if (getResolver != nullptr && globalClass != nullptr) {
+        jmethodID getFloat = env->GetStaticMethodID(globalClass, "getFloat", "(Landroid/content/ContentResolver;Ljava/lang/String;F)F");
+        jobject resolver = env->CallObjectMethod(activity, getResolver);
+        jstring name = env->NewStringUTF("animator_duration_scale");
+        if (getFloat != nullptr && resolver != nullptr && name != nullptr) {
+            reduce = env->CallStaticFloatMethod(globalClass, getFloat, resolver, name, 1.0f) == 0.0f;
+        }
+        if (name != nullptr) {
+            env->DeleteLocalRef(name);
+        }
+        if (resolver != nullptr) {
+            env->DeleteLocalRef(resolver);
+        }
+    }
+
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    if (globalClass != nullptr) {
+        env->DeleteLocalRef(globalClass);
+    }
+    env->DeleteLocalRef(activityClass);
+    env->DeleteLocalRef(activity);
+    return reduce;
+#else
+    return false;
+#endif
 }
 
 void MuiContext::dim(bool fadeIn)
@@ -858,6 +921,9 @@ void muiPush(MuiScreen* screen)
     muiRemove(screen);
     screen->finished = false;
     screen->openTime = SDL_GetTicks();
+    // A screen run before by `muiRunModal` and pushed again.
+    screen->animated = false;
+    screen->closeTime = 0;
     gScreens.push_back(screen);
 
     // New screen doesn't continue a touch that started below it.
@@ -966,6 +1032,7 @@ bool muiHoldsFrame()
 void muiRunModal(MuiScreen* screen)
 {
     muiPush(screen);
+    screen->animated = true;
 
     while (!screen->finished) {
         sharedFpsLimiter.mark();
@@ -981,6 +1048,17 @@ void muiRunModal(MuiScreen* screen)
 
         renderPresent();
         sharedFpsLimiter.throttle();
+    }
+
+    // Fades out (not touchable) before it's gone.
+    if (!muiReduceMotion()) {
+        screen->closeTime = SDL_GetTicks();
+        while (SDL_GetTicks() - screen->closeTime < kCloseDurationMs) {
+            sharedFpsLimiter.mark();
+            inputGetInput();
+            renderPresent();
+            sharedFpsLimiter.throttle();
+        }
     }
 
     muiRemove(screen);
@@ -1033,6 +1111,7 @@ void muiRender(SDL_Renderer* renderer)
     gPixelsPerDp = hudGetScreenDensity() * hudGetInterfaceScale();
 
     unsigned int now = SDL_GetTicks();
+    muiSceneFadeUpdate(now, muiReduceMotion(), muiCoversScreen());
     updateSafeRect(now);
     processEvents();
 
@@ -1068,9 +1147,14 @@ void muiRender(SDL_Renderer* renderer)
             continue;
         }
         context.current = screen;
-        context.isInteractive = screen == top;
+        context.isInteractive = screen == top && screen->closeTime == 0;
+        // A window fading in or out as a whole.
+        if (screen->animated) {
+            muiSetLayerAlpha(context.appear());
+        }
         screen->build(context);
         context.drawScrollMarks();
+        muiSetLayerAlpha(1.0f);
     }
 
     // Over every screen, not touchable.

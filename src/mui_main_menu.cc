@@ -7,6 +7,10 @@
 #include <string>
 
 #include "art.h"
+#include "fps_limiter.h"
+#include "input.h"
+#include "mui_draw.h"
+#include "svga.h"
 #include "game.h"
 #include "loadsave.h"
 #include "mainmenu.h"
@@ -18,6 +22,10 @@
 namespace fallout {
 
 namespace {
+
+    // The buttons going away before a screen opens in windows.
+    constexpr unsigned int kLeaveMs = 150;
+
 
     const MuiColor kBackground = muiRgb(0x000000);
 
@@ -52,6 +60,9 @@ namespace {
         void back() override { choice = MAIN_MENU_EXIT; }
 
         int choice = -1;
+        // Going away in windows (`muiMainMenuLeave`): the buttons fade out
+        // over the picture.
+        unsigned int leaveTime = 0;
 
     private:
         // The save Continue loads, -1 - none (or the button is off).
@@ -94,7 +105,17 @@ namespace {
         float width = std::min(ui.dp(300.0f), safe.w * 0.42f);
         MuiRect column = { safe.x + margin, safe.y + margin, width, safe.h - margin * 2.0f };
         muiDrawTitleArt(ui, column.right() + margin);
+
+        // The buttons fade in and out over the picture (which stays: the
+        // screens opened over it in windows draw it too).
+        float alpha = ui.appear();
+        if (leaveTime != 0 && !muiReduceMotion()) {
+            alpha = 1.0f - std::min(static_cast<float>(ui.now - leaveTime) / kLeaveMs, 1.0f);
+        }
+        float layer = muiLayerAlpha();
+        muiSetLayerAlpha(alpha);
         buildButtons(ui, column);
+        muiSetLayerAlpha(layer);
     }
 
     void MainMenuScreen::buildButtons(MuiContext& ui, const MuiRect& column)
@@ -228,10 +249,18 @@ void muiMainMenuShow()
     muiPush(gMainMenuScreen);
 }
 
-void muiMainMenuReady()
+void muiMainMenuLeave()
 {
-    if (gMainMenuScreen != nullptr) {
-        gMainMenuScreen->openTime = SDL_GetTicks();
+    if (gMainMenuScreen == nullptr || muiReduceMotion()) {
+        return;
+    }
+
+    gMainMenuScreen->leaveTime = SDL_GetTicks();
+    while (SDL_GetTicks() - gMainMenuScreen->leaveTime < kLeaveMs) {
+        sharedFpsLimiter.mark();
+        inputGetInput();
+        renderPresent();
+        sharedFpsLimiter.throttle();
     }
 }
 

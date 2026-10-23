@@ -971,6 +971,11 @@ MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitl
         gWindowContinued = gWindowShownTime != 0 && ui.now - gWindowShownTime < kWindowContinueMs;
     }
     gWindowShownTime = ui.now;
+    // Over the title picture the window fades in as a whole (the rest of
+    // the screen's build, `muiRender` resets it).
+    if (overTitle && !gWindowContinued) {
+        muiSetLayerAlpha(ui.appear());
+    }
     ui.dim(!gWindowContinued);
     const MuiTheme& theme = muiTheme();
     MuiColor fill = background.withAlpha(kWindowAlpha);

@@ -21,6 +21,8 @@ namespace {
     constexpr unsigned int kMaxMs = 9000;
     constexpr unsigned int kHudMs = 4000;
     constexpr unsigned int kFadeMs = 300;
+    // Coming in: from a little above, fading in.
+    constexpr unsigned int kArriveMs = 150;
 
     // Plates at once, lines of one plate; lines next to the HUD's log button.
     constexpr size_t kMaxPlates = 3;
@@ -51,13 +53,22 @@ namespace {
         return std::min(kBaseMs + static_cast<unsigned int>(notice.text.size()) * kPerCharacterMs, kMaxMs);
     }
 
+    // 0 - just shown, 1 - in place.
+    float arrival(const Notice& notice, unsigned int now)
+    {
+        if (muiReduceMotion() || now < notice.shownTime) {
+            return 1.0f;
+        }
+        return std::min(1.0f, static_cast<float>(now - notice.shownTime) / kArriveMs);
+    }
+
     float fade(const Notice& notice, unsigned int now, bool hud)
     {
         unsigned int end = notice.shownTime + duration(notice, hud);
         if (now >= end) {
             return 0.0f;
         }
-        return std::min(1.0f, static_cast<float>(end - now) / kFadeMs);
+        return std::min({ 1.0f, static_cast<float>(end - now) / kFadeMs, arrival(notice, now) });
     }
 
     MuiColor faded(MuiColor color, float alpha)
@@ -131,7 +142,7 @@ namespace {
 
             float titleHeight = title.empty() ? 0.0f : muiLineHeight(titleSize) + ui.dp(2.0f);
             float height = paddingY * 2.0f + titleHeight + lines.size() * lineHeight;
-            MuiRect plate = { safe.centerX() - width / 2.0f, y, width, height };
+            MuiRect plate = { safe.centerX() - width / 2.0f, y - (1.0f - arrival(*notice, ui.now)) * ui.dp(8.0f), width, height };
             y += height + ui.dp(6.0f);
 
             MuiColor border = theme.panelBorder;

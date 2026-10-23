@@ -33,6 +33,7 @@
 #include "object.h"
 #include "palette.h"
 #include "platform_compat.h"
+#include "mui_draw.h"
 #include "preferences.h"
 #include "proto.h"
 #include "random.h"
@@ -209,10 +210,19 @@ int falloutMain(int argc, char** argv)
                 if (loadGameRc == -1) {
                     debugPrint("\n ** Error running LoadGame()! **\n");
                 }
+                // Mobile UI: the menu's picture (in windows) fades out, then
+                // the world in from black, the curtain gone.
+                bool windowed = muiIsEnabled();
+                if (loadGameRc > 0 && windowed) {
+                    paletteFadeToForMenu(gPaletteBlack);
+                }
                 mainCurtainHide(win);
 
                 if (loadGameRc > 0) {
                     mainMenuFinishSubscreen();
+                    if (windowed) {
+                        paletteFadeToForMenu(_cmap);
+                    }
                     mainRunGameLoopAndCleanup();
                     mainMenuWindowInit();
                 } else {
@@ -531,6 +541,9 @@ static void mainRunGameLoopAndCleanup()
 {
     mainHandleDevEndgameRequests();
     mainLoop();
+    // CE: The HUD (back when the game's menu closed) doesn't show for the
+    // fade.
+    muiSceneFadeHide();
     paletteFadeTo(gPaletteWhite);
 
     // NOTE: Uninline.

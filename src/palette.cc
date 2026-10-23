@@ -7,6 +7,7 @@
 #include "debug.h"
 #include "game_sound.h"
 #include "input.h"
+#include "mui_draw.h"
 #include "settings.h"
 #include "svga.h"
 
@@ -60,8 +61,32 @@ void paletteExit()
 }
 
 // 0x493AD4 palette_fade_to
-void paletteFadeTo(unsigned char* palette)
+// No picture: all black, or all white (leaving a game).
+static bool paletteIsBlank(const unsigned char* palette)
 {
+    for (int index = 1; index < 768; index++) {
+        if (palette[index] != palette[0]) {
+            return false;
+        }
+    }
+    return palette[0] == 0 || palette[0] == 63;
+}
+
+static void paletteFadeFor(unsigned char* palette, unsigned int durationMs)
+{
+    // CE: Already there: no waiting for a fade that changes nothing.
+    if (memcmp(gPalette, palette, sizeof(gPalette)) == 0) {
+        return;
+    }
+
+    // CE: The mobile UI (drawn in its own colors) fades with the picture.
+    float from = paletteIsBlank(gPalette) ? 0.0f : 1.0f;
+    float to = paletteIsBlank(palette) ? 0.0f : 1.0f;
+    bool sceneFade = from != to;
+    if (sceneFade) {
+        muiSceneFadeBegin(from, to, durationMs);
+    }
+
     bool colorCycleWasEnabled = colorCycleEnabled();
     colorCycleDisable();
 
@@ -69,7 +94,7 @@ void paletteFadeTo(unsigned char* palette)
         colorPaletteSetTransitionCallback(soundContinueAll);
     }
 
-    colorPaletteFadeBetween(gPalette, palette, gPaletteFadeDurationMs);
+    colorPaletteFadeBetween(gPalette, palette, durationMs);
     colorPaletteSetTransitionCallback(nullptr);
 
     memcpy(gPalette, palette, 768);
@@ -77,11 +102,28 @@ void paletteFadeTo(unsigned char* palette)
     if (colorCycleWasEnabled) {
         colorCycleEnable();
     }
+
+    if (sceneFade) {
+        muiSceneFadeEnd();
+    }
+}
+
+void paletteFadeTo(unsigned char* palette)
+{
+    paletteFadeFor(palette, gPaletteFadeDurationMs);
+}
+
+void paletteFadeToForMenu(unsigned char* palette)
+{
+    paletteFadeFor(palette, settings.enhancements.fast_menu_fades ? gPaletteFadeDurationMs / 3 : gPaletteFadeDurationMs);
 }
 
 // 0x493B48 palette_set_to
 void paletteSetEntries(unsigned char* palette)
 {
+    if (!paletteIsBlank(palette)) {
+        muiSceneFadeRelease();
+    }
     memcpy(gPalette, palette, sizeof(gPalette));
     _setSystemPalette(palette);
 }

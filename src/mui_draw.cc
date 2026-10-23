@@ -126,6 +126,24 @@ namespace {
 
     std::vector<SDL_Vertex> gVertices;
 
+    float gLayerAlpha = 1.0f;
+
+    // The scene fade (`muiSceneFadeBegin`).
+    constexpr unsigned int kSceneFadeInMs = 250;
+    float gSceneAlpha = 1.0f;
+    float gSceneFrom = 1.0f;
+    float gSceneTo = 1.0f;
+    unsigned int gSceneStart = 0;
+    unsigned int gSceneDuration = 0;
+    // Black after a fade, waiting for something to fade in.
+    bool gSceneWaiting = false;
+    bool gSceneReleased = false;
+
+    Uint8 layered(Uint8 alpha)
+    {
+        return static_cast<Uint8>(alpha * gLayerAlpha * gSceneAlpha);
+    }
+
     Font* loadFont(int index)
     {
         Font& font = gFonts[index];
@@ -317,7 +335,7 @@ namespace {
         SDL_Vertex result;
         result.position.x = x;
         result.position.y = y;
-        result.color = { color.r, color.g, color.b, color.a };
+        result.color = { color.r, color.g, color.b, layered(color.a) };
         result.tex_coord.x = u;
         result.tex_coord.y = v;
         return result;
@@ -486,7 +504,7 @@ SDL_Renderer* muiDrawGetRenderer()
 void muiFillRect(const MuiRect& rect, MuiColor color)
 {
     SDL_FRect frect = { rect.x, rect.y, rect.w, rect.h };
-    SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
+    SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, layered(color.a));
     SDL_RenderFillRectF(gRenderer, &frect);
 }
 
@@ -651,6 +669,75 @@ std::vector<unsigned char> muiRasterizeContours(const std::vector<std::vector<SD
         stbtt_Rasterize(&bitmap, 0.35f, vertices.data(), static_cast<int>(vertices.size()), 1.0f / kSubpixels, 1.0f / kSubpixels, 0.0f, 0.0f, 0, 0, 0, nullptr);
     }
     return coverage;
+}
+
+void muiSetLayerAlpha(float alpha)
+{
+    gLayerAlpha = std::clamp(alpha, 0.0f, 1.0f);
+}
+
+float muiLayerAlpha()
+{
+    return gLayerAlpha * gSceneAlpha;
+}
+
+void muiSceneFadeBegin(float from, float to, unsigned int durationMs)
+{
+    gSceneWaiting = false;
+    gSceneReleased = false;
+    // Already partly back (the next screen fading in by itself) or gone:
+    // from there.
+    gSceneFrom = to > from ? std::max(from, gSceneAlpha) : std::min(from, gSceneAlpha);
+    gSceneTo = to;
+    gSceneStart = SDL_GetTicks();
+    gSceneDuration = std::max(durationMs, 1u);
+    gSceneAlpha = gSceneFrom;
+}
+
+void muiSceneFadeHide()
+{
+    gSceneAlpha = 0.0f;
+    gSceneDuration = 0;
+    gSceneWaiting = true;
+    gSceneReleased = false;
+}
+
+void muiSceneFadeEnd()
+{
+    gSceneAlpha = gSceneTo;
+    gSceneDuration = 0;
+    gSceneWaiting = gSceneTo == 0.0f;
+}
+
+void muiSceneFadeRelease()
+{
+    if (gSceneWaiting) {
+        gSceneReleased = true;
+    }
+}
+
+void muiSceneFadeUpdate(unsigned int now, bool reduceMotion, bool covered)
+{
+    if (gSceneWaiting && (covered || gSceneReleased)) {
+        gSceneWaiting = false;
+        gSceneReleased = false;
+        if (reduceMotion) {
+            gSceneAlpha = 1.0f;
+            return;
+        }
+        gSceneFrom = 0.0f;
+        gSceneTo = 1.0f;
+        gSceneStart = now;
+        gSceneDuration = kSceneFadeInMs;
+    }
+
+    if (gSceneDuration != 0) {
+        float progress = std::min(static_cast<float>(now - gSceneStart) / gSceneDuration, 1.0f);
+        gSceneAlpha = gSceneFrom + (gSceneTo - gSceneFrom) * progress;
+        if (progress >= 1.0f) {
+            gSceneDuration = 0;
+        }
+    }
 }
 
 void muiPushClip(const MuiRect& rect)
@@ -1103,7 +1190,7 @@ void muiDrawTexture(SDL_Texture* texture, const MuiRect& rect, MuiColor tint)
     }
 
     SDL_SetTextureColorMod(texture, tint.r, tint.g, tint.b);
-    SDL_SetTextureAlphaMod(texture, tint.a);
+    SDL_SetTextureAlphaMod(texture, layered(tint.a));
     SDL_FRect dest = { rect.x, rect.y, rect.w, rect.h };
     SDL_RenderCopyF(gRenderer, texture, nullptr, &dest);
 }
@@ -1115,7 +1202,7 @@ void muiDrawTexturePart(SDL_Texture* texture, const SDL_Rect& source, const MuiR
     }
 
     SDL_SetTextureColorMod(texture, tint.r, tint.g, tint.b);
-    SDL_SetTextureAlphaMod(texture, tint.a);
+    SDL_SetTextureAlphaMod(texture, layered(tint.a));
     SDL_FRect dest = { rect.x, rect.y, rect.w, rect.h };
     SDL_RenderCopyF(gRenderer, texture, &source, &dest);
 }
@@ -1144,7 +1231,7 @@ void muiDrawTextureCover(SDL_Texture* texture, const MuiRect& rect, MuiColor tin
     }
 
     SDL_SetTextureColorMod(texture, tint.r, tint.g, tint.b);
-    SDL_SetTextureAlphaMod(texture, tint.a);
+    SDL_SetTextureAlphaMod(texture, layered(tint.a));
     SDL_FRect dest = { rect.x, rect.y, rect.w, rect.h };
     SDL_RenderCopyF(gRenderer, texture, &source, &dest);
 }

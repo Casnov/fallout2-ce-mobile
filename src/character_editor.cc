@@ -882,7 +882,7 @@ static int characterEditorShowMobile()
 
     if (rc == 0 && gCharacterEditorIsCreationMode) {
         _proto_dude_update_gender();
-        paletteFadeTo(gPaletteBlack);
+        paletteFadeToForMenu(gPaletteBlack);
     }
 
     characterEditorStateFree();
@@ -1301,7 +1301,7 @@ int characterEditorShow(bool isCreationMode)
     if (rc == 0) {
         if (isCreationMode) {
             _proto_dude_update_gender();
-            paletteFadeTo(gPaletteBlack);
+            paletteFadeToForMenu(gPaletteBlack);
         }
     }
 

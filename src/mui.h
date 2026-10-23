@@ -136,7 +136,15 @@ public:
 
     // Set when pushed, for appear animations.
     unsigned int openTime = 0;
+    // Fades in and out as a whole (`muiRunModal`'s windows), from
+    // [closeTime] on going away.
+    bool animated = false;
+    unsigned int closeTime = 0;
 };
+
+// Android's "Remove animations" (animator duration scale 0): screens and
+// notices appear and go at once.
+bool muiReduceMotion();
 
 class MuiContext {
 public:
@@ -348,9 +356,10 @@ void muiMainMenuShow();
 // The title menu's picture (fit to the screen's height at its right edge,
 // its left part fading into black up to [fadeRight]) over black.
 void muiDrawTitleArt(MuiContext& ui, float fadeRight);
-// It faded in: taps count from now (not ones made in the dark before).
-void muiMainMenuReady();
 void muiMainMenuHide();
+// In windows: the buttons fade out over the picture before a screen opens
+// over it (waits for it).
+void muiMainMenuLeave();
 // The button tapped since the last call, -1 - none.
 int muiMainMenuTakeChoice();
 

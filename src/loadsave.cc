@@ -1367,9 +1367,9 @@ int lsgLoadGame(int mode)
         if (rc == 1 && mode == LOAD_SAVE_MODE_FROM_MAIN_MENU) {
             // The title menu fades the game's indexed palette to black.
             // The classic picker restores it before play; the mobile picker
-            // returns here, so restore it after a successful load as well.
+            // returns here: the colors are loaded, the main menu's loop
+            // fades the world in once the curtain is gone.
             colorPaletteLoad("color.pal");
-            paletteFadeTo(_cmap);
         }
         return rc;
     }
@@ -2876,10 +2876,9 @@ int lsgContinueGame()
     loadSaveMessageListReset();
 
     if (rc == 1) {
-        // As the load screen from the main menu: the title menu faded the
-        // palette to black.
+        // As the load screen from the main menu: the colors, faded in by the
+        // main menu's loop.
         colorPaletteLoad("color.pal");
-        paletteFadeTo(_cmap);
     }
     return rc;
 }
