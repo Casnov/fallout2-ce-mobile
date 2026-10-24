@@ -365,6 +365,7 @@ void initSettingsRegistry(bool isMapper)
 #undef SECT
 
 #define SECT debug
+    SETTING(update_repo);
     SETTING(mode);
     SETTING(show_fps);
     SETTING(perf_log);
@@ -403,6 +404,7 @@ void initSettingsRegistry(bool isMapper)
 #undef SECT
 
 #define SECT touch
+    SETTING(update_check);
     SETTING(controls);
     SETTING(hud);
     SETTING(mobile_ui);
