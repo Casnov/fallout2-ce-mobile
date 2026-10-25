@@ -23,7 +23,8 @@
 {122}{}{CANCEL}
 {123}{}{DONE}
 
-# Attack modes (touch_hud.cc), as on the item button art
+# Attack modes (touch_hud.cc), as on the item button art; unarmed specials
+# without "punch" / "kick" (the hand slot tells it)
 {124}{}{SINGLE}
 {125}{}{BURST}
 {126}{}{THRUST}
@@ -34,18 +35,18 @@
 {131}{}{RELOAD}
 {132}{}{USE}
 {133}{}{USE ON}
-{134}{}{STRONG PUNCH}
-{135}{}{HAMMER PUNCH}
+{134}{}{STRONG}
+{135}{}{HAMMER}
 {136}{}{HAYMAKER}
 {137}{}{JAB}
 {138}{}{PALM STRIKE}
-{139}{}{PIERCING STRIKE}
-{140}{}{STRONG KICK}
-{141}{}{SNAP KICK}
-{142}{}{POWER KICK}
-{143}{}{HIP KICK}
-{144}{}{HOOK KICK}
-{145}{}{PIERCING KICK}
+{139}{}{PIERCING}
+{140}{}{STRONG}
+{141}{}{SNAP}
+{142}{}{POWER}
+{143}{}{HIP}
+{144}{}{HOOK}
+{145}{}{PIERCING}
 
 # Action menu item names (touch_controls.cc), shown while choosing
 {146}{}{Cancel}
@@ -282,6 +283,26 @@
 {372}{}{Licenses}
 {373}{}{Tactical view}
 {374}{}{Combat button: see-through figures, tiles and where you can walk}
+{375}{}{Game screens}
+{376}{}{Auto: windows over the world on tablets}
+{377}{}{Close windows by tapping outside}
+{378}{}{A tap on the world past a window closes it}
+{379}{}{Auto}
+{380}{}{Full screen}
+{381}{}{Windows}
+{382}{}{No weapon}
+{383}{}{No armor}
+{384}{}{Wears no armor}
+{385}{}{Best}
+{386}{}{Screen layouts}
+{387}{}{Auto: tablet layouts in windows where they fit}
+{388}{}{Phone}
+{389}{}{Tablet}
+{390}{}{Start combat}
+{391}{}{Reload}
+{392}{}{Use}
+{393}{}{Unit prices when trading}
+{394}{}{Top right of an item: the price of one in this deal}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

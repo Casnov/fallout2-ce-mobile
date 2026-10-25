@@ -138,6 +138,7 @@ namespace {
         CharacterSelectorScreen();
 
         bool coversScreen() override { return true; }
+        bool isGameScreen() override { return true; }
         void build(MuiContext& ui) override;
         void back() override { pending = Action::Back; }
         void key(int keyCode) override;
@@ -157,6 +158,8 @@ namespace {
         std::u32string bioTitle;
         std::u32string bio;
         bool resetBioScroll = true;
+        // Tablet windows: the roomy layout (`muiIsTallContent`).
+        bool tall = false;
 
         std::vector<unsigned char> splash;
         int splashWidth = 0;
@@ -169,6 +172,7 @@ namespace {
         void buildPicture(MuiContext& ui, const MuiRect& rect);
         void buildBio(MuiContext& ui, const MuiRect& rect);
         void buildStats(MuiContext& ui, const MuiRect& rect);
+        void buildStatsTall(MuiContext& ui, const MuiRect& rect);
         void buildButtons(MuiContext& ui, const MuiRect& rect);
     };
 
@@ -281,12 +285,10 @@ namespace {
 
     void CharacterSelectorScreen::build(MuiContext& ui)
     {
-        muiFillRect(ui.screenRect(), kBackground);
-
-        MuiRect content;
-        MuiRect rail;
-        muiDialogLayout(ui, &content, &rail);
-        if (muiGameScreenTabs(ui, rail, "selector", MuiGameScreenTab::None, false) == MuiGameScreenTab::Back) {
+        // Opaque, or a window over the title menu's picture.
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground, true);
+        const MuiRect& content = frame.content;
+        if (muiGameScreenTabs(ui, frame.tabs, "selector", MuiGameScreenTab::None, false) == MuiGameScreenTab::Back || frame.tappedOutside) {
             back();
         }
 
@@ -296,6 +298,36 @@ namespace {
 
         // The picture as wide as fits over the biography's least room.
         float aspect = static_cast<float>(592 - kPortraitEdge * 2) / (260 - kPortraitEdge * 2);
+
+        // Tablet windows (the window's mockup): the characters' tabs over the
+        // whole width, the picture and the story at the left, one column of
+        // stats with the buttons under it at the right.
+        tall = muiIsTallContent(ui, content);
+        if (tall) {
+            float tallGap = ui.dp(12.0f);
+            MuiRect tabRect = { content.x, content.y, content.w, ui.dp(44.0f) };
+            float bodyY = tabRect.bottom() + tallGap;
+            float leftWidth = std::floor(content.w * 0.507f);
+            float pictureHeight = std::min(leftWidth / aspect, (content.bottom() - bodyY) * 0.5f);
+            MuiRect picture = { content.x, bodyY, leftWidth, pictureHeight };
+            MuiRect bioRect = { content.x, picture.bottom() + tallGap, leftWidth, content.bottom() - picture.bottom() - tallGap };
+            MuiRect right = { picture.right() + ui.dp(14.0f), bodyY, content.right() - picture.right() - ui.dp(14.0f), content.bottom() - bodyY };
+
+            int selected = current;
+            if (ui.segmented("selector.tabs", tabRect, names, &selected)) {
+                _gsound_red_butt_press(-1, 0);
+                show(selected);
+            }
+
+            buildPicture(ui, picture);
+            buildBio(ui, bioRect);
+
+            float buttonHeight = ui.dp(52.0f);
+            MuiRect buttons = { right.x, right.bottom() - buttonHeight, right.w, buttonHeight };
+            buildStatsTall(ui, { right.x, right.y, right.w, buttons.y - tallGap - right.y });
+            buildButtons(ui, buttons);
+            return;
+        }
         float leftWidth = content.w * 0.56f;
         float pictureHeight = std::min(leftWidth / aspect, content.h - tabsHeight - minBio - gap * 2.0f);
         leftWidth = std::max(leftWidth, pictureHeight * aspect);
@@ -368,8 +400,8 @@ namespace {
     void CharacterSelectorScreen::buildBio(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-        float size = ui.dp(12.0f);
-        float lineHeight = muiLineHeight(size);
+        float size = ui.dp(tall ? 16.0f : 12.0f);
+        float lineHeight = tall ? std::max(muiLineHeight(size), ui.dp(24.0f)) : muiLineHeight(size);
 
         std::vector<std::u32string> lines;
         size_t start = 0;
@@ -385,6 +417,7 @@ namespace {
             start = end + 1;
         }
 
+        float titleSize = tall ? ui.dp(13.0f) : size;
         float titleHeight = bioTitle.empty() ? 0.0f : lineHeight * 1.3f;
         float contentHeight = titleHeight + lines.size() * lineHeight;
         if (resetBioScroll) {
@@ -396,11 +429,11 @@ namespace {
         muiPushClip(rect);
         float y = rect.y - offset;
         if (!bioTitle.empty()) {
-            muiDrawText(bioTitle, rect.x, y, size, theme.text);
+            muiDrawTextAligned(bioTitle, { rect.x, y, rect.w, lineHeight }, titleSize, tall ? theme.textDim : theme.text, MuiAlign::Start, MuiAlign::Center);
             y += titleHeight;
         }
         for (const std::u32string& line : lines) {
-            muiDrawText(line, rect.x, y, size, theme.textDim);
+            muiDrawTextAligned(line, { rect.x, y, rect.w, lineHeight }, size, tall ? theme.text : theme.textDim, MuiAlign::Start, MuiAlign::Center);
             y += lineHeight;
         }
         muiPopClip();
@@ -485,6 +518,87 @@ namespace {
         }
         MuiRect traitsRect = { rect.x, y, rect.w, rowHeight };
         muiDrawTextAligned(traits, traitsRect, muiFitTextSize(traits, rect.w, size, ui.dp(9.0f)), stats.traits.empty() ? theme.textDim : theme.text, MuiAlign::Start, MuiAlign::Center);
+    }
+
+    // Tall layout: SPECIAL with the full names, values and the game's words
+    // for them; derived stats under a line, tagged skills, traits.
+    void CharacterSelectorScreen::buildStatsTall(MuiContext& ui, const MuiRect& rect)
+    {
+        const MuiTheme& theme = muiTheme();
+        float size = ui.dp(16.0f);
+        float rankSize = ui.dp(14.0f);
+        float captionSize = ui.dp(13.0f);
+        bool custom = isCustom();
+
+        // Rows over the height there is (30 dp at most).
+        int lineCount = 7 + (custom ? 1 : 0) + 4 + 1 + std::max<int>(1, static_cast<int>(stats.skills.size())) + 2;
+        float rowHeight = std::min(ui.dp(30.0f), (rect.h - ui.dp(17.0f)) / lineCount);
+        float y = rect.y;
+
+        auto row = [&](const std::u32string& label, const std::u32string& value, MuiColor valueColor, const std::u32string& rank) {
+            MuiRect line = { rect.x, y, rect.w, rowHeight };
+            float rankWidth = rank.empty() ? 0.0f : muiTextWidth(rank, rankSize) + ui.dp(8.0f);
+            float valueWidth = muiTextWidth(value, size);
+            float labelSize = muiFitTextSize(label, rect.w - rankWidth - valueWidth - ui.dp(12.0f), size, ui.dp(11.0f));
+            muiDrawTextAligned(label, line, labelSize, theme.text, MuiAlign::Start, MuiAlign::Center);
+            if (!rank.empty()) {
+                muiDrawTextAligned(rank, line, rankSize, theme.textDim, MuiAlign::End, MuiAlign::Center);
+            }
+            muiDrawTextAligned(value, { line.x, line.y, line.w - rankWidth, line.h }, size, valueColor, MuiAlign::End, MuiAlign::Center);
+            y += rowHeight;
+        };
+
+        auto caption = [&](const std::u32string& text) {
+            muiDrawTextAligned(text, { rect.x, y, rect.w, rowHeight }, captionSize, theme.textDim, MuiAlign::Start, MuiAlign::End);
+            y += rowHeight;
+        };
+
+        for (int stat = 0; stat < 7; stat++) {
+            row(muiDecodeGameText(statGetName(static_cast<Stat>(STAT_STRENGTH + stat))), number(stats.special[stat]), theme.accent, muiDecodeGameText(statGetValueDescription(stats.special[stat])));
+        }
+        if (custom) {
+            char points[16];
+            snprintf(points, sizeof(points), "+%d", stats.freePoints);
+            MuiRect line = { rect.x, y, rect.w, rowHeight };
+            muiDrawTextAligned(muiDecodeGameText(muiText(kTextPoints, "Points")), line, size, kPoints, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(muiDecodeUtf8(points), line, size, kPoints, MuiAlign::End, MuiAlign::Center);
+            y += rowHeight;
+        }
+
+        y += ui.dp(8.0f);
+        muiFillRect({ rect.x, y, rect.w, ui.dp(1.0f) }, theme.panelBorder);
+        y += ui.dp(9.0f);
+
+        row(messageText(kMessageHitPoints), number(stats.hitPoints), theme.accent, U"");
+        row(muiDecodeGameText(statGetName(STAT_ARMOR_CLASS)), number(stats.armorClass), theme.accent, U"");
+        row(messageText(kMessageActionPoints), number(stats.actionPoints), theme.accent, U"");
+        row(muiDecodeGameText(statGetName(STAT_MELEE_DAMAGE)), number(stats.meleeDamage), theme.accent, U"");
+
+        caption(muiDecodeGameText(muiText(kTextSkills, "Skills")));
+        if (stats.skills.empty()) {
+            char text[64];
+            snprintf(text, sizeof(text), muiText(kTextTagSkills, "tag %d"), DEFAULT_TAGGED_SKILLS);
+            muiDrawTextAligned(muiDecodeGameText(text), { rect.x, y, rect.w, rowHeight }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            y += rowHeight;
+        }
+        for (const auto& skill : stats.skills) {
+            row(skill.first, number(skill.second) + U"%", theme.accent, U"");
+        }
+
+        caption(muiDecodeGameText(muiText(kTextTraits, "Traits")));
+        std::u32string traits;
+        if (stats.traits.empty()) {
+            char text[64];
+            snprintf(text, sizeof(text), muiText(kTextChooseTraits, "up to %d, optional"), TRAITS_MAX_SELECTED_COUNT);
+            traits = muiDecodeGameText(text);
+        }
+        for (const std::u32string& trait : stats.traits) {
+            if (!traits.empty()) {
+                traits += U" · ";
+            }
+            traits += trait;
+        }
+        muiDrawTextAligned(traits, { rect.x, y, rect.w, rowHeight }, muiFitTextSize(traits, rect.w, size, ui.dp(10.0f)), stats.traits.empty() ? theme.textDim : theme.text, MuiAlign::Start, MuiAlign::Center);
     }
 
     void CharacterSelectorScreen::buildButtons(MuiContext& ui, const MuiRect& rect)

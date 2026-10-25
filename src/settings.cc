@@ -398,6 +398,8 @@ void initSettingsRegistry(bool isMapper)
     SETTING(worldmap_follow_party);
     SETTING(tactical_view);
     SETTING(save_compatibility);
+    SETTING(barter_unit_price);
+    SETTING(fast_menu_fades);
 #undef SECT
 
 #define SECT touch
@@ -407,6 +409,10 @@ void initSettingsRegistry(bool isMapper)
     SETTING_P(hud_scale, clamp(50, 200));
     SETTING_P(hud_density, clamp(0.0, 8.0));
     SETTING(tactical_view);
+    SETTING_P(windows, clamp(0, 2));
+    SETTING_P(layout, clamp(0, 2));
+    SETTING(windows_tap_outside);
+    SETTING_P(font, clamp(0, 1));
 #undef SECT
 
 #define SECT world_view

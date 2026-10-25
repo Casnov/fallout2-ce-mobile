@@ -442,7 +442,7 @@ namespace {
             _gsound_red_butt_press(-1, 0);
             townsOpen = false;
         }
-        muiDrawIcon(MuiIcon::Cancel, close.centerX(), close.centerY(), ui.dp(18.0f), ui.dp(2.0f), closePressed ? theme.accent : theme.text);
+        muiDrawIcon(MuiIcon::Cancel, close.centerX(), close.centerY(), ui.dp(18.0f), closePressed ? theme.accent : theme.text);
 
         MuiRect list = { panel.x + inset, header.bottom() + ui.dp(4.0f), panel.w - inset * 2.0f, panel.bottom() - header.bottom() - ui.dp(4.0f) - inset };
         float offset = ui.scroll("worldmap.towns.list", list, contentHeight);
@@ -575,7 +575,7 @@ namespace {
         }
         muiFillRoundRect(menu, ui.dp(theme.radius), menuPressed ? theme.buttonPressed : theme.panel.withAlpha(235));
         muiStrokeRoundRect(menu, ui.dp(theme.radius), ui.dp(theme.borderWidth), theme.panelBorder);
-        muiDrawIcon(MuiIcon::Menu, menu.centerX(), menu.centerY(), ui.dp(24.0f), ui.dp(2.0f), theme.accent);
+        muiDrawIcon(MuiIcon::Menu, menu.centerX(), menu.centerY(), ui.dp(24.0f), theme.accent);
 
         buildStatus(ui, { menu.right() + ui.dp(8.0f), menu.y, 0.0f, size });
 
@@ -591,7 +591,7 @@ namespace {
             }
             muiFillRoundRect(towns, ui.dp(theme.radius), townsPressed ? theme.buttonPressed : theme.panel.withAlpha(235));
             muiStrokeRoundRect(towns, ui.dp(theme.radius), ui.dp(theme.borderWidth), theme.panelBorder);
-            muiDrawIcon(MuiIcon::Map, towns.x + ui.dp(22.0f), towns.centerY(), ui.dp(20.0f), ui.dp(2.0f), theme.accent);
+            muiDrawIcon(MuiIcon::Map, towns.x + ui.dp(22.0f), towns.centerY(), ui.dp(20.0f), theme.accent);
             muiDrawTextAligned(townsLabel, { towns.x + ui.dp(40.0f), towns.y, towns.w - ui.dp(46.0f), towns.h }, ui.dp(15.0f), theme.text, MuiAlign::Start, MuiAlign::Center);
         }
 

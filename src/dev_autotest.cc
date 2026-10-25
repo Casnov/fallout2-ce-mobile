@@ -41,6 +41,7 @@
 #include "mouse.h"
 #include "movie.h"
 #include "mui.h"
+#include "mui_icons.h"
 #include "object.h"
 #include "party_member.h"
 #include "perf_monitor.h"
@@ -453,6 +454,16 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_LOG_PREFERENCES,
     // Logs the saves (count, quick ones); FAIL when there aren't [a] of them.
     DEV_AUTOTEST_ACTION_LOG_SAVES,
+    // Mobile UI with windows (tablets): taps the world left of the game
+    // screen's window (`muiScreenFrame`). No window, or no room left of it
+    // (4:3): nothing is tapped.
+    DEV_AUTOTEST_ACTION_MUI_TAP_OUTSIDE_WINDOW,
+    // After `MUI_TAP_OUTSIDE_WINDOW`: FAIL when it tapped and widget `widget`
+    // is still shown; when it didn't, the screen is closed with Back.
+    DEV_AUTOTEST_ACTION_MUI_CHECK_CLOSED,
+    // Shows every mobile UI icon (`MuiIcon`) named, from icon [c] on, [a] dp
+    // big (a dev screen over the game, for icon work).
+    DEV_AUTOTEST_ACTION_ICON_SHEET,
 };
 
 struct DevAutotestStep {
@@ -470,6 +481,108 @@ struct DevAutotestStep {
 };
 
 static void devAutotestLog(const char* format, ...);
+
+// `MuiIcon` names, in its order.
+static const char* const kDevIconNames[] = {
+    "Menu",
+    "QuickSave",
+    "QuickLoad",
+    "Inventory",
+    "Character",
+    "Pipboy",
+    "Map",
+    "Skills",
+    "Highlight",
+    "Sneak",
+    "Log",
+    "EndTurn",
+    "EndCombat",
+    "ActionPoints",
+    "HitPoints",
+    "Aim",
+    "Reload",
+    "Fist",
+    "Kick",
+    "Weight",
+    "Back",
+    "PartyOrders",
+    "Holster",
+    "Regroup",
+    "Spread",
+    "Burst",
+    "AutoLoot",
+    "Lockpick",
+    "Steal",
+    "Traps",
+    "Doctor",
+    "Science",
+    "Repair",
+    "Target",
+    "Talk",
+    "Barter",
+    "Review",
+    "FilterAll",
+    "FilterWeapons",
+    "FilterWeaponsAndAmmo",
+    "FilterArmor",
+    "Stimpak",
+    "FilterAmmo",
+    "FilterMisc",
+    "Cancel",
+    "Drop",
+    "Look",
+    "Rotate",
+    "Use",
+    "Unload",
+    "Push",
+    "Plus",
+    "Minus",
+    "Edit",
+    "Play",
+    "Pause",
+    "Stop",
+    "Expand",
+    "Collapse",
+    "TacticalView",
+};
+static_assert(sizeof(kDevIconNames) / sizeof(kDevIconNames[0]) == static_cast<size_t>(MuiIcon::Count), "an icon without a name");
+
+// The icons on the HUD's panel color, each over its name, in a grid.
+class DevIconSheetScreen : public MuiScreen {
+public:
+    float size = 24.0f;
+    int first = 0;
+
+    bool coversScreen() override { return true; }
+
+    void build(MuiContext& ui) override
+    {
+        const MuiTheme& theme = muiTheme();
+        MuiRect screen = ui.screenRect();
+        muiFillRect(screen, muiRgb(0x0B120D));
+
+        float nameSize = ui.dp(9.0f);
+        float cellWidth = ui.dp(std::max(size * 1.5f, 72.0f));
+        float cellHeight = ui.dp(size + 8.0f) + muiLineHeight(nameSize) + ui.dp(4.0f);
+        MuiRect area = ui.safeRect().inset(ui.dp(8.0f));
+        int columns = std::max(static_cast<int>(area.w / cellWidth), 1);
+        int count = static_cast<int>(MuiIcon::Count);
+        for (int index = first; index < count; index++) {
+            int slot = index - first;
+            MuiRect cell = { area.x + (slot % columns) * cellWidth, area.y + (slot / columns) * cellHeight, cellWidth, cellHeight };
+            if (cell.bottom() > area.bottom()) {
+                break;
+            }
+            float iconY = cell.y + ui.dp(4.0f) + ui.dp(size) / 2.0f;
+            muiDrawIcon(static_cast<MuiIcon>(index), cell.centerX(), iconY, ui.dp(size), theme.accent);
+            std::u32string name = muiDecodeUtf8(kDevIconNames[index]);
+            MuiRect nameRect = { cell.x, cell.bottom() - muiLineHeight(nameSize) - ui.dp(2.0f), cell.w, muiLineHeight(nameSize) };
+            muiDrawTextAligned(name, nameRect, muiFitTextSize(name, cell.w - ui.dp(4.0f), nameSize, ui.dp(6.0f)), theme.textDim, MuiAlign::Center, MuiAlign::Center);
+        }
+    }
+};
+
+static DevIconSheetScreen* gDevIconSheet = nullptr;
 static void devAutotestCheckDudeRoundTrip();
 
 static const DevAutotestStep kDevAutotestSteps[] = {
@@ -512,11 +625,12 @@ static const DevAutotestStep kDevAutotestSteps[] = {
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 20, "24g_inventory_drag_to_hand", "inventory.pid.4", "inventory.slot.right" },
     { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "24h_inventory_after_drag" },
     { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 30, "24i_close_inventory" },
-    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "24j_hit_mode" },
-    { DEV_AUTOTEST_ACTION_HUD_TAP_MODE, 1, 0, 0, 20, "24k_aimed_hit_mode" },
-    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "24l_hit_mode_after" },
     { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 60, "25_combat_started" },
     { DEV_AUTOTEST_ACTION_LOG_COMBAT, 0, 0, 0, 1, "26_combat_state" },
+    // Attack modes show in combat only.
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "26a_hit_mode" },
+    { DEV_AUTOTEST_ACTION_HUD_TAP_MODE, 1, 0, 0, 20, "26b_aimed_hit_mode" },
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "26c_hit_mode_after" },
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 0, 0, 40, "27_combat_select_target" },
     { DEV_AUTOTEST_ACTION_LOG_COMBAT, 0, 0, 0, 1, "28_after_select" },
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 0, 0, 30, "29_combat_aimed_attack" },
@@ -562,15 +676,6 @@ static const DevAutotestStep kDevAutotestWorldmapSteps[] = {
 static const DevAutotestStep kDevAutotestHudSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 45, "h00_hud" },
     { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 9, HAND_LEFT, 0, 20, "h01_smg" },
-    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h02_hit_mode" },
-    { DEV_AUTOTEST_ACTION_HUD_TAP_MODE, 2, 0, 0, 20, "h03_tap_mode_2" },
-    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h04_hit_mode" },
-    { DEV_AUTOTEST_ACTION_HUD_TAP_MODE, 1, 0, 0, 20, "h05_tap_mode_1" },
-    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h06_hit_mode" },
-    { DEV_AUTOTEST_ACTION_HUD_QUICK_TAP_MODE, 2, 0, 0, 20, "h06b_quick_tap_mode_2" },
-    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h06c_hit_mode_burst" },
-    { DEV_AUTOTEST_ACTION_HUD_QUICK_TAP_MODE, 0, 0, 0, 20, "h06d_quick_tap_mode_0" },
-    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h06e_hit_mode_single" },
     { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 7, HAND_LEFT, 0, 20, "h07_spear" },
     { DEV_AUTOTEST_ACTION_CENTER_CRITTER, 0, 0, 0, 10, "h07b_center_critter" },
     { DEV_AUTOTEST_ACTION_TOUCH_LONG_PRESS_CRITTER, 0, 0, 0, 20, "h08_radial" },
@@ -616,9 +721,23 @@ static const DevAutotestStep kDevAutotestHudSteps[] = {
     { DEV_AUTOTEST_ACTION_LOG_SLOT, 12, 0, 0, 1, "h13f_slot_2" },
     { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(Inventory), 0, 0, 30, "h14_inventory" },
     { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 30, "h15_inventory_closed" },
-    { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(SwapHands), 0, 0, 40, "h16_swap_hands" },
+    // The other hand's slot swaps hands.
+    { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(HandRight), 0, 0, 40, "h16_swap_hands" },
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h16b_right_hand" },
     { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 60, "h17_combat" },
     { DEV_AUTOTEST_ACTION_LOG_COMBAT, 0, 0, 0, 1, "h18_combat_state" },
+    // Attack modes show in combat only: the SMG back in the left hand.
+    { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 9, HAND_LEFT, 0, 20, "h18b_smg" },
+    { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(HandLeft), 0, 0, 40, "h18c_left_hand" },
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h02_hit_mode" },
+    { DEV_AUTOTEST_ACTION_HUD_TAP_MODE, 2, 0, 0, 20, "h03_tap_mode_2" },
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h04_hit_mode" },
+    { DEV_AUTOTEST_ACTION_HUD_TAP_MODE, 1, 0, 0, 20, "h05_tap_mode_1" },
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h06_hit_mode" },
+    { DEV_AUTOTEST_ACTION_HUD_QUICK_TAP_MODE, 2, 0, 0, 20, "h06b_quick_tap_mode_2" },
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h06c_hit_mode_burst" },
+    { DEV_AUTOTEST_ACTION_HUD_QUICK_TAP_MODE, 0, 0, 0, 20, "h06d_quick_tap_mode_0" },
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "h06e_hit_mode_single" },
     { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(EndTurn), 0, 0, 120, "h19_end_turn" },
     { DEV_AUTOTEST_ACTION_LOG_COMBAT, 0, 0, 0, 1, "h20_after_end_turn" },
 };
@@ -692,6 +811,16 @@ static const DevAutotestStep kDevAutotestTacticalSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_TACTICAL, 0, 1, 0, 1, "v19_hidden_kept" },
     { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 60, "v20_next_combat" },
     { DEV_AUTOTEST_ACTION_CHECK_TACTICAL, 1, 1, 0, 1, "v21_shown_again" },
+};
+
+// Every icon at the UI's sizes: small (labels, weights), chips and buttons,
+// the radial menu's.
+static const DevAutotestStep kDevAutotestIconsSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "i00_start" },
+    { DEV_AUTOTEST_ACTION_ICON_SHEET, 16, 0, 0, 10, "i01_16" },
+    { DEV_AUTOTEST_ACTION_ICON_SHEET, 24, 0, 0, 10, "i02_24" },
+    { DEV_AUTOTEST_ACTION_ICON_SHEET, 40, 0, 0, 10, "i03_40" },
+    { DEV_AUTOTEST_ACTION_ICON_SHEET, 40, 0, 36, 10, "i04_40b" },
 };
 
 // Combat: the critter picked (its outline pulses: two frames apart), then a
@@ -1036,6 +1165,9 @@ static int gDevAutotestTouchFrame = -1;
 // Frames to wait before the touch starts.
 static int gDevAutotestTouchDelay = 0;
 
+// `MUI_TAP_OUTSIDE_WINDOW` tapped the world next to a window.
+static bool gDevAutotestTappedOutside = false;
+
 static int gDevAutotestWalkTarget = -1;
 static int gDevAutotestTouchStartTile = -1;
 
@@ -1298,12 +1430,17 @@ static const DevAutotestStep kDevAutotestInventorySteps[] = {
     { DEV_AUTOTEST_ACTION_MUI_LONG_PRESS, 45, 0, 0, 20, "i07b_pistol_menu", "inventory.pid.8" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "i07c_unload", "radial.7" },
     { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "i07d_log" },
-    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 30, "i08_ammo_into_pistol", "inventory.pid.29", "inventory.pid.8" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 22, 30, "i08_ammo_into_pistol", "inventory.pid.29", "inventory.pid.8" },
     { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "i08b_log" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 30, "i09_knife_into_bag", "inventory.pid.4", "inventory.pid.46" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 30, "i10_wear_jacket", "inventory.pid.74", "inventory.slot.armor" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 30, "i11_pistol_to_hand", "inventory.pid.8", "inventory.slot.right" },
     { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "i11b_log" },
+    // Ammo onto the weapon in the hand loads it (its slot shows how).
+    { DEV_AUTOTEST_ACTION_MUI_LONG_PRESS, 45, 0, 0, 20, "i11c_hand_menu", "inventory.slot.right" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "i11d_unload_hand", "radial.7" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 22, 30, "i11e_ammo_into_hand", "inventory.pid.29", "inventory.slot.right" },
+    { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "i11f_log" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "i12_info_jacket", "inventory.slot.armor" },
     { DEV_AUTOTEST_ACTION_MUI_LONG_PRESS, 45, 0, 0, 20, "i13_bag_menu", "inventory.pid.46" },
     { DEV_AUTOTEST_ACTION_MUI_LONG_PRESS, 20, 0, 0, 30, "i14_open_bag", "radial.6" },
@@ -1323,12 +1460,16 @@ static const DevAutotestStep kDevAutotestInventorySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "i21g_after_use" },
     { DEV_AUTOTEST_ACTION_GIVE_ITEM, 40, 0, 0, 10, "i21h_give_drag_stimpak" },
     { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "i21i_before_drag_use" },
-    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 30, "i21j_drag_stimpak_to_figure", "inventory.pid.40", "inventory.figure" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 22, 30, "i21j_drag_stimpak_to_figure", "inventory.pid.40", "inventory.figure" },
     { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "i21k_after_drag_use" },
     { DEV_AUTOTEST_ACTION_GIVE_ITEM, 4, 0, 0, 10, "i21l_give_nonconsumable" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 30, "i21m_drag_knife_to_figure", "inventory.pid.4", "inventory.figure" },
     { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "i21n_after_rejected_drag" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "i22_back", "inventory.back" },
+    // Tablets: a tap on the world next to the window closes it.
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Inventory), 0, 0, 30, "i23_open_again" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP_OUTSIDE_WINDOW, 0, 0, 0, 30, "i24_tap_outside" },
+    { DEV_AUTOTEST_ACTION_MUI_CHECK_CLOSED, 0, 0, 0, 30, "i25_closed", "inventory.back" },
 };
 
 // The game's inventory and loot windows (run with [touch] mobile_ui=0,
@@ -1513,6 +1654,7 @@ static const DevAutotestStep kDevAutotestQuickSavesSteps[] = {
     { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 40, "q02_menu" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "q03_settings", "menu.settings" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0, -0.45f, 0, 40, "q04_scrolled", "prefs.rows.253" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0, -0.3f, 0, 40, "q04b_scrolled", "prefs.rows.356" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0.15f, 0, 0, 40, "q05_more", "prefs.rows.360" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "q06_applied", "prefs.apply" },
     { DEV_AUTOTEST_ACTION_LOG_SAVES, 16, 0, 0, 1, "q07_saves" },
@@ -1857,9 +1999,10 @@ static const DevAutotestStep kDevAutotestCalledShotSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "s00_start" },
     { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 9, HAND_LEFT, 0, 20, "s00b_smg" },
     { DEV_AUTOTEST_ACTION_MOVE_NEAR_CRITTER, 5, 0, 0, 20, "s00c_near_critter" },
-    { DEV_AUTOTEST_ACTION_HUD_TAP_MODE, 1, 0, 0, 20, "s01_aimed_mode" },
-    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "s02_hit_mode" },
     { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 60, "s03_combat" },
+    // Attack modes show in combat only.
+    { DEV_AUTOTEST_ACTION_HUD_TAP_MODE, 1, 0, 0, 20, "s03a_aimed_mode" },
+    { DEV_AUTOTEST_ACTION_LOG_HIT_MODE, 0, 0, 0, 1, "s03a_hit_mode" },
     { DEV_AUTOTEST_ACTION_CENTER_CRITTER, 0, 0, 0, 20, "s03b_center_critter" },
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 0, 0, 40, "s04_select_target" },
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 0, 0, 30, "s05_panel" },
@@ -3065,6 +3208,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "tactical") == 0) {
         gDevAutotestSteps = kDevAutotestTacticalSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestTacticalSteps) / sizeof(kDevAutotestTacticalSteps[0]);
+    } else if (strcmp(name, "icons") == 0) {
+        gDevAutotestSteps = kDevAutotestIconsSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestIconsSteps) / sizeof(kDevAutotestIconsSteps[0]);
     } else if (strcmp(name, "photos") == 0) {
         gDevAutotestSteps = kDevAutotestPhotosSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPhotosSteps) / sizeof(kDevAutotestPhotosSteps[0]);
@@ -3462,7 +3608,7 @@ void devAutotestTick()
         }
         case DEV_AUTOTEST_ACTION_LOG_CRITTERS:
             // `a` - 1: every elevation (with the critters' scripts).
-            for (int elevation = 0; elevation < ELEVATION_COUNT; elevation++) {
+            for (MapElevation elevation = ELEVATION_FIRST; elevation < ELEVATION_COUNT; elevation++) {
                 if (step->a == 0 && elevation != gDude->elevation) {
                     continue;
                 }
@@ -3485,7 +3631,7 @@ void devAutotestTick()
             Object* critter = nullptr;
             // The dude's elevation first, then the others.
             for (int pass = 0; pass <= ELEVATION_COUNT && critter == nullptr; pass++) {
-                int elevation = pass == 0 ? gDude->elevation : pass - 1;
+                MapElevation elevation = pass == 0 ? gDude->elevation : static_cast<MapElevation>(pass - 1);
                 for (Object* object = objectFindFirstAtElevation(elevation); object != nullptr; object = objectFindNextAtElevation()) {
                     if (object->pid == pid) {
                         critter = object;
@@ -3797,6 +3943,15 @@ void devAutotestTick()
                 settings.touch.hud_scale, settings.world_view.filter);
             break;
         }
+        case DEV_AUTOTEST_ACTION_ICON_SHEET:
+            if (gDevIconSheet == nullptr) {
+                gDevIconSheet = new DevIconSheetScreen();
+                muiPush(gDevIconSheet);
+            }
+            gDevIconSheet->size = step->a;
+            gDevIconSheet->first = static_cast<int>(step->c);
+            devAutotestLog("  icons %.0f dp, from %d\n", step->a, gDevIconSheet->first);
+            break;
         case DEV_AUTOTEST_ACTION_LOG_SAVES: {
             lsgMobileRefreshSlots();
             int count = 0;
@@ -3823,7 +3978,7 @@ void devAutotestTick()
             name[sizeof(name) - 1] = '\0';
             MapTransition transition;
             transition.map = wmMapMatchNameToIdx(name);
-            transition.elevation = static_cast<int>(step->a);
+            transition.elevation = static_cast<MapElevation>(static_cast<int>(step->a));
             transition.tile = static_cast<int>(step->b);
             transition.rotation = ROTATION_NE;
             devAutotestLog("  map %d now, to %s (%d), party %d\n", static_cast<int>(gMapHeader.index), step->widget,
@@ -4656,7 +4811,7 @@ void devAutotestTick()
             // another one (here it would block the tiles itself, it walks to
             // the dude to attack him).
             if (member != nullptr) {
-                objectSetLocation(member, member->tile, (gDude->elevation + 1) % ELEVATION_COUNT, nullptr);
+                objectSetLocation(member, member->tile, static_cast<MapElevation>((gDude->elevation + 1) % ELEVATION_COUNT), nullptr);
             }
             _partyMemberSyncPosition();
             Object* blocker = nullptr;
@@ -5950,6 +6105,39 @@ void devAutotestTick()
                 devAutotestStartTouch(x + step->a, y + step->b, x + step->a, y + step->b, 1, 0);
             }
             break;
+        case DEV_AUTOTEST_ACTION_MUI_TAP_OUTSIDE_WINDOW: {
+            // The window's area where taps don't close it (a mark).
+            MuiRect area;
+            gDevAutotestTappedOutside = false;
+            if (!muiGetWidgetRect(kMuiWindowTapArea, &area)) {
+                devAutotestLog("  no window: the screen covers the screen\n");
+                break;
+            }
+            float x = area.x / 2.0f * screenGetWidth();
+            float y = area.centerY() * screenGetHeight();
+            if (x < 2.0f) {
+                devAutotestLog("  no room left of the window\n");
+                break;
+            }
+            devAutotestLog("  tap outside the window at (%.0f, %.0f)\n", x, y);
+            devAutotestStartTouch(x, y, x, y, 1, 0);
+            gDevAutotestTappedOutside = true;
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MUI_CHECK_CLOSED: {
+            float x;
+            float y;
+            bool shown = step->widget != nullptr && muiGetWidgetCenter(step->widget, &x, &y);
+            if (!gDevAutotestTappedOutside) {
+                devAutotestLog("  not tapped outside, %s %s: Back\n", step->widget != nullptr ? step->widget : "?", shown ? "shown" : "gone");
+                muiRequestBack();
+            } else if (shown) {
+                devAutotestLog("FAIL: %s still shown after a tap outside the window\n", step->widget);
+            } else {
+                devAutotestLog("  closed by the tap outside the window\n");
+            }
+            break;
+        }
         case DEV_AUTOTEST_ACTION_MUI_TAP: {
             float x;
             float y;

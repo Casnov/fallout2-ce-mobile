@@ -315,6 +315,13 @@ struct EnhancementSettings {
     // Touch controls: the combat's tactical view button (tactical_view.h);
     // whether the view is on is [touch] tactical_view.
     bool tactical_view = true;
+    // Mobile barter with a trader: each item cell shows the price of one in
+    // this deal (`barterGetItemPrice`, as the dragged item shows it).
+    bool barter_unit_price = true;
+    // Fades of menus and loading (main menu, loading a save, character
+    // creation) a third as long. Fades meaning time passes (skills, books,
+    // encounters) and the splash's stay.
+    bool fast_menu_fades = true;
 };
 
 // CE: Zoomable map view, see world_view.h.
@@ -341,12 +348,28 @@ struct TouchSettings {
     bool hud = false;
     bool mobile_ui = false;
 #endif
-    // HUD size in percent of the default (buttons are sized in dp).
+    // HUD and mobile UI size in percent: buttons, text and the game screens'
+    // windows are sized in dp times it (a smaller size works as a screen of
+    // more dp, `hudIsTabletScreen`).
     int hud_scale = 100;
     // Screen density (Android dp scale). 0 - detect (Android), 1.0 elsewhere.
     double hud_density = 0.0;
     // Combat's tactical view (its HUD button), kept until switched again.
     bool tactical_view = false;
+    // Mobile UI's game screens as windows over the world instead of
+    // covering the screen (`muiUsesWindows`): 0 - on tablets (by the
+    // screen's size), 1 - never, 2 - always.
+    int windows = 0;
+    // Game screens' layouts: 0 - the roomy ones in windows where they fit
+    // (`muiIsTallContent`), 1 - the phone's, 2 - the roomy ones always
+    // (even where they don't fit: the player's choice).
+    int layout = 0;
+    // A tap on the world outside a window closes it (the game screens'
+    // windows; small panels always close so).
+    bool windows_tap_outside = true;
+    // Mobile UI's font: 0 - classic (the game's dialog font redrawn), 1 -
+    // modern (PT Mono).
+    int font = 0;
 };
 
 struct MapperSettings {

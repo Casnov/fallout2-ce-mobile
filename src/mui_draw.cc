@@ -14,6 +14,7 @@
 #include "debug.h"
 #include "game_charset.h"
 #include "mui_icons.h"
+#include "settings.h"
 #include "svga.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -24,8 +25,23 @@ namespace fallout {
 
 namespace {
 
-    // Font shipped in ce.dat (PT Mono, OFL, see fonts/OFL.txt).
-    constexpr const char* kFontPath = "fonts\\PTM55FT.ttf";
+    // Fonts shipped in ce.dat: the classic one (Fallout Classic Dialog, the
+    // game's dialog font redrawn, MIT, fonts/FalloutClassicDialog-LICENSE.txt)
+    // and the modern one (PT Mono, OFL, fonts/OFL.txt). Characters the
+    // classic one lacks come from the modern one.
+    constexpr const char* kFontPaths[] = {
+        "fonts\\FalloutClassicDialog.ttf",
+        "fonts\\PTM55FT.ttf",
+    };
+    constexpr int kFontCount = sizeof(kFontPaths) / sizeof(kFontPaths[0]);
+    constexpr int kModernFont = 1;
+
+    // The classic font's glyphs at this much of a size in a Cyrillic game:
+    // its Russian texts run 8% wider than PT Mono's (the UI's 11%), Latin
+    // ones as wide (English, German, French, Polish: 0-2%), so it takes
+    // about the same room (a bit less, chosen on the phone). The line stays
+    // the size's.
+    constexpr float kClassicCyrillicScale = 0.9f;
 
     // Glyph ranges packed into atlases: ASCII, Latin-1, Latin Extended-A,
     // Cyrillic, general punctuation, currency and letterlike symbols.
@@ -60,10 +76,18 @@ namespace {
 
     SDL_Renderer* gRenderer = nullptr;
 
-    std::vector<unsigned char> gFontData;
-    stbtt_fontinfo gFontInfo;
-    bool gFontLoaded = false;
-    bool gFontLoadFailed = false;
+    struct Font {
+        std::vector<unsigned char> data;
+        stbtt_fontinfo info;
+        bool loaded = false;
+        bool failed = false;
+    };
+
+    Font gFonts[kFontCount];
+
+    // `[touch] font` the atlases are made with, the classic font's scale.
+    int gFontChoice = 0;
+    float gClassicScale = 1.0f;
 
     // By pixel size.
     std::map<int, std::unique_ptr<FontAtlas>> gAtlases;
@@ -102,49 +126,93 @@ namespace {
 
     std::vector<SDL_Vertex> gVertices;
 
-    bool loadFont()
+    float gLayerAlpha = 1.0f;
+
+    // The scene fade (`muiSceneFadeBegin`).
+    constexpr unsigned int kSceneFadeInMs = 250;
+    float gSceneAlpha = 1.0f;
+    float gSceneFrom = 1.0f;
+    float gSceneTo = 1.0f;
+    unsigned int gSceneStart = 0;
+    unsigned int gSceneDuration = 0;
+    // Black after a fade, waiting for something to fade in.
+    bool gSceneWaiting = false;
+    bool gSceneReleased = false;
+
+    Uint8 layered(Uint8 alpha)
     {
-        if (gFontLoaded) {
-            return true;
+        return static_cast<Uint8>(alpha * gLayerAlpha * gSceneAlpha);
+    }
+
+    Font* loadFont(int index)
+    {
+        Font& font = gFonts[index];
+        if (font.loaded) {
+            return &font;
         }
 
-        if (gFontLoadFailed) {
-            return false;
+        if (font.failed) {
+            return nullptr;
         }
 
-        File* stream = fileOpen(kFontPath, "rb");
+        const char* path = kFontPaths[index];
+        File* stream = fileOpen(path, "rb");
         if (stream == nullptr) {
-            debugPrint("MUI: can't open font %s\n", kFontPath);
-            gFontLoadFailed = true;
-            return false;
+            debugPrint("MUI: can't open font %s\n", path);
+            font.failed = true;
+            return nullptr;
         }
 
         int size = fileGetSize(stream);
-        gFontData.resize(size);
-        size_t read = fileRead(gFontData.data(), 1, size, stream);
+        font.data.resize(size);
+        size_t read = fileRead(font.data.data(), 1, size, stream);
         fileClose(stream);
 
-        if (static_cast<int>(read) != size || !stbtt_InitFont(&gFontInfo, gFontData.data(), stbtt_GetFontOffsetForIndex(gFontData.data(), 0))) {
-            debugPrint("MUI: can't read font %s\n", kFontPath);
-            gFontLoadFailed = true;
-            return false;
+        if (static_cast<int>(read) != size || !stbtt_InitFont(&font.info, font.data.data(), stbtt_GetFontOffsetForIndex(font.data.data(), 0))) {
+            debugPrint("MUI: can't read font %s\n", path);
+            font.failed = true;
+            return nullptr;
         }
 
-        gFontLoaded = true;
-        return true;
+        font.loaded = true;
+        return &font;
+    }
+
+    // The chosen font, the modern one when the classic one can't be read.
+    Font* mainFont()
+    {
+        Font* font = loadFont(gFontChoice == 1 ? kModernFont : 0);
+        return font != nullptr ? font : loadFont(kModernFont);
     }
 
     FontAtlas* atlasForSize(float size)
     {
+        // The font setting or the game's alphabet (known once its fonts
+        // are) changed: the text is made again.
+        float classicScale = gameCharsetIsCyrillic() ? kClassicCyrillicScale : 1.0f;
+        if (settings.touch.font != gFontChoice || classicScale != gClassicScale) {
+            for (auto& entry : gAtlases) {
+                if (entry.second->texture != nullptr) {
+                    SDL_DestroyTexture(entry.second->texture);
+                }
+            }
+            gAtlases.clear();
+            gFontChoice = settings.touch.font;
+            gClassicScale = classicScale;
+        }
+
         int pixelSize = std::max(static_cast<int>(std::lround(size)), 6);
         auto it = gAtlases.find(pixelSize);
         if (it != gAtlases.end()) {
             return it->second.get();
         }
 
-        if (gRenderer == nullptr || !loadFont()) {
+        Font* main = mainFont();
+        if (gRenderer == nullptr || main == nullptr) {
             return nullptr;
         }
+        Font* fallback = main != &gFonts[kModernFont] ? loadFont(kModernFont) : nullptr;
+        float glyphSize = fallback != nullptr ? pixelSize * gClassicScale : static_cast<float>(pixelSize);
 
         auto atlas = std::make_unique<FontAtlas>();
 
@@ -160,17 +228,49 @@ namespace {
 
             stbtt_PackSetOversampling(&context, 2, 1);
 
-            stbtt_pack_range ranges[kRangeCount];
-            for (int index = 0; index < kRangeCount; index++) {
-                atlas->chars[index].assign(kGlyphRanges[index].count, stbtt_packedchar {});
-                ranges[index].font_size = static_cast<float>(pixelSize);
-                ranges[index].first_unicode_codepoint_in_range = kGlyphRanges[index].first;
-                ranges[index].array_of_unicode_codepoints = nullptr;
-                ranges[index].num_chars = kGlyphRanges[index].count;
-                ranges[index].chardata_for_range = atlas->chars[index].data();
-            }
+            // Each range's characters from the main font, the ones it
+            // lacks from the fallback (when that has them), each part of a
+            // range its own call: stb_truetype (v1.26) gives a character
+            // the font lacks the data of the first one it lacked, by that
+            // one's index - an index into the range it was in, read from
+            // the current range's array (past its end when that's shorter:
+            // 0x2010.. then 0x2030..). In one call that index stays in
+            // its range.
+            bool packed = true;
+            for (int index = 0; index < kRangeCount && packed; index++) {
+                const GlyphRange& range = kGlyphRanges[index];
+                atlas->chars[index].assign(range.count, stbtt_packedchar {});
 
-            bool packed = stbtt_PackFontRanges(&context, gFontData.data(), 0, ranges, kRangeCount) != 0;
+                std::vector<int> own;
+                std::vector<int> borrowed;
+                for (int codepoint = range.first; codepoint < range.first + range.count; codepoint++) {
+                    bool lacks = stbtt_FindGlyphIndex(&main->info, codepoint) == 0;
+                    if (lacks && fallback != nullptr && stbtt_FindGlyphIndex(&fallback->info, codepoint) != 0) {
+                        borrowed.push_back(codepoint);
+                    } else {
+                        own.push_back(codepoint);
+                    }
+                }
+
+                for (int part = 0; part < 2 && packed; part++) {
+                    std::vector<int>& codepoints = part == 0 ? own : borrowed;
+                    Font* font = part == 0 ? main : fallback;
+                    if (codepoints.empty()) {
+                        continue;
+                    }
+
+                    std::vector<stbtt_packedchar> chars(codepoints.size());
+                    stbtt_pack_range pack {};
+                    pack.font_size = glyphSize;
+                    pack.array_of_unicode_codepoints = codepoints.data();
+                    pack.num_chars = static_cast<int>(codepoints.size());
+                    pack.chardata_for_range = chars.data();
+                    packed = stbtt_PackFontRanges(&context, font->data.data(), 0, &pack, 1) != 0;
+                    for (size_t at = 0; at < codepoints.size(); at++) {
+                        atlas->chars[index][codepoints[at] - range.first] = chars[at];
+                    }
+                }
+            }
             stbtt_PackEnd(&context);
 
             if (packed) {
@@ -199,13 +299,18 @@ namespace {
         SDL_SetTextureBlendMode(atlas->texture, SDL_BLENDMODE_BLEND);
         SDL_SetTextureScaleMode(atlas->texture, SDL_ScaleModeLinear);
 
-        float scale = stbtt_ScaleForPixelHeight(&gFontInfo, static_cast<float>(pixelSize));
+        // A line is the main font's ascent and descent at the size, without
+        // its line gap: both fonts sit in a line the same way (the same cap
+        // and x heights at a size), the screens' layouts fit either. Smaller
+        // glyphs are centered in it.
+        float scale = stbtt_ScaleForPixelHeight(&main->info, static_cast<float>(pixelSize));
+        float glyphScale = stbtt_ScaleForPixelHeight(&main->info, glyphSize);
         int ascent;
         int descent;
         int lineGap;
-        stbtt_GetFontVMetrics(&gFontInfo, &ascent, &descent, &lineGap);
-        atlas->ascent = ascent * scale;
-        atlas->lineHeight = (ascent - descent + lineGap) * scale;
+        stbtt_GetFontVMetrics(&main->info, &ascent, &descent, &lineGap);
+        atlas->lineHeight = (ascent - descent) * scale;
+        atlas->ascent = ascent * glyphScale + (atlas->lineHeight - (ascent - descent) * glyphScale) / 2.0f;
 
         FontAtlas* result = atlas.get();
         gAtlases[pixelSize] = std::move(atlas);
@@ -230,7 +335,7 @@ namespace {
         SDL_Vertex result;
         result.position.x = x;
         result.position.y = y;
-        result.color = { color.r, color.g, color.b, color.a };
+        result.color = { color.r, color.g, color.b, layered(color.a) };
         result.tex_coord.x = u;
         result.tex_coord.y = v;
         return result;
@@ -242,31 +347,40 @@ namespace {
         return std::clamp(static_cast<int>(radius / 2.0f), 3, 12);
     }
 
-    void roundRectOutline(const MuiRect& rect, float radius, std::vector<SDL_FPoint>& points, int segments)
+    // The left corners' radius [left], the right ones' [right].
+    void roundRectOutline(const MuiRect& rect, float left, float right, std::vector<SDL_FPoint>& points, int segments)
     {
-        radius = std::max(std::min(radius, std::min(rect.w, rect.h) / 2.0f), 0.0f);
+        float limit = std::min(rect.w, rect.h) / 2.0f;
+        left = std::max(std::min(left, limit), 0.0f);
+        right = std::max(std::min(right, limit), 0.0f);
 
         struct Corner {
             float cx;
             float cy;
+            float radius;
             float start;
         };
 
         const float pi = 3.14159265f;
         Corner corners[4] = {
-            { rect.x + rect.w - radius, rect.y + radius, -pi / 2.0f },
-            { rect.x + rect.w - radius, rect.y + rect.h - radius, 0.0f },
-            { rect.x + radius, rect.y + rect.h - radius, pi / 2.0f },
-            { rect.x + radius, rect.y + radius, pi },
+            { rect.x + rect.w - right, rect.y + right, right, -pi / 2.0f },
+            { rect.x + rect.w - right, rect.y + rect.h - right, right, 0.0f },
+            { rect.x + left, rect.y + rect.h - left, left, pi / 2.0f },
+            { rect.x + left, rect.y + left, left, pi },
         };
 
         points.clear();
         for (const Corner& corner : corners) {
             for (int step = 0; step <= segments; step++) {
                 float angle = corner.start + (pi / 2.0f) * step / segments;
-                points.push_back({ corner.cx + std::cos(angle) * radius, corner.cy + std::sin(angle) * radius });
+                points.push_back({ corner.cx + std::cos(angle) * corner.radius, corner.cy + std::sin(angle) * corner.radius });
             }
         }
+    }
+
+    void roundRectOutline(const MuiRect& rect, float radius, std::vector<SDL_FPoint>& points, int segments)
+    {
+        roundRectOutline(rect, radius, radius, points, segments);
     }
 
     void fillPolygon(const std::vector<SDL_FPoint>& points, float centerX, float centerY, MuiColor color)
@@ -390,7 +504,7 @@ SDL_Renderer* muiDrawGetRenderer()
 void muiFillRect(const MuiRect& rect, MuiColor color)
 {
     SDL_FRect frect = { rect.x, rect.y, rect.w, rect.h };
-    SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
+    SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, layered(color.a));
     SDL_RenderFillRectF(gRenderer, &frect);
 }
 
@@ -404,6 +518,23 @@ void muiFillRoundRect(const MuiRect& rect, float radius, MuiColor color)
     std::vector<SDL_FPoint> points;
     roundRectOutline(rect, radius, points, roundRectSegments(radius));
     fillPolygon(points, rect.centerX(), rect.centerY(), color);
+}
+
+void muiFillRoundRect(const MuiRect& rect, float left, float right, MuiColor color)
+{
+    std::vector<SDL_FPoint> points;
+    roundRectOutline(rect, left, right, points, roundRectSegments(std::max(left, right)));
+    fillPolygon(points, rect.centerX(), rect.centerY(), color);
+}
+
+void muiStrokeRoundRect(const MuiRect& rect, float left, float right, float thickness, MuiColor color)
+{
+    int segments = roundRectSegments(std::max(left, right));
+    std::vector<SDL_FPoint> outer;
+    std::vector<SDL_FPoint> inner;
+    roundRectOutline(rect, left, right, outer, segments);
+    roundRectOutline(rect.inset(thickness), std::max(left - thickness, 0.0f), std::max(right - thickness, 0.0f), inner, segments);
+    strokePolygons(outer, inner, color);
 }
 
 void muiStrokeRoundRect(const MuiRect& rect, float radius, float thickness, MuiColor color)
@@ -507,6 +638,105 @@ void muiDrawPolyline(const std::vector<SDL_FPoint>& points, float thickness, Mui
 
     for (const SDL_FPoint& point : points) {
         muiFillCircle(point.x, point.y, thickness / 2.0f, color);
+    }
+}
+
+std::vector<unsigned char> muiRasterizeContours(const std::vector<std::vector<SDL_FPoint>>& contours, int width, int height)
+{
+    std::vector<unsigned char> coverage(static_cast<size_t>(std::max(width, 0)) * std::max(height, 0), 0);
+    if (width <= 0 || height <= 0) {
+        return coverage;
+    }
+
+    // stb_truetype's glyph rasterizer: short coordinates, so in 1/16 px.
+    constexpr float kSubpixels = 16.0f;
+    std::vector<stbtt_vertex> vertices;
+    for (const std::vector<SDL_FPoint>& contour : contours) {
+        if (contour.size() < 3) {
+            continue;
+        }
+        for (size_t index = 0; index < contour.size(); index++) {
+            stbtt_vertex vertex = {};
+            vertex.type = index == 0 ? STBTT_vmove : STBTT_vline;
+            vertex.x = static_cast<stbtt_vertex_type>(std::lround(contour[index].x * kSubpixels));
+            vertex.y = static_cast<stbtt_vertex_type>(std::lround(contour[index].y * kSubpixels));
+            vertices.push_back(vertex);
+        }
+    }
+
+    if (!vertices.empty()) {
+        stbtt__bitmap bitmap = { width, height, width, coverage.data() };
+        stbtt_Rasterize(&bitmap, 0.35f, vertices.data(), static_cast<int>(vertices.size()), 1.0f / kSubpixels, 1.0f / kSubpixels, 0.0f, 0.0f, 0, 0, 0, nullptr);
+    }
+    return coverage;
+}
+
+void muiSetLayerAlpha(float alpha)
+{
+    gLayerAlpha = std::clamp(alpha, 0.0f, 1.0f);
+}
+
+float muiLayerAlpha()
+{
+    return gLayerAlpha * gSceneAlpha;
+}
+
+void muiSceneFadeBegin(float from, float to, unsigned int durationMs)
+{
+    gSceneWaiting = false;
+    gSceneReleased = false;
+    // Already partly back (the next screen fading in by itself) or gone:
+    // from there.
+    gSceneFrom = to > from ? std::max(from, gSceneAlpha) : std::min(from, gSceneAlpha);
+    gSceneTo = to;
+    gSceneStart = SDL_GetTicks();
+    gSceneDuration = std::max(durationMs, 1u);
+    gSceneAlpha = gSceneFrom;
+}
+
+void muiSceneFadeHide()
+{
+    gSceneAlpha = 0.0f;
+    gSceneDuration = 0;
+    gSceneWaiting = true;
+    gSceneReleased = false;
+}
+
+void muiSceneFadeEnd()
+{
+    gSceneAlpha = gSceneTo;
+    gSceneDuration = 0;
+    gSceneWaiting = gSceneTo == 0.0f;
+}
+
+void muiSceneFadeRelease()
+{
+    if (gSceneWaiting) {
+        gSceneReleased = true;
+    }
+}
+
+void muiSceneFadeUpdate(unsigned int now, bool reduceMotion, bool covered)
+{
+    if (gSceneWaiting && (covered || gSceneReleased)) {
+        gSceneWaiting = false;
+        gSceneReleased = false;
+        if (reduceMotion) {
+            gSceneAlpha = 1.0f;
+            return;
+        }
+        gSceneFrom = 0.0f;
+        gSceneTo = 1.0f;
+        gSceneStart = now;
+        gSceneDuration = kSceneFadeInMs;
+    }
+
+    if (gSceneDuration != 0) {
+        float progress = std::min(static_cast<float>(now - gSceneStart) / gSceneDuration, 1.0f);
+        gSceneAlpha = gSceneFrom + (gSceneTo - gSceneFrom) * progress;
+        if (progress >= 1.0f) {
+            gSceneDuration = 0;
+        }
     }
 }
 
@@ -960,7 +1190,7 @@ void muiDrawTexture(SDL_Texture* texture, const MuiRect& rect, MuiColor tint)
     }
 
     SDL_SetTextureColorMod(texture, tint.r, tint.g, tint.b);
-    SDL_SetTextureAlphaMod(texture, tint.a);
+    SDL_SetTextureAlphaMod(texture, layered(tint.a));
     SDL_FRect dest = { rect.x, rect.y, rect.w, rect.h };
     SDL_RenderCopyF(gRenderer, texture, nullptr, &dest);
 }
@@ -972,7 +1202,7 @@ void muiDrawTexturePart(SDL_Texture* texture, const SDL_Rect& source, const MuiR
     }
 
     SDL_SetTextureColorMod(texture, tint.r, tint.g, tint.b);
-    SDL_SetTextureAlphaMod(texture, tint.a);
+    SDL_SetTextureAlphaMod(texture, layered(tint.a));
     SDL_FRect dest = { rect.x, rect.y, rect.w, rect.h };
     SDL_RenderCopyF(gRenderer, texture, &source, &dest);
 }
@@ -1001,7 +1231,7 @@ void muiDrawTextureCover(SDL_Texture* texture, const MuiRect& rect, MuiColor tin
     }
 
     SDL_SetTextureColorMod(texture, tint.r, tint.g, tint.b);
-    SDL_SetTextureAlphaMod(texture, tint.a);
+    SDL_SetTextureAlphaMod(texture, layered(tint.a));
     SDL_FRect dest = { rect.x, rect.y, rect.w, rect.h };
     SDL_RenderCopyF(gRenderer, texture, &source, &dest);
 }

@@ -170,8 +170,12 @@ goes through mouse emulation in touchscreen (absolute) mode.
 
 ## Touch HUD (block 1, `src/touch_hud.cc`, `src/hud_layout.cc`)
 
-Enabled with `[touch] hud=1` (default on Android). `hud_scale` (percent) is
-the UI size setting, `hud_density` overrides screen density (0 - Android
+Enabled with `[touch] hud=1` (default on Android). `hud_scale` (percent, 100
+everywhere by default) is the UI size setting: everything of the HUD and the
+mobile UI - buttons, text, the game screens' windows and their margins - is
+laid out in dp times it, so a UI size works as a screen of that many dp (60%
+on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
+`hud_density` overrides screen density (0 - Android
 `densityDpi / 160`; the Mac rig uses 2.667 on Retina to match the phone:
 320 dpi, 1600x720 shown as 1066x480).
 
@@ -203,15 +207,44 @@ the UI size setting, `hud_density` overrides screen density (0 - Android
     outlined once a second, off clears item outlines. Not the sfall script:
     it made the camera stutter and only worked while held;
   - log.
-- Weapon group (status, modes, swap hands, weapon) sits on a translucent
-  terminal panel (`HudGroupSpec::padding`, framed groups). Weapon button:
-  item inventory art, action name (top right), AP cost (bottom left),
-  crosshair when aimed (bottom right), ammo bar at the right edge; data from
-  `interfaceGetItemButtonInfo`, the same description the bar's item button is
-  drawn from. Attack modes strip: `interfaceGetAvailableItemActions` (same
-  rules as the right click cycle), chips show mode names, aimed modes are a
-  crosshair right after their base mode, reload is an icon; strip width is
-  fixed, overflow shows arrow buttons.
+- Weapon group: the actions over the world, under them a translucent
+  terminal panel (`HudGroupSpec::padding`, framed groups; `looseLines` stand
+  over it) with status (AP and HP) and the two hands.
+  - Hands (`HandLeft`, `HandRight`, `interfaceGetHandInfo`): both always
+    shown, in their places; the active one framed, the other dimmed. A tap
+    on the other one is the bar's swap (free), on the active one nothing; a
+    long press shows the name and ammo ("10mm pistol - 12/12, 10mm JHP") as
+    the other buttons' names. A slot: the item's art (bare hands: fist,
+    boot, named punch and kick) and name under it (two lines at most, raised off the bottom edge
+    over the art's lower part), a weapon's rounds (size small, empty red)
+    over the loaded ammo's inventory art beside the art - the ammo's type
+    told by its look.
+  - Actions strip (`buildModes`): in combat the active weapon's attack modes
+    (`interfaceGetAvailableItemActions`, the right click cycle's rules: the
+    game's names, aimed ones a crosshair) with their AP
+    (`interfaceGetItemActionCost`), its reload (only when the game offers
+    it: the magazine not full) and a non-weapon item's use; out of combat,
+    named, "Start combat" (`GameCommandType::StartCombat`, the A key: the
+    bar's weapon button starts combat so too) and the reload or use. Reload
+    (`interfaceReloadCurrentWeapon`) and use act at once, the attack mode
+    kept. Centered over the hands while they fit; wider, their right edge
+    stays at the hands' and they grow left over the world up to the
+    screen's middle, past it they scroll there with a position bar (accent
+    on a dark track, only while scrolling; without it the chips sit on its
+    place, nearer the panel), the chosen mode (an empty weapon's reload)
+    brought into view. A name longer than 72 dp gets smaller, down to 10 dp
+    (the chip wider past that); the AP right after it, the bolt at the top
+    left with the number on its lower right. Unarmed specials are named
+    without "punch" / "kick" (ce.msg 134-145): the hand tells it. A mode
+    and its aimed one stand as a pair: 2 dp apart, their facing corners
+    less round (6 dp between the rest); while
+    the aimed one is chosen its mode is lit like the active hand (framed,
+    its fill).
+  - Colors as the inventory's: the accent for what is tapped and the icons
+    (heart, lightning, mode names), the values' color for every number (HP,
+    AP, costs, rounds) and the item's name, dim for the secondary (the
+    magazine's size), state colors over them (HP yellow and red, an empty
+    weapon's reload orange, no rounds red); no white.
 - Party orders (Party Orders mod, `mods/party_orders.ini`): button on top of
   the left column, only with the mod installed and a living party member on
   the map. It opens the reusable action list (`muiShowActionList`,
@@ -445,9 +478,9 @@ the UI size setting, `hud_density` overrides screen density (0 - Android
 - SDL render batching is on (`SDL_HINT_RENDER_BATCHING`): naming the
   render driver ("opengl" on desktop) turned it off, every draw went to the
   driver alone. Android picks GLES2 without the name, so it batched already.
-- Icons (`mui_icons.cc`) are drawn once per size and thickness into white
-  textures (premultiplied alpha) and tinted when drawn: they were most of
-  the HUD's time. HUD build on a Mac: 1 ms -> 0.19 ms (batching + icons).
+- Icons (`mui_icons.cc`) are rasterized once per size into white textures
+  (premultiplied alpha) and tinted when drawn: they were most of the HUD's
+  time. HUD build on a Mac: 1 ms -> 0.19 ms (batching + icons).
   Menus (inventory, loot, dialog, barter, Pip-Boy, options...) pause the
   world as in the original (`isoDisable`), only drawing is skipped under
   covering mobile screens.
@@ -455,12 +488,24 @@ the UI size setting, `hud_density` overrides screen density (0 - Android
   after talk / barter / review): the game's combat control and
   customization panels in one (`gameDialogGetPartyControlView`,
   `gameDialogQueuePartyControlAction` -> the talk loop,
-  `GAME_DIALOG_PARTY_CONTROL_EVENT`). Stats under the head (hit points,
+  `GAME_DIALOG_PARTY_CONTROL_EVENT`). Under the head one panel where talk
+  has the reply's (its name as the reply's header): the stats (hit points,
   best skill, carrying, melee damage, AP; level / AC / addict with sfall's
-  PartyMemberExtraInfo), weapon and armor with "use best" (the panel's own
-  code, `partyMemberUseBestWeapon/Armor`), five dispositions (0 custom ..
-  4 berserk as the game's buttons: CE's `Disposition` names are shifted by
-  one), six settings with their values (game\custom.msg). A disposition
+  PartyMemberExtraInfo), a line, the weapon and armor as item cells with
+  their names and "use best" (the panel's own code,
+  `partyMemberUseBestWeapon/Armor`). Windows: the stats in two columns
+  (rows up to 32 dp), the line and the hands at the panel's bottom, so
+  room left over goes between them and the stats; the hands in rows with
+  the button at the right and the
+  weapon's damage / range / ammo and the armor's class
+  (`inventoryGetWeaponParts`, `inventoryGetArmorParts`: the summary's
+  inventry.msg lines, also outside the inventory); phones: the stats at the
+  left of the line, the hands over each other at its right, "Best" under
+  the name. The right column holds only the combat settings: five dispositions in a row (0
+  custom .. 4 berserk as the game's buttons: CE's `Disposition` names are
+  shifted by one), each as wide as its name, then six settings one per
+  row with their values (game\custom.msg), a tap opens the values; they
+  fit without scrolling. A disposition
   switches to its AI packet (the companion's preset from data\AI.txt);
   changing a setting switches to the custom disposition first, as the
   game's customization panel is only reached through it. Options a
@@ -527,7 +572,16 @@ the UI size setting, `hud_density` overrides screen density (0 - Android
 - Icons (`mui_icons.cc`, `muiDrawIcon`): HUD buttons, AP/HP, modes, dialog
   tabs, item filters and the radial action menu use drawn line icons in the
   theme colors, no game art or abbreviations. Long press on a HUD button
-  shows its name instead of acting.
+  shows its name instead of acting. The set is SVG on a 24 unit grid, the
+  same as the design board's: a subset (path with all commands, circle,
+  rect with rx, g with translate / scale / rotate, class "f" filled), round
+  caps and joins, strokes 1.8 of 24 at every size; strokes become their
+  segments' quads and round caps, rasterized antialiased by stb_truetype's
+  glyph rasterizer (`muiRasterizeContours`). Simple shapes, as if drawn on
+  an old terminal, one recognizable form each: a stimpak syringe for first
+  aid, the doctor's bag for chems, cartridges for ammo, a cuirass for armor,
+  a chip for science, the game's flattened hexes for the tactical view. Dev scenario `icons` shows them
+  all at 16, 24 and 40 dp, named.
 - Status: AP always like on the bar (empty out of combat, red on others'
   turn, number on dude's turn) and HP (colors as on the bar), with bolt and
   heart icons.
@@ -554,8 +608,33 @@ every screen on the new scalable UI, visual style/textures later via theme).
   original 8-bit UI and movies (`SDL_RenderSetLogicalSize(0, 0)` while
   drawing). Sizes in dp: output px per dp = `hudGetScreenDensity()` *
   `hud_scale`; safe area from HUD metrics (cutout insets).
-- Text: PT Mono (OFL, `files/ce.dat/fonts/`), stb_truetype glyph atlases per
-  pixel size (`third_party/stb`); game texts are decoded by the code page
+- Motion: `muiRunModal`'s windows (dialogs, the action list, quantity,
+  use item) fade in in 160 ms (dialogs also rise 12 dp) and out in 120 ms,
+  not touchable meanwhile (`muiSetLayerAlpha`); notices come in from 8 dp
+  above in 150 ms; Android's "Remove animations" (animator duration scale
+  0, `muiReduceMotion`) turns these off. The game's black fades stay where
+  time passes (skills, books, encounters); menus' and loading's are a third
+  as long (`[enhancements] fast_menu_fades`). The UI fades with the picture
+  (`muiSceneFadeBegin`, from `paletteFadeTo`), and after a fade to black the
+  next screen fades in (250 ms) unless the game's own fade brings it back.
+- Text (`[touch] font`, Settings → Display): classic - Fallout Classic
+  Dialog (MIT, a redrawing of the game's dialog font `font1.aaf`, with
+  Latin, Western / Central European and Cyrillic letters; the dashes,
+  quotes, ellipsis, numero and a few more added from its own glyphs,
+  `docs-private/fonts/addglyphs.py`), the default; modern - PT Mono (OFL).
+  Both in `files/ce.dat/fonts/`. Characters the classic one lacks come from
+  PT Mono, glyph by glyph; a line is the font's ascent and descent without
+  its line gap, so both fonts sit the same in the screens' layouts (their
+  cap and x heights at a size match). In a Cyrillic game the classic
+  font's glyphs are 0.9 of the size, centered in the line: its Russian
+  texts ran 8% wider than PT Mono's (ce.msg 11%), Latin ones as wide
+  (English, German, French, Polish ce.msg and game texts: 0-2%). The game's own fonts (9-24 px
+  bitmaps of 256 characters in the player's files) aren't used: they scale
+  only as pixels. stb_truetype glyph atlases per
+  pixel size (`third_party/stb`), each glyph range packed by its own call
+  (stb_truetype 1.26 gives characters the font lacks the first lacking
+  one's data by its index in another range: reads past the array, a crash
+  on the phone 2026-10-21 building an atlas for a new UI size); game texts are decoded by the code page
   of `game_charset.h`: the alphabet from the game's fonts (a Cyrillic or
   Greek font draws the Latin look-alikes as Latin letters), the variant
   from `[system] language`; the fonts win when they disagree (old Russian
@@ -572,6 +651,49 @@ every screen on the new scalable UI, visual style/textures later via theme).
   `MuiTheme` (placeholder terminal-green).
 - `muiRunModal` runs input+render for synchronous game flows; Esc/Android
   back -> `MuiScreen::back`.
+- Windows (`muiUsesWindows`, `[touch] windows`, the "Game screens" row:
+  0 Auto - where a window with the tall layouts fits: the screen 520x820 dp
+  or more in the UI's dp (7" and bigger at 100%, a phone at a small UI
+  size); 1 Full screen; 2 Windows - phones too): game screens laid out by
+  `muiScreenFrame` open
+  as a window over the world dimmed as under the game menu (`dim`), at most
+  896x680 dp (with everything else in the UI's dp: at 100% a 10" tablet
+  shows the windows' mockups as they are), at least 24 dp from the edges,
+  the tab column outside it at its top right; when the column doesn't fit
+  next to a centered window (4:3) the window moves left. Phones get
+  `muiDialogLayout` unchanged. Such screens are `isGameScreen` and don't
+  `coversScreen` with windows, so the map is drawn under them; switching
+  between game screens holds the frame until the next one shows either way.
+  A tap on the world outside the window and its tabs is the screen's Back,
+  like the game menu's: no band around the window (its 14 dp padding keeps
+  the buttons off the edge), only 8 dp past the frameless tabs; the area is
+  marked `window.tap_area` for autotests. The elevator keeps its card and
+  puts Back next to it (`muiTabsBeside`). Windows: inventory, character
+  (creation too), Pip-Boy, automap, talk, barter, loot, save/load,
+  settings, the character selector. Screens of the title menu (selector,
+  creation, its load and settings) are windows over its picture
+  (`muiScreenFrame(..., overTitle)`, `muiDrawTitleArt`; the menu itself is
+  closed under them). Creation and talk take no tap outside (Back would
+  cancel the character; talk has none).
+  Screens pick their layout by the content area, not the device
+  (`muiIsTallContent`, `[touch] layout`, the "Screen layouts" row: 0 Auto
+  - windows of 680x440 dp and more, every tablet's, screens covering the
+  screen keep the phone's layouts; 1 Phone - never; 2 Tablet - always,
+  even where they don't fit, the player's choice; any of them with any
+  frame): the roomy sizes of the windows' mockups (bigger rows, buttons,
+  text; settings' sections 56 dp, save rows with thumbnails, character's
+  stats tab as SPECIAL rows over conditions and derived stats in two
+  columns, talk's speaker and reply in a wider left column (460 dp, the
+  picture about 1.2 times the game's; a picture held back by the height
+  narrows the column to it), the party member's stats there in two
+  columns over its weapon and armor rows, the selector's
+  stats in one column). The inventory's tall one has the
+  items on the left and the character, armor and hands over the summary on
+  the right in the mockup's proportions, the summary in two columns
+  (SPECIAL with `statGetName`'s full names next to hit points, armor class
+  and resistances; each hand's weapon under its slot, damage, range and
+  ammo each on its line), its rows as spaced
+  out as fits (22, 20 dp or the font's line); phones get the three columns.
 - Done: dialog boxes (`showDialogBox` -> `muiShowDialogBox`, texts from
   DBOX.MSG), radial action menu drawing (54 dp circles, own line icons,
   centered on the finger, near edges buttons spread over the free arc;
@@ -579,14 +701,33 @@ every screen on the new scalable UI, visual style/textures later via theme).
   moved 12 dp from where the menu opened).
 - Widgets also: `scroll` (inertial, child ids `<id>.`), `dragSource` /
   `dragging` / `dropped` (drag starts on a sideways move or a 350 ms hold),
-  `slider`, long press in `touchable` (500 ms).
+  `slider`, long press in `touchable` (500 ms). Every scroll area whose
+  content doesn't fit gets a thin bar just past its far edge (in its
+  padding, off the content) and a light fade at each edge with more beyond;
+  `scroll` keeps them for the frame and `drawScrollMarks` draws them
+  (before `dim`, after each screen's build), touches go through. Areas with
+  their own marks (the HUD's attack modes, its log) pass `marks = false`.
+- Item grids take the column count keeping their cells nearest one size
+  (`muiItemCellSize`: 68 dp, 88 in the tablet windows' tall layouts;
+  `muiItemColumns`); barter picks its side columns the same way (4/1/1/4
+  on a 20:9 phone, 3/1/1/3 in a tablet window). The right side of loot and
+  barter tells what is carried like the left: weight / carry weight of
+  critters (red above it), weight of the rest (`muiCarriedText`);
+  containers also show their room - the items' size / capacity
+  (`muiContainerVolume`, `containerGetMaxSize`), a volume, with the bag
+  icon, not a weight.
+- `[touch] windows_tap_outside` (on by default, the "Close windows by
+  tapping outside" row shown while windows are used) - only the game
+  screens' windows; small panels (game menu, called shot, action list, use
+  item) always close by a tap aside.
 - Dialog tabs (`muiDialogTabs`, right edge, same place on every dialog
   screen): Talk / Barter (traders only) / History. Talk sends `t`, barter `b`,
   history opens the talk screen's review panel.
 - Talk screen (`mui_game_dialog.cc`, `TalkScreen`, active while
   `gameDialogIsTalking`): talking head / map around the speaker copied every
   frame from the game's display buffer (388 x 200, keeps animation and
-  lips), reply with the speaker name under it, options on the right (any
+  lips), reply with the speaker name under it, options on the right, each
+  scrolling on its own so the reply stays in sight (any
   option via `GAME_DIALOG_OPTION_EVENT_BASE + index`, not only the first
   nine). No exit button (the vanilla `0` exit is a bug CE disables with
   `no_exit_hotkey=1`). Autotest: `--dev-autotest-scenario=talk`.
@@ -595,7 +736,11 @@ every screen on the new scalable UI, visual style/textures later via theme).
   screen queues `BarterAction`s and posts `BARTER_ACTION_EVENT`, the loop
   performs them with the game's own moves (`itemMoveForce`, weight-checked
   `itemMove` for giving to party members) and redisplays. Columns 3 / 1 / 1 / 3
-  (player, offer, request, trader) of square cells of one size, no head. The
+  (player, offer, request, trader) of square cells of one size, no head.
+  One layout on phones and in windows: the tables' titles in the header row
+  between the sides' headers, their prices under them in the filters' row,
+  all four lists down to the offer button under the tables, the sides'
+  weight and money beside it. The
   game's dialog panel slide (`_gdialog_scroll_subwin`) is instant with mobile
   UI, so the tabs switch at once; the one frame between the talk loop and the
   barter loop keeps the last shown frame (`MuiScreen::holdsFrame`,
@@ -643,7 +788,8 @@ every screen on the new scalable UI, visual style/textures later via theme).
   two-way arrow under the feet, one scale for all directions, stays inside
   open containers) with armor slot,
   HP / AC / weight and hand slots, right panel with the game's summary
-  (`inventoryGetSummary`) or the chosen item (`inventoryGetItemInfo`: what
+  (`inventoryGetSummary`; the hands' lines also as inventry.msg labels and
+  values, `handParts`, drawn dim and bright) or the chosen item (`inventoryGetItemInfo`: what
   looking tells, weight, weapon damage/range/AP as if held, armor class and
   thresholds; no price). Back button in the tab column closes an open
   container first. No party tabs here (Inventory Filter has them only in
@@ -693,6 +839,11 @@ every screen on the new scalable UI, visual style/textures later via theme).
   first clip: the one not full, it goes first), its weight and, in barter,
   its price in this deal (`barterGetItemPrice`, the same formula as the
   table totals). So a single clip shows what lands on the table.
+- Unit price (`[enhancements] barter_unit_price`, a settings row): in a deal
+  with a trader every item cell of the four lists shows at its top right,
+  small and dim, the price the dragged item shows (`barterGetItemPrice` of
+  one: the trader's with the deal's markup, ammo's first clip); not on
+  money (its cell has the sum) nor with a party member.
 - Quantity picker (`mui_quantity.cc`, `muiQuantitySelect`, used by
   `inventoryQuantitySelect`): the stack's cell, name, value, the chosen ones'
   weight and, in a deal with a trader, price (`barterGetMovedQuantity`
@@ -1179,10 +1330,10 @@ screen).
 ## Attack modes and reload (resolved)
 
 The original hides them in the weapon button's right click (`N` cycles
-primary -> aimed -> secondary -> aimed -> reload). The touch HUD shows them
-as an attack-mode strip next to the weapon button (`touch_hud.cc`: the
-weapon's modes, reload as an icon, fixed width, scrolls sideways), plus
-end turn / end combat, swap hands, sneak and quick save/load buttons.
+primary -> aimed -> secondary -> aimed -> reload), and its weapon button
+starts combat out of it. The touch HUD shows the modes with their AP over
+the two hands in combat only, reload as its own action, and starts combat
+with "Start combat" (the A key), see the weapon group above.
 
 ## Testing
 

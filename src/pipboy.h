@@ -92,7 +92,7 @@ void pipboyPlayHolodiskNarration(int index);
 
 struct PipboyAutomap {
     Map map;
-    int elevation;
+    MapElevation elevation;
     const char* name;
 };
 

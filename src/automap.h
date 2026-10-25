@@ -75,12 +75,12 @@ int automapLoad(File* stream);
 int automapSave(File* stream);
 int _automapDisplayMap(int map);
 void automapShow(bool isInGame, bool isUsingScanner);
-int automapRenderInPipboyWindow(int win, Map map, int elevation);
+int automapRenderInPipboyWindow(int win, Map map, MapElevation elevation);
 
 // Explored walls (1) and scenery (2) of [map]'s [elevation] as saved for the
 // Pip-Boy: HEX_GRID_WIDTH x HEX_GRID_HEIGHT tiles, rows top down, the way the
 // Pip-Boy draws them. False when there's no data.
-bool automapGetPipboyTiles(Map map, int elevation, std::vector<unsigned char>& tiles);
+bool automapGetPipboyTiles(Map map, MapElevation elevation, std::vector<unsigned char>& tiles);
 
 // CE: Mobile UI map screen (mui_automap.cc) over the automap's state.
 
@@ -96,7 +96,7 @@ struct AutomapView {
     std::vector<std::pair<int, int>> critters;
 };
 
-void automapGetView(int elevation, AutomapView* view);
+void automapGetView(MapElevation elevation, AutomapView* view);
 
 bool automapGetHighDetails();
 void automapSetHighDetails(bool highDetails);

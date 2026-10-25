@@ -68,6 +68,9 @@ SDL_Renderer* muiDrawGetRenderer();
 void muiFillRect(const MuiRect& rect, MuiColor color);
 void muiFillRoundRect(const MuiRect& rect, float radius, MuiColor color);
 void muiStrokeRoundRect(const MuiRect& rect, float radius, float thickness, MuiColor color);
+// Corners rounded by [left] at the left, [right] at the right.
+void muiFillRoundRect(const MuiRect& rect, float left, float right, MuiColor color);
+void muiStrokeRoundRect(const MuiRect& rect, float left, float right, float thickness, MuiColor color);
 // [rect] shading from [left] at its left edge to [right] at its right one.
 void muiFillHorizontalGradient(const MuiRect& rect, MuiColor left, MuiColor right);
 // [rect] shading between the colors of its corners.
@@ -78,6 +81,32 @@ void muiDrawLine(float x1, float y1, float x2, float y2, float thickness, MuiCol
 void muiFillConvex(const std::vector<SDL_FPoint>& points, MuiColor color);
 // Connected segments with round joins and ends.
 void muiDrawPolyline(const std::vector<SDL_FPoint>& points, float thickness, MuiColor color, bool closed = false);
+
+// Antialiased coverage (0-255) of [contours] in a [width] x [height] bitmap,
+// pixel coordinates: each contour is closed; the ones going round the same
+// way add up where they overlap, opposite ones cut holes.
+std::vector<unsigned char> muiRasterizeContours(const std::vector<std::vector<SDL_FPoint>>& contours, int width, int height);
+
+// Everything drawn from now on this much opaque (a screen fading in or
+// out), 1 - as given.
+void muiSetLayerAlpha(float alpha);
+// The layer's and the scene's alpha together.
+float muiLayerAlpha();
+
+// The game's fades to and from black (`paletteFadeTo`): the UI goes dark
+// and comes back with the picture, from [from] to [to] (0 - black, 1 -
+// shown) in [durationMs]. After one to black the UI stays dark until a
+// screen covering everything comes (it fades in) or the picture is back
+// (`muiSceneFadeRelease`, another fade): the HUD doesn't show over black.
+void muiSceneFadeBegin(float from, float to, unsigned int durationMs);
+void muiSceneFadeEnd();
+// The UI gone at once (leaving a game: the HUD doesn't come back for the
+// fade), back as after a fade to black.
+void muiSceneFadeHide();
+// The game's palette set at once to a picture: the UI fades in.
+void muiSceneFadeRelease();
+// Once a frame, before drawing it; [covered] - a screen covers everything.
+void muiSceneFadeUpdate(unsigned int now, bool reduceMotion, bool covered);
 
 void muiPushClip(const MuiRect& rect);
 void muiPopClip();

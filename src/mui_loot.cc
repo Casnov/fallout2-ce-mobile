@@ -56,7 +56,8 @@ namespace {
             modal = true;
         }
 
-        bool coversScreen() override { return true; }
+        bool coversScreen() override { return !muiUsesWindows(); }
+        bool isGameScreen() override { return true; }
 
         bool isActive() override
         {
@@ -77,6 +78,8 @@ namespace {
         bool wasActive = false;
         MuiItemFilterState filters[SIDE_COUNT];
         std::vector<MuiListItem> lists[SIDE_COUNT];
+        // Tablet windows: the roomy sizes (`muiIsTallContent`).
+        bool tall = false;
         MuiRect listRects[SIDE_COUNT];
         std::vector<MuiRect> partyTabRects;
 
@@ -114,40 +117,40 @@ namespace {
 
         const MuiTheme& theme = muiTheme();
 
-        // Opaque over the map.
-        muiFillRect(ui.screenRect(), kBackground);
-
-        MuiRect content;
-        MuiRect tabs;
-        muiDialogLayout(ui, &content, &tabs);
+        // Opaque over the map, or a window over it.
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground);
+        const MuiRect& content = frame.content;
+        const MuiRect& tabs = frame.tabs;
 
         MuiRect back = { tabs.x, tabs.y, tabs.w, tabs.w };
         bool backPressed;
-        if (ui.touchable("loot.back", back, &backPressed)) {
+        if (ui.touchable("loot.back", back, &backPressed) || frame.tappedOutside) {
             lootRequestClose();
         }
         muiFillRoundRect(back, ui.dp(theme.radius), backPressed ? theme.buttonPressed : theme.button);
         muiStrokeRoundRect(back, ui.dp(theme.radius), ui.dp(theme.borderWidth), backPressed ? theme.accent : theme.buttonBorder);
-        muiDrawIcon(MuiIcon::Back, back.centerX(), back.centerY(), back.w * 0.46f, ui.dp(2.2f), theme.accent);
+        muiDrawIcon(MuiIcon::Back, back.centerX(), back.centerY(), back.w * 0.46f, theme.accent);
 
         lists[SIDE_LEFT] = muiInventoryItems(view.leftOwner, filters[SIDE_LEFT]);
         lists[SIDE_RIGHT] = muiInventoryItems(view.rightOwner, filters[SIDE_RIGHT]);
 
+        tall = muiIsTallContent(ui, content);
         float gap = ui.dp(12.0f);
         float sideWidth = (content.w - gap) / 2.0f;
-        float rowHeight = ui.dp(30.0f);
-        float bottomHeight = ui.dp(34.0f);
-        float rowGap = ui.dp(6.0f);
+        float headerHeight = ui.dp(tall ? 36.0f : 30.0f);
+        float filterHeight = ui.dp(tall ? 40.0f : 30.0f);
+        float bottomHeight = ui.dp(tall ? 44.0f : 34.0f);
+        float rowGap = ui.dp(tall ? 8.0f : 6.0f);
 
         for (int side = 0; side < SIDE_COUNT; side++) {
             float x = content.x + side * (sideWidth + gap);
             float y = content.y;
-            buildHeader(ui, view, static_cast<Side>(side), { x, y, sideWidth, rowHeight });
-            y += rowHeight + rowGap;
+            buildHeader(ui, view, static_cast<Side>(side), { x, y, sideWidth, headerHeight });
+            y += headerHeight + rowGap;
 
             std::string filterId = side == SIDE_LEFT ? "loot.filter.left" : "loot.filter.right";
-            muiItemFilterRow(ui, filterId, { x, y, sideWidth, rowHeight }, &filters[side]);
-            y += rowHeight + rowGap;
+            muiItemFilterRow(ui, filterId, { x, y, sideWidth, filterHeight }, &filters[side]);
+            y += filterHeight + rowGap;
 
             float listHeight = content.bottom() - bottomHeight - rowGap - y;
             buildList(ui, view, static_cast<Side>(side), { x, y, sideWidth, listHeight });
@@ -173,7 +176,7 @@ namespace {
         if (tabsHere) {
             buildPartyTabs(ui, view, rect);
         } else if (side == SIDE_LEFT) {
-            muiDrawTextAligned(muiDecodeGameText(objectGetName(view.looter)), rect, ui.dp(14.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
+            muiDrawTextAligned(muiDecodeGameText(objectGetName(view.looter)), rect, ui.dp(tall ? 16.0f : 14.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
         } else {
             buildTargetName(ui, view, rect);
         }
@@ -210,7 +213,7 @@ namespace {
 
             MuiRect label = tab.inset(ui.dp(4.0f), 0.0f);
             muiPushClip(label);
-            muiDrawTextAligned(muiDecodeGameText(objectGetName(view.party[index])), label, ui.dp(12.0f), color, MuiAlign::Center, MuiAlign::Center);
+            muiDrawTextAligned(muiDecodeGameText(objectGetName(view.party[index])), label, ui.dp(tall ? 14.0f : 12.0f), color, MuiAlign::Center, MuiAlign::Center);
             muiPopClip();
             if (!reachable) {
                 muiDrawUnavailableOverlay(ui, tab, 5.0f);
@@ -246,7 +249,7 @@ namespace {
         }
 
         muiPushClip(label);
-        muiDrawTextAligned(muiDecodeGameText(objectGetName(view.target)), label, ui.dp(14.0f), theme.accent, view.targetCount > 1 ? MuiAlign::Center : MuiAlign::Start, MuiAlign::Center);
+        muiDrawTextAligned(muiDecodeGameText(objectGetName(view.target)), label, ui.dp(tall ? 16.0f : 14.0f), theme.accent, view.targetCount > 1 ? MuiAlign::Center : MuiAlign::Start, MuiAlign::Center);
         muiPopClip();
     }
 
@@ -261,7 +264,7 @@ namespace {
         muiFillRoundRect(rect, ui.dp(5.0f), pressed ? theme.buttonPressed : theme.button);
         muiStrokeRoundRect(rect, ui.dp(5.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
         float iconSize = rect.h * 0.5f;
-        muiDrawIcon(MuiIcon::Back, rect.x + ui.dp(8.0f) + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.8f), theme.accent);
+        muiDrawIcon(MuiIcon::Back, rect.x + ui.dp(8.0f) + iconSize / 2.0f, rect.centerY(), iconSize, theme.accent);
         MuiRect label = { rect.x + iconSize + ui.dp(16.0f), rect.y, rect.w - iconSize - ui.dp(20.0f), rect.h };
         muiPushClip(label);
         muiDrawTextAligned(muiDecodeGameText(objectGetName(container)), label, ui.dp(14.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
@@ -280,12 +283,12 @@ namespace {
         muiFillRoundRect(rect, ui.dp(6.0f), kListBackground);
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(target ? 2.0f : 1.0f), target ? theme.accent : theme.panelBorder);
 
-        constexpr int kColumns = 5;
-        float gap = ui.dp(4.0f);
+        float gap = ui.dp(tall ? 6.0f : 4.0f);
         MuiRect area = rect.inset(gap);
-        float cell = (area.w - gap * (kColumns - 1)) / kColumns;
+        int columns = muiItemColumns(ui, area.w, gap, tall);
+        float cell = (area.w - gap * (columns - 1)) / columns;
         const std::vector<MuiListItem>& items = lists[side];
-        int rows = (static_cast<int>(items.size()) + kColumns - 1) / kColumns;
+        int rows = (static_cast<int>(items.size()) + columns - 1) / columns;
         float contentHeight = rows * (cell + gap);
 
         std::string id = kListIds[side];
@@ -296,7 +299,7 @@ namespace {
 
         muiPushClip(area);
         for (int index = 0; index < static_cast<int>(items.size()); index++) {
-            MuiRect cellRect = { area.x + (index % kColumns) * (cell + gap), area.y - offset + (index / kColumns) * (cell + gap), cell, cell };
+            MuiRect cellRect = { area.x + (index % columns) * (cell + gap), area.y - offset + (index / columns) * (cell + gap), cell, cell };
             if (cellRect.bottom() < area.y || cellRect.y > area.bottom()) {
                 continue;
             }
@@ -343,17 +346,35 @@ namespace {
     {
         const MuiTheme& theme = muiTheme();
 
+        // The right side as the left one: weight / carry weight of critters,
+        // weight of the rest; containers also their room (a volume).
+        bool over = false;
         std::u32string weight = side == SIDE_LEFT
             ? number(view.weight) + (view.carryWeight > 0 ? U"/" + number(view.carryWeight) : U"")
-            : number(objectGetInventoryWeight(view.rightOwner));
-        float iconSize = ui.dp(15.0f);
-        float textSize = ui.dp(14.0f);
+            : muiCarriedText(view.rightOwner, &over);
+        int used;
+        int capacity;
+        std::u32string volume;
+        if (side == SIDE_RIGHT && muiContainerVolume(view.rightOwner, &used, &capacity)) {
+            volume = number(used) + U"/" + number(capacity);
+        }
+
+        float iconSize = ui.dp(tall ? 20.0f : 15.0f);
+        float textSize = ui.dp(tall ? 17.0f : 14.0f);
         float edge = ui.dp(2.0f);
-        float weightWidth = iconSize + ui.dp(6.0f) + muiTextWidth(weight, textSize);
-        float weightX = side == SIDE_LEFT ? rect.x + edge : rect.right() - edge - weightWidth;
-        muiDrawIcon(MuiIcon::Weight, weightX + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.5f), theme.textDim);
-        MuiRect weightRect = { weightX + iconSize + ui.dp(6.0f), rect.y, weightWidth, rect.h };
-        muiDrawTextAligned(weight, weightRect, textSize, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        float iconGap = ui.dp(6.0f);
+        float weightWidth = iconSize + iconGap + muiTextWidth(weight, textSize);
+        float volumeWidth = volume.empty() ? 0.0f : iconSize + iconGap + muiTextWidth(volume, textSize);
+        float partsGap = volume.empty() ? 0.0f : ui.dp(14.0f);
+        float weightX = side == SIDE_LEFT ? rect.x + edge : rect.right() - edge - volumeWidth - partsGap - weightWidth;
+        muiDrawIcon(MuiIcon::Weight, weightX + iconSize / 2.0f, rect.centerY(), iconSize, theme.textDim);
+        MuiRect weightRect = { weightX + iconSize + iconGap, rect.y, weightWidth, rect.h };
+        muiDrawTextAligned(weight, weightRect, textSize, over ? kMuiOverLimit : theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        if (!volume.empty()) {
+            float volumeX = rect.right() - edge - volumeWidth;
+            muiDrawIcon(MuiIcon::Inventory, volumeX + iconSize / 2.0f, rect.centerY(), iconSize, theme.textDim);
+            muiDrawTextAligned(volume, { volumeX + iconSize + iconGap, rect.y, volumeWidth, rect.h }, textSize, used > capacity ? kMuiOverLimit : theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        }
 
         if (view.steal) {
             return;
@@ -380,8 +401,8 @@ namespace {
 
         // Arrow towards where the items go.
         std::u32string label = muiDecodeGameText(primary ? muiText(kTextTakeAll, "TAKE ALL") : muiText(kTextGiveAll, "GIVE ALL"));
-        textSize = ui.dp(13.0f);
-        float arrowSize = ui.dp(14.0f);
+        textSize = ui.dp(tall ? 15.0f : 13.0f);
+        float arrowSize = ui.dp(tall ? 16.0f : 14.0f);
         float arrowGap = ui.dp(6.0f);
         float textWidth = std::min(muiTextWidth(label, textSize), button.w - arrowSize - arrowGap - ui.dp(12.0f));
         float start = button.centerX() - (textWidth + arrowGap + arrowSize) / 2.0f;
@@ -394,7 +415,7 @@ namespace {
 
         // Back icon points left; "Give all" points right.
         if (primary) {
-            muiDrawIcon(MuiIcon::Back, arrowX, button.centerY(), arrowSize, ui.dp(1.6f), color);
+            muiDrawIcon(MuiIcon::Back, arrowX, button.centerY(), arrowSize, color);
         } else {
             float half = arrowSize / 2.0f;
             float y = button.centerY();

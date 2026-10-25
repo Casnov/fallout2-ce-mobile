@@ -45,7 +45,7 @@ enum class HudGroupId {
     Tools, // skills, highlight, sneak
     Log, // message log button
     Combat, // end turn, end combat
-    Weapon, // status, attack modes, swap hands, weapon
+    Weapon, // actions over the panel; on it status, the two hands
     Indicators, // SNEAK, LEVEL, POISONED, ...
     Count,
 };
@@ -65,9 +65,9 @@ enum class HudElementId {
     EndTurn,
     EndCombat,
     Status, // AP and HP
-    Modes, // attack modes strip
-    SwapHands,
-    Weapon,
+    Modes, // actions strip: attack modes, reload / use, start combat
+    HandLeft, // hand slots (a tap on the other one swaps hands)
+    HandRight,
     Indicators,
     // Party Orders mod: list of its orders.
     PartyOrders,
@@ -98,6 +98,9 @@ struct HudGroupSpec {
     // Space between the group edge and its elements, dp. Groups with
     // padding are drawn on a panel.
     float padding = 0.0f;
+    // The first lines stand over the world above the panel (the weapon
+    // group's actions), a gap from it, no padding of theirs.
+    int looseLines = 0;
 };
 
 struct HudLayout {
@@ -141,6 +144,9 @@ struct HudPlacedGroup {
     HudRect rect;
     // Group is drawn on a panel.
     bool framed;
+    // The panel's rect, relative to group rect: all of it but the loose
+    // lines.
+    HudRect panel;
     std::vector<HudPlacedElement> elements;
 };
 
@@ -150,6 +156,22 @@ float hudGetPixelsPerDp();
 
 // Screen density (Android dp scale), UI size setting not included.
 float hudGetScreenDensity();
+
+// The screen's shorter side in dp, UI size setting not included (0 before
+// the renderer is up).
+float hudGetScreenShortSideDp();
+
+// A tablet's screen in the UI's dp (the screen's over the UI size: a
+// smaller UI works as a screen of more dp), 7" and bigger at 100%: room for
+// a game screen's window with the tall layouts, so they open as windows
+// over the world (`muiUsesWindows` Auto). With [interfaceScale] - for that
+// UI size instead of the current one.
+bool hudIsTabletScreen(float interfaceScale);
+bool hudIsTabletScreen();
+
+// UI size factor (`[touch] hud_scale`): everything of the HUD and the mobile
+// UI is laid out in dp times it, the windows of game screens too.
+float hudGetInterfaceScale();
 int hudDpToPixels(const HudMetrics& metrics, float dp);
 
 const HudLayout& hudLayoutLandscape();

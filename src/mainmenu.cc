@@ -638,7 +638,7 @@ void mainMenuWindowHide(bool animate)
     soundContinueAll();
 
     if (animate) {
-        paletteFadeTo(gPaletteBlack);
+        paletteFadeToForMenu(gPaletteBlack);
         soundContinueAll();
     }
 
@@ -673,9 +673,8 @@ void mainMenuWindowUnhide(bool animate)
 
     if (animate) {
         colorPaletteLoad("color.pal");
-        paletteFadeTo(_cmap);
+        paletteFadeToForMenu(_cmap);
     }
-    muiMainMenuReady();
 
     gMainMenuWindowHidden = false;
 }
@@ -735,7 +734,12 @@ void mainMenuBeginSubscreen()
         return;
     }
 
-    mainMenuWindowHide(true);
+    // Mobile UI in windows: they open over the menu's picture (they draw
+    // it), no fade; it goes dark only entering a game.
+    if (muiUsesWindows()) {
+        muiMainMenuLeave();
+    }
+    mainMenuWindowHide(!muiUsesWindows());
 
     // Mobile UI: its screens cover the whole screen, no game window.
     if (muiIsEnabled()) {
@@ -762,6 +766,11 @@ void mainMenuCancelSubscreen()
 
 void mainMenuFinishSubscreen()
 {
+    // Mobile UI in windows: the picture fades out entering the game.
+    if (muiUsesWindows()) {
+        paletteFadeToForMenu(gPaletteBlack);
+    }
+
     if (mainMenuWindowIsOverlayActive()) {
         mainMenuWindowHide(false);
     }
@@ -781,7 +790,7 @@ void mainMenuShowSubscreen(bool animate)
         mainMenuWindowShowOverlayDim();
     } else if (animate) {
         colorPaletteLoad("color.pal");
-        paletteFadeTo(_cmap);
+        paletteFadeToForMenu(_cmap);
     }
 }
 
@@ -791,7 +800,7 @@ void mainMenuFadeOutForMenuReturn(bool animate)
         return;
     }
 
-    paletteFadeTo(gPaletteBlack);
+    paletteFadeToForMenu(gPaletteBlack);
 }
 
 void mainMenuFadeOutForGameStart(bool animate)
@@ -800,7 +809,7 @@ void mainMenuFadeOutForGameStart(bool animate)
         return;
     }
 
-    paletteFadeTo(gPaletteBlack);
+    paletteFadeToForMenu(gPaletteBlack);
 }
 
 // 0x481AA8 main_menu_is_enabled

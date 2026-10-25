@@ -116,13 +116,16 @@ namespace {
         Pending pending = Pending::None;
         int pendingValue = 0;
         bool resting = false;
+        // Tablet windows: the roomy sizes (`muiIsTallContent`).
+        bool tall = false;
 
         PipboyScreen()
         {
             modal = true;
         }
 
-        bool coversScreen() override { return true; }
+        bool coversScreen() override { return !muiUsesWindows(); }
+        bool isGameScreen() override { return true; }
 
         // The movie plays over the whole screen.
         bool isActive() override { return !gameMovieIsPlaying(); }
@@ -269,7 +272,8 @@ namespace {
             return;
         }
 
-        muiFillRect(ui.screenRect(), kBackground);
+        // Opaque over the map, or a window over it.
+        MuiScreenFrame frame = muiScreenFrame(ui, kBackground);
 
         // Leaving the holodisks stops the narration.
         if (section != Section::Data && narratedHolodisk != -1) {
@@ -277,32 +281,33 @@ namespace {
             narratedHolodisk = -1;
         }
 
-        MuiRect content;
-        MuiRect tabs;
-        muiDialogLayout(ui, &content, &tabs);
+        MuiRect content = frame.content;
+        MuiRect tabs = frame.tabs;
+        tall = muiIsTallContent(ui, content);
 
         // While resting only the stop button takes touches.
         bool interactive = ui.isInteractive;
         ui.isInteractive = interactive && !resting;
 
         MuiGameScreenTab tab = muiGameScreenTabs(ui, tabs, "pipboy", MuiGameScreenTab::Pipboy, true);
-        if (tab == MuiGameScreenTab::Back) {
+        if (tab == MuiGameScreenTab::Back || (frame.tappedOutside && !resting)) {
             back();
         } else if (tab != MuiGameScreenTab::None && muiSwitchGameScreen(ui, tab)) {
             finished = true;
         }
 
-        float gap = ui.dp(6.0f);
-        float headerHeight = ui.dp(30.0f);
-        float sectionsHeight = ui.dp(34.0f);
+        float gap = ui.dp(tall ? 10.0f : 6.0f);
+        float headerHeight = ui.dp(tall ? 40.0f : 30.0f);
+        float sectionsHeight = ui.dp(tall ? 44.0f : 34.0f);
         buildHeader(ui, { content.x, content.y, content.w, headerHeight });
         buildSections(ui, { content.x, content.y + headerHeight + gap, content.w, sectionsHeight });
 
         float bodyY = content.y + headerHeight + sectionsHeight + gap * 2.0f;
         MuiRect body = { content.x, bodyY, content.w, content.bottom() - bodyY };
-        float listWidth = std::round(body.w * 0.37f);
+        float listWidth = std::round(body.w * (tall ? 0.34f : 0.37f));
+        float listGap = ui.dp(tall ? 10.0f : 8.0f);
         MuiRect list = { body.x, body.y, listWidth, body.h };
-        MuiRect detail = { list.right() + ui.dp(8.0f), body.y, body.right() - list.right() - ui.dp(8.0f), body.h };
+        MuiRect detail = { list.right() + listGap, body.y, body.right() - list.right() - listGap, body.h };
 
         switch (section) {
         case Section::Quests:
@@ -332,8 +337,8 @@ namespace {
     void PipboyScreen::buildHeader(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-        float size = ui.dp(14.0f);
-        float padding = ui.dp(9.0f);
+        float size = ui.dp(tall ? 16.0f : 14.0f);
+        float padding = ui.dp(tall ? 14.0f : 9.0f);
         float x = rect.x;
 
         std::vector<std::pair<std::u32string, MuiColor>> chips = {
@@ -352,7 +357,7 @@ namespace {
             muiFillRoundRect(chipRect, ui.dp(6.0f), kListBackground);
             muiStrokeRoundRect(chipRect, ui.dp(6.0f), ui.dp(1.0f), theme.panelBorder);
             muiDrawTextAligned(chip.first, chipRect, size, chip.second, MuiAlign::Center, MuiAlign::Center);
-            x += width + ui.dp(6.0f);
+            x += width + ui.dp(tall ? 8.0f : 6.0f);
         }
     }
 
@@ -373,7 +378,7 @@ namespace {
         };
 
         int count = static_cast<int>(Section::Count);
-        float gap = ui.dp(4.0f);
+        float gap = ui.dp(tall ? 8.0f : 4.0f);
         float width = (rect.w - gap * (count - 1)) / count;
         for (int index = 0; index < count; index++) {
             MuiRect tabRect = { rect.x + index * (width + gap), rect.y, width, rect.h };
@@ -383,7 +388,7 @@ namespace {
             muiFillRoundRect(tabRect, ui.dp(6.0f), pressed ? theme.buttonPressed : (active ? theme.buttonPrimary : theme.button));
             muiStrokeRoundRect(tabRect, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
             std::u32string label = ceText(sections[index].text, sections[index].fallback);
-            float size = muiFitTextSize(label, tabRect.w - ui.dp(10.0f), ui.dp(14.0f), ui.dp(10.0f));
+            float size = muiFitTextSize(label, tabRect.w - ui.dp(10.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
             muiDrawTextAligned(label, tabRect, size, active && !pressed ? theme.buttonPrimaryText : theme.buttonText, MuiAlign::Center, MuiAlign::Center);
 
             if (tapped && !active) {
@@ -414,10 +419,10 @@ namespace {
         const MuiTheme& theme = muiTheme();
         ui.panel(rect);
 
-        MuiRect inner = rect.inset(ui.dp(6.0f));
-        float rowHeight = ui.dp(38.0f);
-        float size = ui.dp(14.5f);
-        float padding = ui.dp(8.0f);
+        MuiRect inner = rect.inset(ui.dp(tall ? 8.0f : 6.0f));
+        float rowHeight = ui.dp(tall ? 48.0f : 38.0f);
+        float size = ui.dp(tall ? 16.0f : 14.5f);
+        float padding = ui.dp(tall ? 14.0f : 8.0f);
 
         float offset = ui.scroll(id, inner, names.size() * rowHeight);
         bool scrolling = ui.isScrolling(id);
@@ -449,8 +454,8 @@ namespace {
     void PipboyScreen::drawEmpty(MuiContext& ui, const MuiRect& rect, const std::u32string& text)
     {
         ui.panel(rect);
-        MuiRect inner = rect.inset(ui.dp(14.0f));
-        float size = ui.dp(14.0f);
+        MuiRect inner = rect.inset(ui.dp(tall ? 20.0f : 14.0f));
+        float size = ui.dp(tall ? 16.0f : 14.0f);
         float y = inner.y;
         for (const std::u32string& line : muiWrapText(text, inner.w, size)) {
             muiDrawText(line, inner.x, y, size, muiTheme().textDim);
@@ -473,15 +478,16 @@ namespace {
         const MuiTheme& theme = muiTheme();
         ui.panel(rect);
 
-        MuiRect inner = rect.inset(ui.dp(12.0f), ui.dp(10.0f));
-        float titleSize = ui.dp(16.0f);
-        float size = ui.dp(14.0f);
+        MuiRect inner = tall ? rect.inset(ui.dp(20.0f), ui.dp(16.0f)) : rect.inset(ui.dp(12.0f), ui.dp(10.0f));
+        float titleSize = ui.dp(tall ? 20.0f : 16.0f);
+        float size = ui.dp(tall ? 16.0f : 14.0f);
         float lineHeight = muiLineHeight(size);
-        float paragraphGap = ui.dp(8.0f);
+        float paragraphGap = ui.dp(tall ? 10.0f : 8.0f);
+        float titleGap = ui.dp(tall ? 10.0f : 8.0f);
 
         std::vector<std::u32string> titleLines = muiWrapText(title, inner.w, titleSize);
         std::vector<std::vector<std::u32string>> wrapped;
-        float height = titleLines.size() * muiLineHeight(titleSize) + ui.dp(8.0f);
+        float height = titleLines.size() * muiLineHeight(titleSize) + titleGap;
         for (const std::u32string& paragraph : paragraphs) {
             wrapped.push_back(muiWrapText(paragraph, inner.w, size));
             height += wrapped.back().size() * lineHeight + paragraphGap;
@@ -495,7 +501,7 @@ namespace {
             muiDrawText(line, inner.x, y, titleSize, theme.accent);
             y += muiLineHeight(titleSize);
         }
-        y += ui.dp(8.0f);
+        y += titleGap;
 
         for (const std::vector<std::u32string>& lines : wrapped) {
             for (const std::u32string& line : lines) {
@@ -536,11 +542,11 @@ namespace {
         resetDetail(ui, std::string("quests.") + location.name);
 
         ui.panel(detail);
-        MuiRect inner = detail.inset(ui.dp(12.0f), ui.dp(10.0f));
-        float titleSize = ui.dp(16.0f);
-        float size = ui.dp(14.0f);
+        MuiRect inner = tall ? detail.inset(ui.dp(20.0f), ui.dp(16.0f)) : detail.inset(ui.dp(12.0f), ui.dp(10.0f));
+        float titleSize = ui.dp(tall ? 20.0f : 16.0f);
+        float size = ui.dp(tall ? 16.0f : 14.0f);
         float lineHeight = muiLineHeight(size);
-        float mark = ui.dp(18.0f);
+        float mark = ui.dp(tall ? 20.0f : 18.0f);
         float textWidth = inner.w - mark;
 
         std::vector<const PipboyQuest*> ordered;
@@ -644,11 +650,11 @@ namespace {
 
         // Accordion: the chosen location open.
         ui.panel(list);
-        MuiRect inner = list.inset(ui.dp(6.0f));
-        float rowHeight = ui.dp(38.0f);
-        float subHeight = ui.dp(34.0f);
-        float size = ui.dp(14.5f);
-        float padding = ui.dp(8.0f);
+        MuiRect inner = list.inset(ui.dp(tall ? 8.0f : 6.0f));
+        float rowHeight = ui.dp(tall ? 48.0f : 38.0f);
+        float subHeight = ui.dp(tall ? 42.0f : 34.0f);
+        float size = ui.dp(tall ? 16.0f : 14.5f);
+        float padding = ui.dp(tall ? 14.0f : 8.0f);
 
         float height = locations.size() * rowHeight + locations[mapLocation].maps.size() * subHeight;
         float offset = ui.scroll("pipboy.maps", inner, height);
@@ -694,7 +700,7 @@ namespace {
                 }
 
                 std::u32string mapName = gameText(locations[index].maps[entry].name);
-                float mapSize = muiFitTextSize(mapName, subRect.w - padding * 2.0f, ui.dp(13.5f), ui.dp(10.0f));
+                float mapSize = muiFitTextSize(mapName, subRect.w - padding * 2.0f, ui.dp(tall ? 15.0f : 13.5f), ui.dp(10.0f));
                 muiDrawTextAligned(mapName, { subRect.x + padding, subRect.y, subRect.w, subRect.h }, mapSize, entry == mapEntry ? theme.accent : theme.text, MuiAlign::Start, MuiAlign::Center);
             }
         }
@@ -740,8 +746,8 @@ namespace {
         }
 
         ui.panel(detail);
-        MuiRect inner = detail.inset(ui.dp(12.0f));
-        float titleSize = ui.dp(16.0f);
+        MuiRect inner = detail.inset(ui.dp(tall ? 16.0f : 12.0f));
+        float titleSize = ui.dp(tall ? 20.0f : 16.0f);
         std::u32string title = gameText(videos[video].name);
         float titleHeight = muiLineHeight(titleSize) + ui.dp(6.0f);
         muiDrawTextAligned(title, { inner.x, inner.y, inner.w, muiLineHeight(titleSize) }, muiFitTextSize(title, inner.w, titleSize, ui.dp(11.0f)), theme.accent, MuiAlign::Start, MuiAlign::Start);
@@ -761,7 +767,7 @@ namespace {
                 pendingValue = videos[video].movie;
             }
             muiFillCircle(play.centerX(), play.centerY(), buttonSize / 2.0f, pressed ? theme.buttonPressed : theme.buttonPrimary);
-            muiDrawIcon(MuiIcon::Play, play.centerX() + ui.dp(2.0f), play.centerY(), buttonSize * 0.42f, ui.dp(2.0f), theme.buttonPrimaryText);
+            muiDrawIcon(MuiIcon::Play, play.centerX() + ui.dp(2.0f), play.centerY(), buttonSize * 0.42f, theme.buttonPrimaryText);
 
             std::u32string label = ceText(kTextPlay, "Play");
             muiDrawTextAligned(label, { inner.x, screen.bottom() + ui.dp(8.0f), inner.w, controlsHeight }, ui.dp(13.0f), theme.textDim, MuiAlign::Center, MuiAlign::Center);
@@ -793,7 +799,7 @@ namespace {
         bool tapped = ui.touchable(id, rect, &pressed);
         muiFillRoundRect(rect, ui.dp(6.0f), pressed ? theme.buttonPressed : theme.button);
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
-        muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.h * 0.46f, ui.dp(2.0f), theme.accent);
+        muiDrawIcon(icon, rect.centerX(), rect.centerY(), rect.h * 0.46f, theme.accent);
         if (tapped) {
             _gsound_red_butt_press(-1, 0);
         }
@@ -848,11 +854,11 @@ namespace {
         muiStrokeRoundRect(rect, ui.dp(6.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
 
         MuiColor color = enabled ? theme.buttonText : theme.buttonText.withAlpha(90);
-        float size = muiFitTextSize(label, rect.w - ui.dp(8.0f), ui.dp(14.0f), ui.dp(10.0f));
+        float size = muiFitTextSize(label, rect.w - ui.dp(8.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
         if (detail.empty()) {
             muiDrawTextAligned(label, rect, size, color, MuiAlign::Center, MuiAlign::Center);
         } else {
-            float detailSize = ui.dp(11.0f);
+            float detailSize = ui.dp(tall ? 12.5f : 11.0f);
             float total = muiLineHeight(size) + muiLineHeight(detailSize);
             float y = rect.centerY() - total / 2.0f;
             muiDrawTextAligned(label, { rect.x, y, rect.w, muiLineHeight(size) }, size, color, MuiAlign::Center, MuiAlign::Start);
@@ -876,11 +882,11 @@ namespace {
         float y = inner.y + ui.dp(12.0f);
         muiDrawTextAligned(clockText(time), { inner.x, y, inner.w, muiLineHeight(clockSize) }, clockSize, theme.accent, MuiAlign::Center, MuiAlign::Start);
         y += muiLineHeight(clockSize);
-        muiDrawTextAligned(dateText(), { inner.x, y, inner.w, ui.dp(20.0f) }, ui.dp(14.0f), theme.textDim, MuiAlign::Center, MuiAlign::Start);
-        y += ui.dp(30.0f);
+        muiDrawTextAligned(dateText(), { inner.x, y, inner.w, ui.dp(tall ? 22.0f : 20.0f) }, ui.dp(tall ? 16.0f : 14.0f), theme.textDim, MuiAlign::Center, MuiAlign::Start);
+        y += ui.dp(tall ? 34.0f : 30.0f);
 
         std::u32string hp = gameText(pipboyGetText(kPipboyHitPoints)) + U" " + number(critterGetHitPoints(gDude)) + U"/" + number(critterGetStat(gDude, STAT_MAXIMUM_HIT_POINTS));
-        muiDrawTextAligned(hp, { inner.x, y, inner.w, ui.dp(22.0f) }, ui.dp(15.0f), theme.text, MuiAlign::Center, MuiAlign::Start);
+        muiDrawTextAligned(hp, { inner.x, y, inner.w, ui.dp(tall ? 24.0f : 22.0f) }, ui.dp(tall ? 17.0f : 15.0f), theme.text, MuiAlign::Center, MuiAlign::Start);
 
         if (resting) {
             // The only touchable thing while resting: stops it like Esc.
@@ -907,10 +913,10 @@ namespace {
 
         ui.panel(right);
         MuiRect options = right.inset(ui.dp(10.0f));
-        float headingSize = ui.dp(11.5f);
-        float headingHeight = ui.dp(20.0f);
-        float gap = ui.dp(6.0f);
-        float buttonHeight = std::min(ui.dp(46.0f), (options.h - headingHeight * 3.0f - gap * 6.0f) / 4.0f);
+        float headingSize = ui.dp(tall ? 13.0f : 11.5f);
+        float headingHeight = ui.dp(tall ? 26.0f : 20.0f);
+        float gap = ui.dp(tall ? 8.0f : 6.0f);
+        float buttonHeight = std::min(ui.dp(tall ? 56.0f : 46.0f), (options.h - headingHeight * 3.0f - gap * 6.0f) / 4.0f);
         float columnWidth = (options.w - gap * 3.0f) / 4.0f;
         bool enabled = canRest && !resting;
         std::u32string minutes = ceText(kTextMinutes, "min");

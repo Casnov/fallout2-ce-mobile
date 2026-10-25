@@ -15,7 +15,7 @@
 
 namespace fallout {
 
-Object* playerObjectAt(int worldX, int worldY, ObjectType objectType, bool includeDude, int elevation)
+Object* playerObjectAt(int worldX, int worldY, ObjectType objectType, bool includeDude, MapElevation elevation)
 {
     bool intersectsRoof = false;
     if (objectType == -1) {
@@ -51,7 +51,7 @@ Object* playerObjectAt(int worldX, int worldY, ObjectType objectType, bool inclu
     return found;
 }
 
-Object* playerPrimaryTargetAt(int worldX, int worldY, int elevation)
+Object* playerPrimaryTargetAt(int worldX, int worldY, MapElevation elevation)
 {
     Object* target = playerObjectAt(worldX, worldY, OBJ_TYPE_INVALID, true, elevation);
     if (target == nullptr) {

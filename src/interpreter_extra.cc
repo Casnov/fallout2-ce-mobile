@@ -502,7 +502,7 @@ static void opPlaySfx(Program* program)
 static void opSetMapStart(Program* program)
 {
     Rotation rotation = programStackPopEnum<Rotation>(program);
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
     int y = programStackPopInteger(program);
     int x = programStackPopInteger(program);
 
@@ -527,7 +527,7 @@ static void opOverrideMapStart(Program* program)
     program->flags |= PROGRAM_FLAG_CHILD_CALL;
 
     Rotation rotation = programStackPopEnum<Rotation>(program);
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
     int y = programStackPopInteger(program);
     int x = programStackPopInteger(program);
 
@@ -801,7 +801,7 @@ static void opRollDice(Program* program)
 // 0x454E28 op_move_to
 static void opMoveTo(Program* program)
 {
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
     int tile = programStackPopInteger(program);
     Object* object = static_cast<Object*>(programStackPopPointer(program));
 
@@ -861,7 +861,7 @@ static void opMoveTo(Program* program)
 static void opCreateObject(Program* program)
 {
     int sid = programStackPopInteger(program);
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
     int tile = programStackPopInteger(program);
     const ProtoId protoId = programStackPopProtoId(program);
 
@@ -986,7 +986,7 @@ static void opDestroyObject(Program* program)
             interfaceUpdateItems(animated, INTERFACE_ITEM_ACTION_DEFAULT, INTERFACE_ITEM_ACTION_DEFAULT);
         }
 
-        _obj_connect(object, 1, 0, nullptr);
+        _obj_connect(object, 1, ELEVATION_FIRST, nullptr);
 
         if (isSelf) {
             object->sid = -1;
@@ -1058,7 +1058,7 @@ static void opObjectIsCarryingObjectWithPid(Program* program)
 static void opTileContainsObjectWithPid(Program* program)
 {
     const ProtoId protoId = programStackPopProtoId(program);
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
     int tile = programStackPopInteger(program);
 
     int result = 0;
@@ -1680,7 +1680,7 @@ static void opRemoveObjectFromInventory(Program* program)
 
     if (itemRemoveWithReason(owner, item, 1, RemoveInventoryObjectHookReason::ItemRemoved) == 0) {
         Rect rect;
-        _obj_connect(item, 1, 0, &rect);
+        _obj_connect(item, 1, ELEVATION_FIRST, &rect);
         tileWindowRefreshRect(&rect, item->elevation);
 
         if (updateFlags) {
@@ -2021,7 +2021,7 @@ static void opMetarule3(Program* program)
         result.integerValue = killsGetByType(static_cast<KillType>(param1.integerValue));
         break;
     case METARULE3_MARK_MAP_ENTRANCE:
-        result.integerValue = wmMapMarkMapEntranceState(static_cast<Map>(param1.integerValue), param2.integerValue, param3.integerValue);
+        result.integerValue = wmMapMarkMapEntranceState(static_cast<Map>(param1.integerValue), static_cast<MapElevation>(param2.integerValue), param3.integerValue);
         break;
     case METARULE3_WM_SUBTILE_STATE:
         if (1) {
@@ -2034,7 +2034,7 @@ static void opMetarule3(Program* program)
     case METARULE3_TILE_GET_NEXT_CRITTER:
         if (1) {
             int tile = param1.integerValue;
-            int elevation = param2.integerValue;
+            MapElevation elevation = static_cast<MapElevation>(param2.integerValue);
             Object* previousCritter = static_cast<Object*>(param3.pointerValue);
 
             bool critterFound = previousCritter == nullptr;
@@ -2193,7 +2193,7 @@ static void opLoadMap(Program* program)
     if (mapIndex != -1) {
         MapTransition transition;
         transition.map = mapIndex;
-        transition.elevation = -1;
+        transition.elevation = ELEVATION_INVALID;
         transition.tile = -1;
         transition.rotation = ROTATION_INVALID;
         mapSetTransition(&transition);
@@ -2220,9 +2220,9 @@ static void opSetExitGrids(Program* program)
 {
     int destinationRotation = programStackPopInteger(program);
     int destinationTile = programStackPopInteger(program);
-    int destinationElevation = programStackPopInteger(program);
+    MapElevation destinationElevation = programStackPopEnum<MapElevation>(program);
     Map destinationMap = programStackPopEnum<Map>(program);
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
 
     Object* object = objectFindFirstAtElevation(elevation);
     while (object != nullptr) {
@@ -2325,7 +2325,7 @@ static void opGetObjectElevation(Program* program)
 {
     Object* object = static_cast<Object*>(programStackPopPointer(program));
 
-    int elevation = 0;
+    MapElevation elevation = ELEVATION_FIRST;
     if (object != nullptr) {
         elevation = object->elevation;
     } else {
@@ -2860,7 +2860,7 @@ static void opRadiationDecrease(Program* program)
 // 0x4588B4 op_critter_attempt_placement
 static void opCritterAttemptPlacement(Program* program)
 {
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
     int tile = programStackPopInteger(program);
     Object* critter = static_cast<Object*>(programStackPopPointer(program));
 
@@ -3748,7 +3748,7 @@ static void opRemoveMultipleObjectsFromInventory(Program* program)
     if (quantity != 0) {
         if (itemRemoveWithReason(owner, item, quantity, RemoveInventoryObjectHookReason::ItemRemovedMulti) == 0) {
             Rect updatedRect;
-            _obj_connect(item, 1, 0, &updatedRect);
+            _obj_connect(item, 1, ELEVATION_FIRST, &updatedRect);
             if (itemWasEquipped) {
                 if (owner == gDude) {
                     bool animated = !gameUiIsDisabled();
@@ -3786,7 +3786,7 @@ static void opGetDay(Program* program)
 static void opExplosion(Program* program)
 {
     int maxDamage = programStackPopInteger(program);
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
     int tile = programStackPopInteger(program);
 
     if (tile == -1) {
@@ -4576,7 +4576,7 @@ static void opDestroyMultipleObjects(Program* program)
             interfaceUpdateItems(animated, INTERFACE_ITEM_ACTION_DEFAULT, INTERFACE_ITEM_ACTION_DEFAULT);
         }
 
-        _obj_connect(object, 1, 0, nullptr);
+        _obj_connect(object, 1, ELEVATION_FIRST, nullptr);
 
         if (isSelf) {
             object->sid = -1;
@@ -4917,7 +4917,7 @@ static void opCritterStopAttacking(Program* program)
 static void opTileGetObjectWithPid(Program* program)
 {
     const ProtoId protoId = programStackPopProtoId(program);
-    int elevation = programStackPopInteger(program);
+    MapElevation elevation = programStackPopEnum<MapElevation>(program);
     int tile = programStackPopInteger(program);
     Object* found = nullptr;
 

@@ -325,7 +325,7 @@ namespace {
 
         float cursor = rect.x + padding;
         if (hasIcon) {
-            muiDrawIcon(icon, cursor + iconSize / 2.0f, rect.centerY(), iconSize, ui.dp(1.5f), color);
+            muiDrawIcon(icon, cursor + iconSize / 2.0f, rect.centerY(), iconSize, color);
             cursor += iconSize + ui.dp(3.0f);
         }
         if (!text.empty()) {
@@ -431,7 +431,7 @@ namespace {
                 SDL_FPoint center;
                 tileCenter(gMoveTile, scale, &center);
                 if (gMoveCost.cost == -1) {
-                    muiDrawIcon(MuiIcon::Cancel, center.x, center.y, ui.dp(12.0f), ui.dp(2.0f), kDanger);
+                    muiDrawIcon(MuiIcon::Cancel, center.x, center.y, ui.dp(12.0f), kDanger);
                 } else {
                     std::u32string text = toText(std::to_string(gMoveCost.cost));
                     float size = ui.dp(14.0f);

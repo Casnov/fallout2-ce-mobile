@@ -6,11 +6,13 @@
 
 #include "art.h"
 #include "critter.h"
+#include "inventory.h"
 #include "item.h"
 #include "mui_icons.h"
 #include "mui_notify.h"
 #include "object.h"
 #include "proto_types.h"
+#include "stat.h"
 
 namespace fallout {
 
@@ -22,7 +24,8 @@ namespace {
         MuiIcon::FilterWeapons,
         MuiIcon::FilterWeaponsAndAmmo,
         MuiIcon::FilterArmor,
-        MuiIcon::FilterDrugs,
+        // Medkits, chems: as the doctor's bag.
+        MuiIcon::Doctor,
         MuiIcon::FilterAmmo,
         MuiIcon::FilterMisc,
     };
@@ -85,8 +88,8 @@ void muiItemFilterRow(MuiContext& ui, const std::string& id, const MuiRect& rect
         muiFillRoundRect(button, ui.dp(5.0f), fill);
         muiStrokeRoundRect(button, ui.dp(5.0f), ui.dp(1.0f), active ? theme.accent : theme.buttonBorder);
 
-        float size = std::min(button.w, button.h) * 0.52f;
-        muiDrawIcon(kFilterIcons[index], button.centerX(), button.centerY(), size, ui.dp(1.6f), color);
+        float size = std::min(button.w, button.h) * 0.6f;
+        muiDrawIcon(kFilterIcons[index], button.centerX(), button.centerY(), size, color);
 
         // Firearms only: a dot in the corner.
         if (active && filter == MuiItemFilter::Weapons && state->gunsOnly) {
@@ -128,6 +131,43 @@ int muiItemsWeight(const std::vector<MuiListItem>& items)
     return weight;
 }
 
+float muiItemCellSize(MuiContext& ui, bool roomy)
+{
+    return ui.dp(roomy ? 88.0f : 68.0f);
+}
+
+int muiItemColumns(MuiContext& ui, float width, float gap, bool roomy)
+{
+    float cell = muiItemCellSize(ui, roomy);
+    return std::max(1, static_cast<int>(std::lround((width + gap) / (cell + gap))));
+}
+
+std::u32string muiCarriedText(Object* owner, bool* over)
+{
+    *over = false;
+    std::string text;
+    if (ProtoId(owner).objectType() == OBJ_TYPE_CRITTER) {
+        int weight = objectGetInventoryWeight(owner);
+        int carry = critterGetStat(owner, STAT_CARRY_WEIGHT);
+        *over = weight > carry;
+        text = std::to_string(weight) + "/" + std::to_string(carry);
+    } else {
+        text = std::to_string(objectGetInventoryWeight(owner));
+    }
+    return muiDecodeUtf8(text.c_str());
+}
+
+bool muiContainerVolume(Object* owner, int* used, int* capacity)
+{
+    if (ProtoId(owner).objectType() != OBJ_TYPE_ITEM || itemGetType(owner) != ITEM_TYPE_CONTAINER) {
+        return false;
+    }
+
+    *used = containerGetTotalSize(owner);
+    *capacity = containerGetMaxSize(owner);
+    return true;
+}
+
 void muiNotifyPartyMemberOutOfReach(Object* critter)
 {
     // Text in `game\ce.msg`.
@@ -136,6 +176,49 @@ void muiNotifyPartyMemberOutOfReach(Object* critter)
     char text[160];
     snprintf(text, sizeof(text), muiText(kTextOutOfReach, "%s is too far away."), critterGetName(critter));
     muiNotify(text, MuiNoticeKind::Warning);
+}
+
+float muiDrawTextParts(const std::vector<InventoryTextPart>& parts, float x, float y, float width, float lineHeight, float size, bool labelOnNewLine, bool draw)
+{
+    const MuiTheme& theme = muiTheme();
+    float space = muiTextWidth(U" ", size);
+    float lineX = 0.0f;
+    float lineY = y;
+    bool lineStart = true;
+    for (size_t index = 0; index < parts.size(); index++) {
+        const InventoryTextPart& part = parts[index];
+        std::u32string text = muiDecodeGameText(part.text.c_str());
+        MuiColor color = part.label ? theme.textDim : theme.text;
+        // The game's spacing: one space after a label, three before one.
+        float gap = lineStart ? 0.0f : (part.label ? space * 3.0f : space);
+        float textWidth = muiTextWidth(text, size);
+        if (!lineStart && ((labelOnNewLine && part.label) || lineX + gap + textWidth > width)) {
+            lineY += lineHeight;
+            lineX = 0.0f;
+            gap = 0.0f;
+            lineStart = true;
+        }
+
+        if (lineStart && textWidth > width) {
+            std::vector<std::u32string> lines = muiWrapText(text, width, size);
+            for (size_t line = 0; line < lines.size(); line++) {
+                if (draw) {
+                    muiDrawTextAligned(lines[line], { x, lineY, width, lineHeight }, size, color, MuiAlign::Start, MuiAlign::Center);
+                }
+                if (line + 1 < lines.size()) {
+                    lineY += lineHeight;
+                }
+            }
+            lineX = lines.empty() ? 0.0f : muiTextWidth(lines.back(), size);
+        } else {
+            if (draw) {
+                muiDrawTextAligned(text, { x + lineX + gap, lineY, textWidth + space, lineHeight }, size, color, MuiAlign::Start, MuiAlign::Center);
+            }
+            lineX += gap + textWidth;
+        }
+        lineStart = false;
+    }
+    return parts.empty() ? 0.0f : lineY + lineHeight - y;
 }
 
 void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pressed)
@@ -160,10 +243,17 @@ void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pr
     }
 }
 
-void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed)
+void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed, int price)
 {
     const MuiTheme& theme = muiTheme();
     muiDrawItemImage(ui, rect, item, pressed);
+
+    if (price >= 0) {
+        std::string label = "$" + std::to_string(price);
+        float size = ui.dp(10.0f);
+        MuiRect labelRect = { rect.x, rect.y + ui.dp(2.0f), rect.w - ui.dp(4.0f), muiLineHeight(size) };
+        muiDrawTextAligned(muiDecodeUtf8(label.c_str()), labelRect, size, theme.textDim, MuiAlign::End, MuiAlign::Start);
+    }
 
     bool money = ProtoId(item) == ItemProtoTypeId::Money;
     int amount = itemStackAmount(item, quantity);
@@ -178,6 +268,10 @@ void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quan
 void muiDrawDraggedItem(MuiContext& ui, Object* item, int quantity, int price)
 {
     const MuiTheme& theme = muiTheme();
+
+    // The lists' scroll marks first (they'd come after the screen's build):
+    // the item goes over them.
+    ui.drawScrollMarks();
 
     float size = ui.dp(64.0f);
     MuiRect cell = { ui.pointerX() - size / 2.0f, ui.pointerY() - size * 1.1f, size, size };
@@ -209,7 +303,7 @@ void muiDrawDraggedItem(MuiContext& ui, Object* item, int quantity, int price)
     x += gap;
     text(amount, theme.textDim);
     x += gap;
-    muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, bubble.centerY(), iconSize, ui.dp(1.3f), theme.textDim);
+    muiDrawIcon(MuiIcon::Weight, x + iconSize / 2.0f, bubble.centerY(), iconSize, theme.textDim);
     x += iconSize + ui.dp(4.0f);
     text(weight, theme.text);
     if (!cost.empty()) {

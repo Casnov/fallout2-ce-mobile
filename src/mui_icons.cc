@@ -1,8 +1,13 @@
 #include "mui_icons.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -10,878 +15,697 @@ namespace fallout {
 
 namespace {
 
-    constexpr float kPi = 3.14159265f;
-
-    // Draws in icon units: the icon square is -0.5..0.5 on both axes, y goes
-    // down, angles go clockwise from +x (degrees).
-    class Pen {
-    public:
-        Pen(float x, float y, float size, float thickness, MuiColor color)
-            : cx(x)
-            , cy(y)
-            , size(size)
-            , thickness(thickness)
-            , color(color)
-        {
-        }
-
-        SDL_FPoint p(float x, float y) const { return { cx + x * size, cy + y * size }; }
-
-        void line(float x1, float y1, float x2, float y2) const
-        {
-            poly({ { x1, y1 }, { x2, y2 } });
-        }
-
-        void poly(std::initializer_list<SDL_FPoint> units, bool closed = false) const
-        {
-            std::vector<SDL_FPoint> points;
-            for (const SDL_FPoint& unit : units) {
-                points.push_back(p(unit.x, unit.y));
-            }
-            muiDrawPolyline(points, thickness, color, closed);
-        }
-
-        void fill(std::initializer_list<SDL_FPoint> units) const
-        {
-            std::vector<SDL_FPoint> points;
-            for (const SDL_FPoint& unit : units) {
-                points.push_back(p(unit.x, unit.y));
-            }
-            muiFillConvex(points, color);
-        }
-
-        std::vector<SDL_FPoint> arcPoints(float x, float y, float radius, float from, float to) const
-        {
-            int segments = std::max(static_cast<int>(std::fabs(to - from) / 15.0f), 2);
-            std::vector<SDL_FPoint> points;
-            for (int step = 0; step <= segments; step++) {
-                float angle = (from + (to - from) * step / segments) * kPi / 180.0f;
-                points.push_back(p(x + std::cos(angle) * radius, y + std::sin(angle) * radius));
-            }
-            return points;
-        }
-
-        void arc(float x, float y, float radius, float from, float to) const
-        {
-            muiDrawPolyline(arcPoints(x, y, radius, from, to), thickness, color);
-        }
-
-        // Arc with an arrow head at its end, pointing along the arc.
-        void arcArrow(float x, float y, float radius, float from, float to) const
-        {
-            arc(x, y, radius, from, to);
-
-            float angle = to * kPi / 180.0f;
-            float direction = to > from ? 1.0f : -1.0f;
-            float endX = x + std::cos(angle) * radius;
-            float endY = y + std::sin(angle) * radius;
-            // Tangent in the direction of travel.
-            float tangentX = -std::sin(angle) * direction;
-            float tangentY = std::cos(angle) * direction;
-            float head = 0.2f;
-            float spread = 0.6f;
-            float leftX = -tangentX * head + -tangentY * head * spread;
-            float leftY = -tangentY * head + tangentX * head * spread;
-            float rightX = -tangentX * head + tangentY * head * spread;
-            float rightY = -tangentY * head + -tangentX * head * spread;
-            poly({ { endX + leftX, endY + leftY }, { endX, endY }, { endX + rightX, endY + rightY } });
-        }
-
-        void circle(float x, float y, float radius) const
-        {
-            muiStrokeCircle(cx + x * size, cy + y * size, radius * size + thickness / 2.0f, thickness, color);
-        }
-
-        void dot(float x, float y, float radius) const
-        {
-            muiFillCircle(cx + x * size, cy + y * size, radius * size, color);
-        }
-
-        void rect(float x, float y, float w, float h, float radius) const
-        {
-            MuiRect rect = { cx + x * size - thickness / 2.0f, cy + y * size - thickness / 2.0f, w * size + thickness, h * size + thickness };
-            muiStrokeRoundRect(rect, radius * size + thickness / 2.0f, thickness, color);
-        }
-
-        // Quadratic curve.
-        void curve(SDL_FPoint from, SDL_FPoint control, SDL_FPoint to) const
-        {
-            std::vector<SDL_FPoint> points;
-            constexpr int kSegments = 10;
-            for (int step = 0; step <= kSegments; step++) {
-                float t = static_cast<float>(step) / kSegments;
-                float a = (1 - t) * (1 - t);
-                float b = 2 * (1 - t) * t;
-                float c = t * t;
-                points.push_back(p(a * from.x + b * control.x + c * to.x, a * from.y + b * control.y + c * to.y));
-            }
-            muiDrawPolyline(points, thickness, color);
-        }
-
-        float cx;
-        float cy;
-        float size;
-        float thickness;
-        MuiColor color;
+    // The icons, SVG on a 24 unit square as the design board draws them: a
+    // subset - path (all commands), circle, rect (rx), g with translate /
+    // scale / rotate; class "f" is filled, the rest stroked with round caps
+    // and joins. In `MuiIcon` order.
+    const char* const kIconSvg[] = {
+        // Menu
+        "<path d=\"M4 6.5h16M4 12h16M4 17.5h16\"/>",
+        // QuickSave
+        "<path d=\"M4 5h12l4 4v10.5H4zM8 19.5v-5h8v5M12 2.5v8M9 7.5l3 3 3-3\"/>",
+        // QuickLoad
+        "<path d=\"M4 5h12l4 4v10.5H4zM8 19.5v-5h8v5M12 11V3M9 6l3-3 3 3\"/>",
+        // Inventory
+        "<path d=\"M9 6.5V5.2a3 3 0 0 1 6 0v1.3M5.5 6.5h13a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2zM3.5 12h17M9.5 12v3h5v-3\"/>",
+        // Character
+        "<circle cx=\"12\" cy=\"7.5\" r=\"3.5\"/><path d=\"M4.5 20.5a7.5 7.5 0 0 1 15 0z\"/>",
+        // Pipboy
+        "<rect x=\"1.84\" y=\"5.38\" width=\"20.31\" height=\"13.25\" rx=\"1.77\"/><rect x=\"4.49\" y=\"8.03\" width=\"10.16\" height=\"7.95\" rx=\"0.88\"/><circle cx=\"18.62\" cy=\"10.68\" r=\"1.32\"/><path d=\"M17.74 15.53H19.51M6.26 5.38V1.84M6.26 18.62V22.16M12.88 5.38V1.84M12.88 18.62V22.16\"/>",
+        // Map
+        "<path d=\"M3.5 6.5 9 4.5l6 2 5.5-2v13l-5.5 2-6-2-5.5 2zM9 4.5v13M15 6.5v13\"/>",
+        // Skills
+        "<path d=\"M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13M6 8.6c1.5-.2 2.8 0 4 .6M6 11.6c1.5-.2 2.8 0 4 .6M14 9.2c1.2-.6 2.5-.8 4-.6M14 12.2c1.2-.6 2.5-.8 4-.6\"/>",
+        // Highlight
+        "<path d=\"M9.5 17.5h5M10.5 20.5h3M12 3.5a6 6 0 0 1 3.5 10.9V16h-7v-1.6A6 6 0 0 1 12 3.5z\"/>",
+        // Sneak
+        "<path d=\"M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6zM4 20 20 4\"/><circle cx=\"12\" cy=\"12\" r=\"2.5\"/>",
+        // Log
+        "<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2.5\"/><path d=\"M7 9.5l3 2.5-3 2.5M12 15h5\"/>",
+        // EndTurn
+        "<path d=\"M5.5 5v14l10-7zM18.5 5v14\"/>",
+        // EndCombat
+        "<path d=\"M6 21V3.5M6 4h12l-3 4.5 3 4.5H6\"/>",
+        // ActionPoints
+        "<path class=\"f\" d=\"M13.5 2 5 13.5h6L9.8 22 19 10h-6z\"/>",
+        // HitPoints
+        "<path class=\"f\" d=\"M12 20.5s-8-4.8-8-10.7A4.5 4.5 0 0 1 12 6.6a4.5 4.5 0 0 1 8 3.2c0 5.9-8 10.7-8 10.7z\"/>",
+        // Aim
+        "<path d=\"M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5\"/><circle cx=\"12\" cy=\"12\" r=\"6.5\"/><circle class=\"f\" cx=\"12\" cy=\"12\" r=\"1.2\"/>",
+        // Reload
+        "<path d=\"M19.5 9A8 8 0 0 0 5 7.5M4.5 15A8 8 0 0 0 19 16.5M5 3.5v4h4M19 20.5v-4h-4\"/>",
+        // Fist
+        "<path d=\"M3.36 8.64A2.16 2.16 0 0 1 7.68 8.64V12.48M7.68 8.64A2.16 2.16 0 0 1 12.00 8.64V12.48M12.00 8.64A2.16 2.16 0 0 1 16.32 8.64V12.48M16.32 8.64A2.16 2.16 0 0 1 20.64 8.64V16.80M3.36 8.64L3.36 17.76L7.20 22.56L17.76 22.56L20.64 17.76L20.64 16.80M3.36 13.92L13.92 13.92L15.84 16.80\"/>",
+        // Kick
+        "<path d=\"M6.5 3h6v8.5l5.3 2.1c1.6.6 2.7 2.2 2.7 3.9V19h-14zM6.5 19h14v1.5h-14zM9.5 7h3M9.5 9.5h3\"/>",
+        // Weight
+        "<path d=\"M12 3.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM6.5 8.5h11l3 12h-17z\"/>",
+        // Back
+        "<path d=\"M20 12H4.5M10.5 5.5 4 12l6.5 6.5\"/>",
+        // PartyOrders
+        "<circle cx=\"9\" cy=\"8\" r=\"3\"/><path d=\"M3 19.5a6 6 0 0 1 12 0zM16 12.6c3 .3 5 2.5 5 5.5h-3.5\"/><circle cx=\"16.5\" cy=\"7\" r=\"2.4\"/>",
+        // Holster
+        "<g transform=\"translate(1.5 -1.5) scale(.75)\"><path d=\"M2.5 7.5h15.5l1-1.5h2v5h-8l-1.2 2.2h-2.6L7.6 19.5H4.2l1.7-8H2.5z\"/></g><path d=\"M18 14v7M15.5 18.5 18 21l2.5-2.5\"/>",
+        // Regroup
+        "<path d=\"M12 3v6M9.5 6.5 12 9l2.5-2.5M12 21v-6M9.5 17.5 12 15l2.5 2.5M3 12h6M6.5 9.5 9 12l-2.5 2.5M21 12h-6M17.5 9.5 15 12l2.5 2.5\"/>",
+        // Spread
+        "<path d=\"M12 9V3M9.5 5.5 12 3l2.5 2.5M12 15v6M9.5 18.5 12 21l2.5-2.5M9 12H3M5.5 9.5 3 12l2.5 2.5M15 12h6M18.5 9.5 21 12l-2.5 2.5\"/>",
+        // Burst
+        "<g transform=\"translate(-6 0)\"><path d=\"M9.5 21h5M10 21v-9h4v9M10 12c0-3.2.9-6 2-7.5 1.1 1.5 2 4.3 2 7.5\"/></g><g transform=\"translate(0 0)\"><path d=\"M9.5 21h5M10 21v-9h4v9M10 12c0-3.2.9-6 2-7.5 1.1 1.5 2 4.3 2 7.5\"/></g><g transform=\"translate(6 0)\"><path d=\"M9.5 21h5M10 21v-9h4v9M10 12c0-3.2.9-6 2-7.5 1.1 1.5 2 4.3 2 7.5\"/></g>",
+        // AutoLoot
+        "<path d=\"M5 3.5v8.5a7 7 0 0 0 14 0V3.5h-4V12a3 3 0 0 1-6 0V3.5zM5 7.5h4M15 7.5h4\"/>",
+        // Lockpick
+        "<rect x=\"5\" y=\"11\" width=\"14\" height=\"9.5\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 0 1 7.8-1.2M12 14.5v2.5\"/>",
+        // Steal
+        "<path d=\"M2.5 10c2.6-1.6 6-1.8 9.5-.6 3.5-1.2 6.9-1 9.5.6 0 3.6-1.9 6-4.6 6-1.9 0-3.4-1.1-4.9-2.6-1.5 1.5-3 2.6-4.9 2.6-2.7 0-4.6-2.4-4.6-6zM5.5 12.2c.8-.9 2.4-1 3.3 0M15.2 12.2c.8-.9 2.4-1 3.3 0\"/>",
+        // Traps
+        "<path d=\"M2.5 20h19M4.5 20v-2.6c0-1 1-1.9 2.3-1.9h10.4c1.3 0 2.3.9 2.3 1.9V20M10 15.5v-2.3h4v2.3M8.5 11.2h7\"/>",
+        // Doctor
+        "<rect x=\"3.5\" y=\"7.5\" width=\"17\" height=\"12.5\" rx=\"2.5\"/><path d=\"M9 7.5V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1.5M12 10.5v6M9 13.5h6\"/>",
+        // Science
+        "<path d=\"M7 7h10v10H7zM10 10h4v4h-4zM10 7V4M14 7V4M10 20v-3M14 20v-3M7 10H4M7 14H4M20 10h-3M20 14h-3\"/>",
+        // Repair
+        "<path d=\"M14.93 7.16L17.75 4.34A4.6 4.6 0 0 0 11.49 10.46L4.70 17.25A1.45 1.45 0 0 0 6.75 19.30L13.54 12.51A4.6 4.6 0 0 0 19.66 6.25L16.84 9.07z\"/>",
+        // Target
+        "<path d=\"M3.5 8V3.5H8M16 3.5h4.5V8M20.5 16v4.5H16M8 20.5H3.5V16\"/><circle cx=\"12\" cy=\"12\" r=\"3.5\"/>",
+        // Talk
+        "<path d=\"M6 4.5h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-5 4.5v-4.5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z\"/>",
+        // Barter
+        "<path d=\"M4 8h15M15.5 4.5 19 8l-3.5 3.5M20 16H5M8.5 12.5 5 16l3.5 3.5\"/>",
+        // Review
+        "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>",
+        // FilterAll
+        "<path d=\"M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z\"/>",
+        // FilterWeapons
+        "<path d=\"M2.5 7.5h15.5l1-1.5h2v5h-8l-1.2 2.2h-2.6L7.6 19.5H4.2l1.7-8H2.5zM9.3 11.5v2.2h2.4\"/>",
+        // FilterWeaponsAndAmmo
+        "<g transform=\"translate(.2 4.3) scale(.62)\"><path d=\"M2.5 7.5h15.5l1-1.5h2v5h-8l-1.2 2.2h-2.6L7.6 19.5H4.2l1.7-8H2.5z\"/></g><g transform=\"translate(8.6 2.05) scale(.78)\"><path d=\"M9.5 21h5M10 21v-9h4v9M10 12c0-3.2.9-6 2-7.5 1.1 1.5 2 4.3 2 7.5\"/></g>",
+        // FilterArmor
+        "<path d=\"M7 4h3l2 2 2-2h3l3 3-1.5 3.5V20H5.5V10.5L4 7zM7.5 12h9M7.5 15.5h9\"/>",
+        // Stimpak
+        "<g transform=\"rotate(-45 12 12)\"><path d=\"M6 10h9v4H6zM15 12h3.5M18.5 9.5v5M6 12H2.5M9 10v1.4M11.5 10v1.4\"/></g>",
+        // FilterAmmo
+        "<g transform=\"translate(-6 0)\"><path d=\"M9.5 21h5M10 21v-9h4v9M10 12c0-3.2.9-6 2-7.5 1.1 1.5 2 4.3 2 7.5\"/></g><g transform=\"translate(0 0)\"><path d=\"M9.5 21h5M10 21v-9h4v9M10 12c0-3.2.9-6 2-7.5 1.1 1.5 2 4.3 2 7.5\"/></g><g transform=\"translate(6 0)\"><path d=\"M9.5 21h5M10 21v-9h4v9M10 12c0-3.2.9-6 2-7.5 1.1 1.5 2 4.3 2 7.5\"/></g>",
+        // FilterMisc
+        "<path d=\"M12 2.8 20.5 7v10L12 21.2 3.5 17V7zM3.5 7 12 11.2 20.5 7M12 11.2v10\"/>",
+        // Cancel
+        "<path d=\"M5.5 5.5l13 13M18.5 5.5l-13 13\"/>",
+        // Drop
+        "<path d=\"M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 20h15\"/>",
+        // Look
+        "<path d=\"M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z\"/><circle cx=\"12\" cy=\"12\" r=\"2.8\"/>",
+        // Rotate
+        "<circle cx=\"11.5\" cy=\"4.8\" r=\"2.2\"/><path d=\"M7.5 13a4 4 0 0 1 8 0M4.25 15.96 L3.78 16.51 L3.54 17.08 L3.52 17.66 L3.75 18.24 L4.19 18.78 L4.86 19.29 L5.71 19.75 L6.74 20.13 L7.90 20.44 L9.17 20.65 L10.51 20.77 L11.88 20.80 L13.23 20.72 L14.54 20.55 L15.75 20.28 L16.85 19.93 L17.78 19.51 L18.53 19.02 L19.08 18.49 L19.40 17.92 L19.50 17.34 L19.36 16.76 L18.99 16.21 L18.40 15.68 L17.61 15.21 L16.64 14.80M20.03 13.63L16.64 14.80L18.53 17.85\"/>",
+        // Use
+        "<path d=\"M8 13V6.2a1.5 1.5 0 0 1 3 0V11.5M11 11V4.7a1.5 1.5 0 0 1 3 0V11M14 11V5.7a1.5 1.5 0 0 1 3 0V11.5M17 11.5V8.7a1.5 1.5 0 0 1 3 0v5.8c0 4-2.8 7-6.6 7-2.5 0-4-1.2-5.2-3L5 14.6c-.8-1.2.7-2.6 1.8-1.7L8 14\"/>",
+        // Unload
+        "<g transform=\"translate(-4 1)\"><path d=\"M9.5 21h5M10 21v-9h4v9M10 12c0-3.2.9-6 2-7.5 1.1 1.5 2 4.3 2 7.5\"/></g><path d=\"M16.5 20V9M13.5 12l3-3 3 3\"/>",
+        // Push
+        "<path d=\"M3.5 12h11M10.5 7.5 15 12l-4.5 4.5M19.5 4.5v15\"/>",
+        // Plus
+        "<path d=\"M12 5v14M5 12h14\"/>",
+        // Minus
+        "<path d=\"M5 12h14\"/>",
+        // Edit
+        "<path d=\"M15.5 4.5l4 4L9 19H5v-4zM13 7l4 4\"/>",
+        // Play
+        "<path class=\"f\" d=\"M7 4.5v15l12.5-7.5z\"/>",
+        // Pause
+        "<path class=\"f\" d=\"M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z\"/>",
+        // Stop
+        "<path class=\"f\" d=\"M5.5 5.5h13v13h-13z\"/>",
+        // Expand
+        "<path d=\"M3.5 9V3.5H9M15 3.5h5.5V9M20.5 15v5.5H15M9 20.5H3.5V15\"/>",
+        // Collapse
+        "<path d=\"M9 3.5V9H3.5M15 3.5V9h5.5M20.5 15H15v5.5M3.5 15H9v5.5\"/>",
+        // TacticalView
+        "<path d=\"M2.73 12.00L5.38 8.91L10.68 8.91L13.32 12.00L10.68 15.09L5.38 15.09zM10.68 8.91L13.32 5.82L18.62 5.82L21.27 8.91L18.62 12.00L13.32 12.00zM10.68 15.09L13.32 12.00L18.62 12.00L21.27 15.09L18.62 18.18L13.32 18.18z\"/>",
     };
 
-    // MARK: HUD
+    static_assert(sizeof(kIconSvg) / sizeof(kIconSvg[0]) == static_cast<size_t>(MuiIcon::Count), "an icon without its drawing");
 
-    void drawMenu(const Pen& pen)
-    {
-        for (int line = -1; line <= 1; line++) {
-            pen.line(-0.42f, line * 0.3f, 0.42f, line * 0.3f);
+    constexpr float kGrid = 24.0f;
+    // The drawings keep to 2..22 of the grid; those 20 units take 93% of the
+    // icon's square, as far out as the icons went before.
+    constexpr float kSizeUnits = 21.5f;
+    // Strokes are 1.8 units at every size.
+    constexpr float kStroke = 1.8f;
+    constexpr float kPi = 3.14159265f;
+
+    // x' = a x + c y + e, y' = b x + d y + f.
+    struct Affine {
+        float a = 1.0f;
+        float b = 0.0f;
+        float c = 0.0f;
+        float d = 1.0f;
+        float e = 0.0f;
+        float f = 0.0f;
+
+        SDL_FPoint apply(float x, float y) const { return { a * x + c * y + e, b * x + d * y + f }; }
+
+        // [other] first, then this one.
+        Affine operator*(const Affine& other) const
+        {
+            Affine result;
+            result.a = a * other.a + c * other.b;
+            result.b = b * other.a + d * other.b;
+            result.c = a * other.c + c * other.d;
+            result.d = b * other.c + d * other.d;
+            result.e = a * other.e + c * other.f + e;
+            result.f = b * other.e + d * other.f + f;
+            return result;
         }
-    }
+    };
 
-    // Floppy disk with an arrow into (save) or out of (load) it.
-    void drawFloppy(const Pen& pen, bool save)
-    {
-        pen.poly({ { -0.4f, -0.32f }, { 0.24f, -0.32f }, { 0.4f, -0.16f }, { 0.4f, 0.48f }, { -0.4f, 0.48f } }, true);
-        pen.poly({ { -0.22f, 0.48f }, { -0.22f, 0.2f }, { 0.22f, 0.2f }, { 0.22f, 0.48f } });
-
-        pen.line(0.0f, -0.52f, 0.0f, 0.02f);
-        if (save) {
-            pen.poly({ { -0.16f, -0.14f }, { 0.0f, 0.02f }, { 0.16f, -0.14f } });
-        } else {
-            pen.poly({ { -0.16f, -0.36f }, { 0.0f, -0.52f }, { 0.16f, -0.36f } });
-        }
-    }
-
-    // Backpack.
-    void drawInventory(const Pen& pen)
-    {
-        pen.arc(0.0f, -0.28f, 0.17f, 180.0f, 360.0f);
-        pen.rect(-0.42f, -0.28f, 0.84f, 0.76f, 0.16f);
-        pen.line(-0.42f, 0.0f, 0.42f, 0.0f);
-        pen.poly({ { -0.18f, 0.0f }, { -0.18f, 0.2f }, { 0.18f, 0.2f }, { 0.18f, 0.0f } });
-    }
-
-    // Head and shoulders.
-    void drawCharacter(const Pen& pen)
-    {
-        pen.circle(0.0f, -0.22f, 0.17f);
-        pen.arc(0.0f, 0.46f, 0.4f, 180.0f, 360.0f);
-        pen.line(-0.4f, 0.46f, 0.4f, 0.46f);
-    }
-
-    // Wrist computer: screen, knob and straps.
-    void drawPipboy(const Pen& pen)
-    {
-        pen.rect(-0.46f, -0.3f, 0.92f, 0.6f, 0.08f);
-        pen.rect(-0.34f, -0.18f, 0.46f, 0.36f, 0.04f);
-        pen.circle(0.3f, -0.06f, 0.06f);
-        pen.line(0.26f, 0.16f, 0.34f, 0.16f);
-        for (float x : { -0.26f, 0.04f }) {
-            pen.line(x, -0.3f, x, -0.46f);
-            pen.line(x, 0.3f, x, 0.46f);
-        }
-    }
-
-    // Folded paper map.
-    void drawMap(const Pen& pen)
-    {
-        pen.poly({ { -0.46f, -0.32f }, { -0.16f, -0.42f }, { 0.16f, -0.32f }, { 0.46f, -0.42f }, { 0.46f, 0.32f }, { 0.16f, 0.42f }, { -0.16f, 0.32f }, { -0.46f, 0.42f } }, true);
-        pen.line(-0.16f, -0.42f, -0.16f, 0.32f);
-        pen.line(0.16f, -0.32f, 0.16f, 0.42f);
-    }
-
-    // Open book (Skilldex).
-    void drawSkills(const Pen& pen)
-    {
-        pen.poly({ { 0.0f, -0.28f }, { -0.46f, -0.38f }, { -0.46f, 0.34f }, { 0.0f, 0.44f }, { 0.46f, 0.34f }, { 0.46f, -0.38f } }, true);
-        pen.line(0.0f, -0.28f, 0.0f, 0.44f);
-        pen.line(-0.34f, -0.14f, -0.12f, -0.1f);
-        pen.line(-0.34f, 0.04f, -0.12f, 0.08f);
-        pen.line(0.34f, -0.14f, 0.12f, -0.1f);
-        pen.line(0.34f, 0.04f, 0.12f, 0.08f);
-    }
-
-    // Light bulb.
-    void drawHighlight(const Pen& pen)
-    {
-        pen.arc(0.0f, -0.14f, 0.3f, 135.0f, 405.0f);
-        pen.line(-0.21f, 0.07f, -0.13f, 0.24f);
-        pen.line(0.21f, 0.07f, 0.13f, 0.24f);
-        pen.line(-0.13f, 0.24f, 0.13f, 0.24f);
-        pen.line(-0.11f, 0.36f, 0.11f, 0.36f);
-        pen.line(-0.06f, 0.47f, 0.06f, 0.47f);
-    }
-
-    void drawEye(const Pen& pen)
-    {
-        pen.curve({ -0.48f, 0.0f }, { 0.0f, -0.46f }, { 0.48f, 0.0f });
-        pen.curve({ -0.48f, 0.0f }, { 0.0f, 0.46f }, { 0.48f, 0.0f });
-        pen.circle(0.0f, 0.0f, 0.1f);
-    }
-
-    // Eye crossed out: not seen.
-    void drawSneak(const Pen& pen)
-    {
-        drawEye(pen);
-        pen.line(-0.38f, 0.38f, 0.38f, -0.38f);
-    }
-
-    // Terminal prompt.
-    void drawLog(const Pen& pen)
-    {
-        pen.rect(-0.46f, -0.36f, 0.92f, 0.72f, 0.08f);
-        pen.poly({ { -0.28f, -0.14f }, { -0.1f, 0.02f }, { -0.28f, 0.18f } });
-        pen.line(0.0f, 0.18f, 0.26f, 0.18f);
-    }
-
-    // Play to the end.
-    void drawEndTurn(const Pen& pen)
-    {
-        pen.poly({ { -0.36f, -0.34f }, { 0.16f, 0.0f }, { -0.36f, 0.34f } }, true);
-        pen.line(0.32f, -0.34f, 0.32f, 0.34f);
-    }
-
-    // Three tiles of the hex grid (flat as the game's).
-    void drawTacticalView(const Pen& pen)
-    {
-        auto hex = [&](float x, float y) {
-            const float w = 0.24f;
-            const float h = 0.14f;
-            pen.poly({ { x - w, y }, { x - w / 2.0f, y - h }, { x + w / 2.0f, y - h }, { x + w, y }, { x + w / 2.0f, y + h }, { x - w / 2.0f, y + h } }, true);
-        };
-        hex(-0.18f, 0.0f);
-        hex(0.18f, -0.14f);
-        hex(0.18f, 0.14f);
-    }
-
-    // Truce flag.
-    void drawEndCombat(const Pen& pen)
-    {
-        pen.line(-0.34f, -0.46f, -0.34f, 0.48f);
-        pen.poly({ { -0.34f, -0.42f }, { 0.42f, -0.42f }, { 0.24f, -0.18f }, { 0.42f, 0.06f }, { -0.34f, 0.06f } });
-    }
-
-    // Two arrows chasing each other.
-    void drawSwapHands(const Pen& pen)
-    {
-        pen.arcArrow(0.0f, 0.0f, 0.36f, 200.0f, 330.0f);
-        pen.arcArrow(0.0f, 0.0f, 0.36f, 20.0f, 150.0f);
-    }
-
-    // Lightning bolt (filled).
-    void drawActionPoints(const Pen& pen)
-    {
-        pen.fill({ { 0.16f, -0.5f }, { -0.3f, 0.08f }, { 0.08f, 0.08f } });
-        pen.fill({ { -0.08f, -0.08f }, { 0.3f, -0.08f }, { -0.16f, 0.5f } });
-    }
-
-    // Heart (filled).
-    void drawHitPoints(const Pen& pen)
-    {
-        pen.dot(-0.2f, -0.14f, 0.22f);
-        pen.dot(0.2f, -0.14f, 0.22f);
-        pen.fill({ { -0.41f, -0.06f }, { 0.41f, -0.06f }, { 0.0f, 0.44f } });
-    }
-
-    // Crosshair.
-    void drawAim(const Pen& pen)
-    {
-        pen.circle(0.0f, 0.0f, 0.28f);
-        pen.line(0.0f, -0.48f, 0.0f, -0.16f);
-        pen.line(0.0f, 0.16f, 0.0f, 0.48f);
-        pen.line(-0.48f, 0.0f, -0.16f, 0.0f);
-        pen.line(0.16f, 0.0f, 0.48f, 0.0f);
-        pen.dot(0.0f, 0.0f, 0.05f);
-    }
-
-    // Bullet.
-    void drawAmmo(const Pen& pen, float x, float y, float scale)
-    {
-        float half = 0.17f * scale;
-        float top = y - 0.15f * scale;
-        float bottom = y + 0.5f * scale;
-        float tip = y - 0.5f * scale;
-        pen.poly({ { x - half, bottom }, { x - half, top }, { x, tip }, { x + half, top }, { x + half, bottom } }, true);
-    }
-
-    // Circular arrow around a bullet.
-    void drawReload(const Pen& pen)
-    {
-        pen.arcArrow(0.0f, 0.0f, 0.4f, -60.0f, 230.0f);
-        drawAmmo(pen, 0.0f, 0.02f, 0.44f);
-    }
-
-    // Fist from the front: four knuckles, thumb across the fingers.
-    void drawFist(const Pen& pen)
-    {
-        for (int finger = 0; finger < 4; finger++) {
-            float x = -0.27f + finger * 0.18f;
-            pen.arc(x, -0.14f, 0.09f, 180.0f, 360.0f);
-            pen.line(x + 0.09f, -0.14f, x + 0.09f, finger == 3 ? 0.2f : 0.02f);
-        }
-        pen.poly({ { -0.36f, -0.14f }, { -0.36f, 0.24f }, { -0.2f, 0.44f }, { 0.24f, 0.44f }, { 0.36f, 0.24f }, { 0.36f, 0.2f } });
-        pen.poly({ { -0.36f, 0.08f }, { 0.08f, 0.08f }, { 0.16f, 0.2f } });
-    }
-
-    // Kettlebell.
-    void drawWeight(const Pen& pen)
-    {
-        pen.arc(0.0f, -0.24f, 0.2f, 160.0f, 380.0f);
-        pen.circle(0.0f, 0.16f, 0.3f);
-        pen.line(-0.22f, 0.46f, 0.22f, 0.46f);
-    }
-
-    // Front part of a wide flat ellipse with heads at both ends, pointing
-    // sideways.
-    void drawTurn(const Pen& pen)
-    {
-        constexpr float kRadiusX = 0.8f;
-        constexpr float kRadiusY = 0.3f;
-        constexpr float kCenterY = -0.2f;
-        constexpr float kFrom = 55.0f;
-        constexpr float kTo = 125.0f;
-
+    struct Polyline {
         std::vector<SDL_FPoint> points;
-        for (int step = 0; step <= 12; step++) {
-            float angle = (kFrom + (kTo - kFrom) * step / 12.0f) * kPi / 180.0f;
-            points.push_back(pen.p(std::cos(angle) * kRadiusX, kCenterY + std::sin(angle) * kRadiusY));
-        }
-        muiDrawPolyline(points, pen.thickness, pen.color);
+        bool closed;
+    };
 
-        // Heads point along the ellipse, away from its middle.
-        for (float end : { kFrom, kTo }) {
-            float angle = end * kPi / 180.0f;
-            float x = std::cos(angle) * kRadiusX;
-            float y = kCenterY + std::sin(angle) * kRadiusY;
-            float direction = end == kFrom ? -1.0f : 1.0f;
-            float tangentX = -std::sin(angle) * kRadiusX * direction;
-            float tangentY = std::cos(angle) * kRadiusY * direction;
-            float length = std::sqrt(tangentX * tangentX + tangentY * tangentY);
-            tangentX /= length;
-            tangentY /= length;
-            float head = 0.14f;
-            pen.poly({ { x - tangentX * head - tangentY * head * 0.8f, y - tangentY * head + tangentX * head * 0.8f },
-                { x, y },
-                { x - tangentX * head + tangentY * head * 0.8f, y - tangentY * head - tangentX * head * 0.8f } });
+    // An icon in grid units.
+    struct IconShapes {
+        std::vector<Polyline> strokes;
+        std::vector<std::vector<SDL_FPoint>> fills;
+    };
+
+    bool readNumber(const char** cursor, float* value)
+    {
+        const char* p = *cursor;
+        while (*p == ' ' || *p == ',' || *p == '\t' || *p == '\n') {
+            p++;
+        }
+        char* end;
+        float result = strtof(p, &end);
+        if (end == p) {
+            return false;
+        }
+        *value = result;
+        *cursor = end;
+        return true;
+    }
+
+    // A flag of an arc: a single 0 or 1, maybe with no separator after it.
+    bool readFlag(const char** cursor, bool* value)
+    {
+        const char* p = *cursor;
+        while (*p == ' ' || *p == ',') {
+            p++;
+        }
+        if (*p != '0' && *p != '1') {
+            return false;
+        }
+        *value = *p == '1';
+        *cursor = p + 1;
+        return true;
+    }
+
+    void addCubic(std::vector<SDL_FPoint>& points, SDL_FPoint from, SDL_FPoint c1, SDL_FPoint c2, SDL_FPoint to)
+    {
+        constexpr int kSegments = 16;
+        for (int step = 1; step <= kSegments; step++) {
+            float t = static_cast<float>(step) / kSegments;
+            float u = 1.0f - t;
+            float a = u * u * u;
+            float b = 3.0f * u * u * t;
+            float c = 3.0f * u * t * t;
+            float d = t * t * t;
+            points.push_back({ a * from.x + b * c1.x + c * c2.x + d * to.x, a * from.y + b * c1.y + c * c2.y + d * to.y });
         }
     }
 
-    void drawBack(const Pen& pen)
+    void addQuadratic(std::vector<SDL_FPoint>& points, SDL_FPoint from, SDL_FPoint control, SDL_FPoint to)
     {
-        pen.line(-0.42f, 0.0f, 0.42f, 0.0f);
-        pen.poly({ { -0.06f, -0.36f }, { -0.42f, 0.0f }, { -0.06f, 0.36f } });
+        constexpr int kSegments = 12;
+        for (int step = 1; step <= kSegments; step++) {
+            float t = static_cast<float>(step) / kSegments;
+            float u = 1.0f - t;
+            points.push_back({ u * u * from.x + 2.0f * u * t * control.x + t * t * to.x, u * u * from.y + 2.0f * u * t * control.y + t * t * to.y });
+        }
     }
 
-    // MARK: Dialog
-
-    // Speech bubble: one outline, the tail opens out of the bottom edge.
-    void drawTalk(const Pen& pen)
+    // SVG's endpoint arc through its center form (SVG 1.1 F.6.5).
+    void addArc(std::vector<SDL_FPoint>& points, SDL_FPoint from, float rx, float ry, float rotation, bool large, bool sweep, SDL_FPoint to)
     {
-        constexpr float kLeft = -0.5f;
-        constexpr float kTop = -0.5f;
-        constexpr float kRight = 0.5f;
-        constexpr float kBottom = 0.22f;
-        constexpr float kRadius = 0.18f;
+        rx = std::fabs(rx);
+        ry = std::fabs(ry);
+        if (rx < 1e-4f || ry < 1e-4f) {
+            points.push_back(to);
+            return;
+        }
 
-        std::vector<SDL_FPoint> points;
-        auto arc = [&](float x, float y, float from, float to) {
-            std::vector<SDL_FPoint> arcPoints = pen.arcPoints(x, y, kRadius, from, to);
-            points.insert(points.end(), arcPoints.begin(), arcPoints.end());
+        float phi = rotation * kPi / 180.0f;
+        float cosPhi = std::cos(phi);
+        float sinPhi = std::sin(phi);
+        float dx = (from.x - to.x) / 2.0f;
+        float dy = (from.y - to.y) / 2.0f;
+        float x1 = cosPhi * dx + sinPhi * dy;
+        float y1 = -sinPhi * dx + cosPhi * dy;
+
+        float lambda = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
+        if (lambda > 1.0f) {
+            rx *= std::sqrt(lambda);
+            ry *= std::sqrt(lambda);
+        }
+
+        float numerator = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1;
+        float denominator = rx * rx * y1 * y1 + ry * ry * x1 * x1;
+        float coefficient = denominator > 0.0f ? std::sqrt(std::max(numerator / denominator, 0.0f)) : 0.0f;
+        if (large == sweep) {
+            coefficient = -coefficient;
+        }
+        float cx1 = coefficient * rx * y1 / ry;
+        float cy1 = -coefficient * ry * x1 / rx;
+        float cx = cosPhi * cx1 - sinPhi * cy1 + (from.x + to.x) / 2.0f;
+        float cy = sinPhi * cx1 + cosPhi * cy1 + (from.y + to.y) / 2.0f;
+
+        auto angle = [](float ux, float uy, float vx, float vy) {
+            return std::atan2(ux * vy - uy * vx, ux * vx + uy * vy);
         };
+        float start = angle(1.0f, 0.0f, (x1 - cx1) / rx, (y1 - cy1) / ry);
+        float delta = angle((x1 - cx1) / rx, (y1 - cy1) / ry, (-x1 - cx1) / rx, (-y1 - cy1) / ry);
+        if (!sweep && delta > 0.0f) {
+            delta -= 2.0f * kPi;
+        } else if (sweep && delta < 0.0f) {
+            delta += 2.0f * kPi;
+        }
 
-        // From the tail's right side clockwise round the corners.
-        points.push_back(pen.p(-0.02f, kBottom));
-        arc(kRight - kRadius, kBottom - kRadius, 90.0f, 0.0f);
-        arc(kRight - kRadius, kTop + kRadius, 0.0f, -90.0f);
-        arc(kLeft + kRadius, kTop + kRadius, -90.0f, -180.0f);
-        arc(kLeft + kRadius, kBottom - kRadius, 180.0f, 90.0f);
-        points.push_back(pen.p(-0.25f, kBottom));
-        points.push_back(pen.p(-0.38f, 0.5f));
-        muiDrawPolyline(points, pen.thickness, pen.color, true);
+        int segments = std::max(static_cast<int>(std::ceil(std::fabs(delta) / (10.0f * kPi / 180.0f))), 2);
+        for (int step = 1; step <= segments; step++) {
+            float t = start + delta * step / segments;
+            float px = rx * std::cos(t);
+            float py = ry * std::sin(t);
+            points.push_back({ cosPhi * px - sinPhi * py + cx, sinPhi * px + cosPhi * py + cy });
+        }
     }
 
-    // Two opposite arrows.
-    void drawBarter(const Pen& pen)
+    void addShape(IconShapes* shapes, std::vector<SDL_FPoint>& points, bool closed, bool fill, const Affine& transform)
     {
-        float head = 0.28f;
-        pen.line(-0.5f, -0.22f, 0.5f, -0.22f);
-        pen.poly({ { 0.5f - head, -0.22f - head }, { 0.5f, -0.22f }, { 0.5f - head, -0.22f + head } });
-        pen.line(0.5f, 0.22f, -0.5f, 0.22f);
-        pen.poly({ { -0.5f + head, 0.22f - head }, { -0.5f, 0.22f }, { -0.5f + head, 0.22f + head } });
-    }
-
-    // Clock.
-    void drawReview(const Pen& pen)
-    {
-        pen.circle(0.0f, 0.0f, 0.46f);
-        pen.poly({ { 0.0f, -0.28f }, { 0.0f, 0.0f }, { 0.2f, 0.08f } });
-    }
-
-    // MARK: Filters
-
-    // Pistol.
-    void drawWeapon(const Pen& pen, float x, float y, float scale)
-    {
-        float top = y - 0.22f * scale;
-        pen.line(x - 0.5f * scale, top, x + 0.5f * scale, top);
-        pen.line(x - 0.28f * scale, top, x - 0.4f * scale, y + 0.5f * scale);
-        pen.line(x - 0.05f * scale, top, x - 0.05f * scale, y + 0.12f * scale);
-    }
-
-    // Shield.
-    void drawArmor(const Pen& pen)
-    {
-        pen.poly({ { -0.4f, -0.5f }, { 0.4f, -0.5f }, { 0.4f, 0.08f }, { 0.0f, 0.5f }, { -0.4f, 0.08f } }, true);
-    }
-
-    // Medical cross.
-    void drawDrugs(const Pen& pen)
-    {
-        Pen thick = pen;
-        thick.thickness *= 2.0f;
-        thick.line(-0.5f, 0.0f, 0.5f, 0.0f);
-        thick.line(0.0f, -0.5f, 0.0f, 0.5f);
-    }
-
-    // Box.
-    void drawMisc(const Pen& pen)
-    {
-        pen.rect(-0.5f, -0.28f, 1.0f, 0.78f, 0.04f);
-        pen.line(-0.5f, -0.03f, 0.5f, -0.03f);
-    }
-
-    // MARK: Action menu
-
-    void drawCancel(const Pen& pen)
-    {
-        pen.line(-0.34f, -0.34f, 0.34f, 0.34f);
-        pen.line(-0.34f, 0.34f, 0.34f, -0.34f);
-    }
-
-    void drawPlus(const Pen& pen)
-    {
-        pen.line(-0.36f, 0.0f, 0.36f, 0.0f);
-        pen.line(0.0f, -0.36f, 0.0f, 0.36f);
-    }
-
-    void drawMinus(const Pen& pen)
-    {
-        pen.line(-0.36f, 0.0f, 0.36f, 0.0f);
-    }
-
-    void drawPlay(const Pen& pen)
-    {
-        pen.fill({ { -0.26f, -0.4f }, { 0.4f, 0.0f }, { -0.26f, 0.4f } });
-    }
-
-    void drawPause(const Pen& pen)
-    {
-        pen.fill({ { -0.34f, -0.38f }, { -0.1f, -0.38f }, { -0.1f, 0.38f }, { -0.34f, 0.38f } });
-        pen.fill({ { 0.1f, -0.38f }, { 0.34f, -0.38f }, { 0.34f, 0.38f }, { 0.1f, 0.38f } });
-    }
-
-    void drawStop(const Pen& pen)
-    {
-        pen.fill({ { -0.32f, -0.32f }, { 0.32f, -0.32f }, { 0.32f, 0.32f }, { -0.32f, 0.32f } });
-    }
-
-    // Corners out (full screen) or in (back from it).
-    void drawCorners(const Pen& pen, bool out)
-    {
-        float a = out ? 0.42f : 0.12f;
-        float b = out ? 0.12f : 0.42f;
-        for (float sx : { -1.0f, 1.0f }) {
-            for (float sy : { -1.0f, 1.0f }) {
-                pen.poly({ { sx * a, sy * b }, { sx * a, sy * a }, { sx * b, sy * a } });
+        if (points.size() >= 2) {
+            for (SDL_FPoint& point : points) {
+                point = transform.apply(point.x, point.y);
+            }
+            if (fill) {
+                shapes->fills.push_back(points);
+            } else {
+                shapes->strokes.push_back({ points, closed });
             }
         }
+        points.clear();
     }
 
-    // Pencil.
-    void drawEdit(const Pen& pen)
+    void parsePath(const char* data, const Affine& transform, bool fill, IconShapes* shapes)
     {
-        pen.poly({ { -0.36f, 0.4f }, { -0.36f, 0.2f }, { 0.22f, -0.38f }, { 0.42f, -0.18f }, { -0.16f, 0.4f } }, true);
-        pen.line(0.08f, -0.24f, 0.28f, -0.04f);
+        std::vector<SDL_FPoint> points;
+        SDL_FPoint current = { 0.0f, 0.0f };
+        SDL_FPoint start = { 0.0f, 0.0f };
+        // The last curve's second control point, for S and T.
+        SDL_FPoint control = { 0.0f, 0.0f };
+        char previous = 0;
+        char command = 0;
+        const char* p = data;
+        while (true) {
+            while (*p == ' ' || *p == ',' || *p == '\t' || *p == '\n') {
+                p++;
+            }
+            if (*p == '\0') {
+                break;
+            }
+            if (isalpha(static_cast<unsigned char>(*p))) {
+                command = *p++;
+            } else if (command == 0) {
+                break;
+            }
+
+            bool relative = islower(static_cast<unsigned char>(command)) != 0;
+            char upper = static_cast<char>(toupper(static_cast<unsigned char>(command)));
+            float ox = relative ? current.x : 0.0f;
+            float oy = relative ? current.y : 0.0f;
+            if (upper != 'M' && upper != 'Z' && points.empty()) {
+                points.push_back(current);
+            }
+
+            bool ok = true;
+            switch (upper) {
+            case 'M': {
+                float x;
+                float y;
+                ok = readNumber(&p, &x) && readNumber(&p, &y);
+                if (ok) {
+                    addShape(shapes, points, false, fill, transform);
+                    current = { ox + x, oy + y };
+                    start = current;
+                    points.push_back(current);
+                    // Pairs after it are lines.
+                    command = relative ? 'l' : 'L';
+                }
+                break;
+            }
+            case 'L': {
+                float x;
+                float y;
+                ok = readNumber(&p, &x) && readNumber(&p, &y);
+                if (ok) {
+                    current = { ox + x, oy + y };
+                    points.push_back(current);
+                }
+                break;
+            }
+            case 'H': {
+                float x;
+                ok = readNumber(&p, &x);
+                if (ok) {
+                    current.x = ox + x;
+                    points.push_back(current);
+                }
+                break;
+            }
+            case 'V': {
+                float y;
+                ok = readNumber(&p, &y);
+                if (ok) {
+                    current.y = oy + y;
+                    points.push_back(current);
+                }
+                break;
+            }
+            case 'C':
+            case 'S': {
+                float v[6];
+                SDL_FPoint c1;
+                if (upper == 'C') {
+                    for (int index = 0; index < 6 && ok; index++) {
+                        ok = readNumber(&p, &v[index]);
+                    }
+                    c1 = { ox + v[0], oy + v[1] };
+                } else {
+                    for (int index = 2; index < 6 && ok; index++) {
+                        ok = readNumber(&p, &v[index]);
+                    }
+                    c1 = previous == 'C' || previous == 'S' ? SDL_FPoint { 2.0f * current.x - control.x, 2.0f * current.y - control.y } : current;
+                }
+                if (ok) {
+                    SDL_FPoint c2 = { ox + v[2], oy + v[3] };
+                    SDL_FPoint to = { ox + v[4], oy + v[5] };
+                    addCubic(points, current, c1, c2, to);
+                    control = c2;
+                    current = to;
+                }
+                break;
+            }
+            case 'Q':
+            case 'T': {
+                float v[4];
+                SDL_FPoint c;
+                if (upper == 'Q') {
+                    for (int index = 0; index < 4 && ok; index++) {
+                        ok = readNumber(&p, &v[index]);
+                    }
+                    c = { ox + v[0], oy + v[1] };
+                } else {
+                    for (int index = 2; index < 4 && ok; index++) {
+                        ok = readNumber(&p, &v[index]);
+                    }
+                    c = previous == 'Q' || previous == 'T' ? SDL_FPoint { 2.0f * current.x - control.x, 2.0f * current.y - control.y } : current;
+                }
+                if (ok) {
+                    SDL_FPoint to = { ox + v[2], oy + v[3] };
+                    addQuadratic(points, current, c, to);
+                    control = c;
+                    current = to;
+                }
+                break;
+            }
+            case 'A': {
+                float rx;
+                float ry;
+                float rotation;
+                bool large;
+                bool sweep;
+                float x;
+                float y;
+                ok = readNumber(&p, &rx) && readNumber(&p, &ry) && readNumber(&p, &rotation)
+                    && readFlag(&p, &large) && readFlag(&p, &sweep) && readNumber(&p, &x) && readNumber(&p, &y);
+                if (ok) {
+                    SDL_FPoint to = { ox + x, oy + y };
+                    addArc(points, current, rx, ry, rotation, large, sweep, to);
+                    current = to;
+                }
+                break;
+            }
+            case 'Z':
+                addShape(shapes, points, true, fill, transform);
+                current = start;
+                break;
+            default:
+                ok = false;
+                break;
+            }
+
+            if (!ok) {
+                break;
+            }
+            previous = upper;
+        }
+        addShape(shapes, points, false, fill, transform);
     }
 
-    // Arrow down to the ground.
-    void drawDrop(const Pen& pen)
+    Affine parseTransform(const std::string& text)
     {
-        pen.line(0.0f, -0.46f, 0.0f, 0.16f);
-        pen.poly({ { -0.22f, -0.06f }, { 0.0f, 0.16f }, { 0.22f, -0.06f } });
-        pen.line(-0.4f, 0.42f, 0.4f, 0.42f);
+        Affine result;
+        const char* p = text.c_str();
+        while (*p != '\0') {
+            while (*p == ' ' || *p == ',') {
+                p++;
+            }
+            std::string name;
+            while (isalpha(static_cast<unsigned char>(*p))) {
+                name += *p++;
+            }
+            if (*p != '(') {
+                break;
+            }
+            p++;
+            float v[3] = { 0.0f, 0.0f, 0.0f };
+            int count = 0;
+            while (count < 3 && readNumber(&p, &v[count])) {
+                count++;
+            }
+            while (*p != '\0' && *p != ')') {
+                p++;
+            }
+            if (*p == ')') {
+                p++;
+            }
+
+            Affine step;
+            if (name == "translate") {
+                step.e = v[0];
+                step.f = count > 1 ? v[1] : 0.0f;
+            } else if (name == "scale") {
+                step.a = v[0];
+                step.d = count > 1 ? v[1] : v[0];
+            } else if (name == "rotate") {
+                float angle = v[0] * kPi / 180.0f;
+                Affine rotation;
+                rotation.a = std::cos(angle);
+                rotation.b = std::sin(angle);
+                rotation.c = -std::sin(angle);
+                rotation.d = std::cos(angle);
+                Affine to;
+                to.e = v[1];
+                to.f = v[2];
+                Affine back;
+                back.e = -v[1];
+                back.f = -v[2];
+                step = count == 3 ? to * rotation * back : rotation;
+            }
+            result = result * step;
+        }
+        return result;
     }
 
-    // Circular arrow around the object.
-    void drawRotate(const Pen& pen)
+    IconShapes parseIcon(const char* svg)
     {
-        pen.arcArrow(0.0f, 0.0f, 0.4f, 120.0f, 400.0f);
-        pen.dot(0.0f, 0.0f, 0.09f);
+        IconShapes shapes;
+        std::vector<Affine> transforms(1);
+        const char* p = svg;
+        while ((p = strchr(p, '<')) != nullptr) {
+            p++;
+            if (*p == '/') {
+                if (transforms.size() > 1) {
+                    transforms.pop_back();
+                }
+                continue;
+            }
+
+            std::string tag;
+            while (isalpha(static_cast<unsigned char>(*p))) {
+                tag += *p++;
+            }
+
+            std::map<std::string, std::string> attributes;
+            bool selfClosing = false;
+            while (*p != '\0' && *p != '>') {
+                if (*p == '/') {
+                    selfClosing = true;
+                    p++;
+                    continue;
+                }
+                if (*p == ' ') {
+                    p++;
+                    continue;
+                }
+                std::string name;
+                while (*p != '\0' && *p != '=' && *p != ' ' && *p != '>' && *p != '/') {
+                    name += *p++;
+                }
+                if (*p == '=' && (p[1] == '"' || p[1] == '\'')) {
+                    char quote = p[1];
+                    const char* value = p + 2;
+                    const char* end = strchr(value, quote);
+                    if (end == nullptr) {
+                        return shapes;
+                    }
+                    attributes[name] = std::string(value, end);
+                    p = end + 1;
+                }
+            }
+
+            Affine transform = transforms.back();
+            if (attributes.count("transform") != 0) {
+                transform = transform * parseTransform(attributes["transform"]);
+            }
+            if (tag == "g") {
+                if (!selfClosing) {
+                    transforms.push_back(transform);
+                }
+                continue;
+            }
+
+            bool fill = attributes["class"] == "f";
+            auto number = [&](const char* name) {
+                return static_cast<float>(atof(attributes[name].c_str()));
+            };
+            std::vector<SDL_FPoint> points;
+            if (tag == "path") {
+                parsePath(attributes["d"].c_str(), transform, fill, &shapes);
+            } else if (tag == "circle") {
+                float cx = number("cx");
+                float cy = number("cy");
+                float r = number("r");
+                constexpr int kSegments = 48;
+                for (int step = 0; step < kSegments; step++) {
+                    float angle = 2.0f * kPi * step / kSegments;
+                    points.push_back({ cx + std::cos(angle) * r, cy + std::sin(angle) * r });
+                }
+                addShape(&shapes, points, true, fill, transform);
+            } else if (tag == "rect") {
+                float x = number("x");
+                float y = number("y");
+                float w = number("width");
+                float h = number("height");
+                float r = std::min(number("rx"), std::min(w, h) / 2.0f);
+                if (r <= 0.0f) {
+                    points = { { x, y }, { x + w, y }, { x + w, y + h }, { x, y + h } };
+                } else {
+                    struct Corner {
+                        float cx;
+                        float cy;
+                        float start;
+                    };
+                    Corner corners[4] = { { x + w - r, y + r, -90.0f }, { x + w - r, y + h - r, 0.0f }, { x + r, y + h - r, 90.0f }, { x + r, y + r, 180.0f } };
+                    for (const Corner& corner : corners) {
+                        for (int step = 0; step <= 8; step++) {
+                            float angle = (corner.start + 90.0f * step / 8.0f) * kPi / 180.0f;
+                            points.push_back({ corner.cx + std::cos(angle) * r, corner.cy + std::sin(angle) * r });
+                        }
+                    }
+                }
+                addShape(&shapes, points, true, fill, transform);
+            }
+        }
+        return shapes;
     }
 
-    // Open hand.
-    void drawUse(const Pen& pen)
+    float signedArea(const std::vector<SDL_FPoint>& points)
     {
-        pen.rect(-0.26f, -0.02f, 0.5f, 0.48f, 0.16f);
-        pen.line(-0.18f, -0.02f, -0.18f, -0.3f);
-        pen.line(-0.04f, -0.02f, -0.04f, -0.44f);
-        pen.line(0.1f, -0.02f, 0.1f, -0.42f);
-        pen.line(0.24f, 0.04f, 0.24f, -0.26f);
-        pen.line(-0.26f, 0.2f, -0.44f, -0.02f);
+        float area = 0.0f;
+        for (size_t index = 0; index < points.size(); index++) {
+            const SDL_FPoint& a = points[index];
+            const SDL_FPoint& b = points[(index + 1) % points.size()];
+            area += a.x * b.y - b.x * a.y;
+        }
+        return area;
     }
 
-    // Magazine with a bullet going out.
-    void drawUnload(const Pen& pen)
+    // All one way round: overlapping parts add up instead of cutting holes.
+    void addContour(std::vector<std::vector<SDL_FPoint>>* contours, std::vector<SDL_FPoint> points)
     {
-        pen.rect(-0.22f, 0.02f, 0.44f, 0.46f, 0.06f);
-        pen.line(-0.22f, 0.18f, 0.22f, 0.18f);
-        pen.line(0.0f, -0.08f, 0.0f, -0.48f);
-        pen.poly({ { -0.18f, -0.3f }, { 0.0f, -0.48f }, { 0.18f, -0.3f } });
+        if (signedArea(points) < 0.0f) {
+            std::reverse(points.begin(), points.end());
+        }
+        contours->push_back(std::move(points));
     }
 
-    // Arrow into a wall.
-    void drawPush(const Pen& pen)
+    // A stroke as the union of its segments' quads and a round cap at every
+    // point (round joins and ends).
+    void addStroke(std::vector<std::vector<SDL_FPoint>>* contours, const Polyline& line, float halfWidth)
     {
-        pen.line(-0.46f, 0.0f, 0.12f, 0.0f);
-        pen.poly({ { -0.08f, -0.2f }, { 0.12f, 0.0f }, { -0.08f, 0.2f } });
-        pen.line(0.34f, -0.4f, 0.34f, 0.4f);
-    }
+        size_t count = line.points.size();
+        size_t segments = line.closed ? count : count - 1;
+        for (size_t index = 0; index < segments; index++) {
+            const SDL_FPoint& a = line.points[index];
+            const SDL_FPoint& b = line.points[(index + 1) % count];
+            float dx = b.x - a.x;
+            float dy = b.y - a.y;
+            float length = std::sqrt(dx * dx + dy * dy);
+            if (length < 1e-3f) {
+                continue;
+            }
+            float nx = -dy / length * halfWidth;
+            float ny = dx / length * halfWidth;
+            addContour(contours, { { a.x + nx, a.y + ny }, { b.x + nx, b.y + ny }, { b.x - nx, b.y - ny }, { a.x - nx, a.y - ny } });
+        }
 
-    // MARK: Party orders
-
-    // Two people, the front one bigger; the one behind shows only what the
-    // front one doesn't cover.
-    void drawPartyOrders(const Pen& pen)
-    {
-        pen.circle(0.2f, -0.26f, 0.12f);
-        pen.arc(0.2f, 0.3f, 0.28f, 250.0f, 340.0f);
-        pen.circle(-0.14f, -0.12f, 0.15f);
-        pen.arc(-0.14f, 0.48f, 0.34f, 180.0f, 360.0f);
-        pen.line(-0.48f, 0.48f, 0.2f, 0.48f);
-    }
-
-    // Pistol going down.
-    void drawHolster(const Pen& pen)
-    {
-        drawWeapon(pen, -0.1f, -0.14f, 0.7f);
-        pen.line(0.36f, -0.46f, 0.36f, 0.42f);
-        pen.poly({ { 0.2f, 0.26f }, { 0.36f, 0.42f }, { 0.52f, 0.26f } });
-    }
-
-    // Four arrows to the center (or from it).
-    void drawCrossArrows(const Pen& pen, bool inward)
-    {
-        for (int direction = 0; direction < 4; direction++) {
-            float dx = direction == 0 ? 1.0f : (direction == 1 ? -1.0f : 0.0f);
-            float dy = direction == 2 ? 1.0f : (direction == 3 ? -1.0f : 0.0f);
-            float outer = 0.48f;
-            float inner = 0.14f;
-            pen.line(dx * outer, dy * outer, dx * inner, dy * inner);
-            float tip = inward ? inner : outer;
-            float back = inward ? inner + 0.14f : outer - 0.14f;
-            pen.poly({ { dx * back - dy * 0.12f, dy * back - dx * 0.12f }, { dx * tip, dy * tip }, { dx * back + dy * 0.12f, dy * back + dx * 0.12f } });
+        int steps = std::clamp(static_cast<int>(halfWidth * 4.0f), 8, 32);
+        for (const SDL_FPoint& point : line.points) {
+            std::vector<SDL_FPoint> cap;
+            for (int step = 0; step < steps; step++) {
+                float angle = 2.0f * kPi * step / steps;
+                cap.push_back({ point.x + std::cos(angle) * halfWidth, point.y + std::sin(angle) * halfWidth });
+            }
+            addContour(contours, std::move(cap));
         }
     }
 
-    // Three bullets.
-    void drawBurst(const Pen& pen)
+    const IconShapes& iconShapes(MuiIcon icon)
     {
-        drawAmmo(pen, -0.3f, 0.02f, 0.62f);
-        drawAmmo(pen, 0.0f, 0.02f, 0.62f);
-        drawAmmo(pen, 0.3f, 0.02f, 0.62f);
+        static std::vector<IconShapes> parsed;
+        if (parsed.empty()) {
+            for (const char* svg : kIconSvg) {
+                parsed.push_back(parseIcon(svg));
+            }
+        }
+        return parsed[static_cast<size_t>(icon)];
     }
-
-    // Hand in a circular arrow: picking up by itself.
-    void drawAutoLoot(const Pen& pen)
-    {
-        pen.arcArrow(0.0f, 0.0f, 0.46f, -70.0f, 220.0f);
-        Pen small = pen;
-        small.size *= 0.55f;
-        small.cy += pen.size * 0.04f;
-        drawUse(small);
-    }
-
-    // MARK: Skills
-
-    // Open padlock with a keyhole.
-    void drawLockpick(const Pen& pen)
-    {
-        pen.rect(-0.32f, -0.02f, 0.64f, 0.46f, 0.06f);
-        pen.arc(0.0f, -0.12f, 0.2f, 180.0f, 330.0f);
-        pen.line(-0.2f, -0.12f, -0.2f, -0.02f);
-        pen.dot(0.0f, 0.16f, 0.06f);
-        pen.line(0.0f, 0.18f, 0.0f, 0.3f);
-    }
-
-    // Hand taking a coin.
-    void drawSteal(const Pen& pen)
-    {
-        Pen hand = pen;
-        hand.size *= 0.82f;
-        hand.cx -= pen.size * 0.08f;
-        hand.cy += pen.size * 0.08f;
-        drawUse(hand);
-        pen.circle(0.32f, -0.3f, 0.12f);
-    }
-
-    // Mine with spikes.
-    void drawTraps(const Pen& pen)
-    {
-        pen.arc(0.0f, 0.24f, 0.34f, 180.0f, 360.0f);
-        pen.line(-0.46f, 0.24f, 0.46f, 0.24f);
-        pen.rect(-0.08f, -0.24f, 0.16f, 0.14f, 0.02f);
-        pen.line(-0.3f, -0.34f, -0.18f, -0.2f);
-        pen.line(0.3f, -0.34f, 0.18f, -0.2f);
-        pen.line(0.0f, -0.46f, 0.0f, -0.34f);
-    }
-
-    // Medical bag.
-    void drawDoctor(const Pen& pen)
-    {
-        pen.arc(0.0f, -0.2f, 0.16f, 180.0f, 360.0f);
-        pen.rect(-0.42f, -0.2f, 0.84f, 0.62f, 0.08f);
-        pen.line(-0.14f, 0.11f, 0.14f, 0.11f);
-        pen.line(0.0f, -0.03f, 0.0f, 0.25f);
-    }
-
-    // Computer screen.
-    void drawScience(const Pen& pen)
-    {
-        pen.rect(-0.44f, -0.38f, 0.88f, 0.58f, 0.06f);
-        pen.poly({ { -0.28f, -0.04f }, { -0.14f, -0.04f }, { -0.06f, -0.2f }, { 0.06f, 0.08f }, { 0.14f, -0.04f }, { 0.28f, -0.04f } });
-        pen.line(0.0f, 0.2f, 0.0f, 0.36f);
-        pen.line(-0.2f, 0.42f, 0.2f, 0.42f);
-    }
-
-    // Wrench.
-    void drawRepair(const Pen& pen)
-    {
-        pen.line(-0.38f, 0.38f, 0.12f, -0.12f);
-        pen.arc(0.24f, -0.24f, 0.17f, 225.0f, 495.0f);
-    }
-
-    // Crosshair in a frame corner marks: choose a target.
-    void drawTarget(const Pen& pen)
-    {
-        pen.circle(0.0f, 0.0f, 0.2f);
-        pen.dot(0.0f, 0.0f, 0.05f);
-        pen.poly({ { -0.46f, -0.24f }, { -0.46f, -0.46f }, { -0.24f, -0.46f } });
-        pen.poly({ { 0.24f, -0.46f }, { 0.46f, -0.46f }, { 0.46f, -0.24f } });
-        pen.poly({ { 0.46f, 0.24f }, { 0.46f, 0.46f }, { 0.24f, 0.46f } });
-        pen.poly({ { -0.24f, 0.46f }, { -0.46f, 0.46f }, { -0.46f, 0.24f } });
-    }
-
-} // namespace
-
-// Draws the icon's lines and shapes.
-static void drawIconShapes(MuiIcon icon, float x, float y, float size, float thickness, MuiColor color)
-{
-    Pen pen(x, y, size, thickness, color);
-
-    switch (icon) {
-    case MuiIcon::Menu:
-    case MuiIcon::FilterAll:
-        drawMenu(pen);
-        break;
-    case MuiIcon::QuickSave:
-        drawFloppy(pen, true);
-        break;
-    case MuiIcon::QuickLoad:
-        drawFloppy(pen, false);
-        break;
-    case MuiIcon::Inventory:
-        drawInventory(pen);
-        break;
-    case MuiIcon::Character:
-        drawCharacter(pen);
-        break;
-    case MuiIcon::Pipboy:
-        drawPipboy(pen);
-        break;
-    case MuiIcon::Map:
-        drawMap(pen);
-        break;
-    case MuiIcon::Skills:
-        drawSkills(pen);
-        break;
-    case MuiIcon::Highlight:
-        drawHighlight(pen);
-        break;
-    case MuiIcon::Sneak:
-        drawSneak(pen);
-        break;
-    case MuiIcon::Log:
-        drawLog(pen);
-        break;
-    case MuiIcon::EndTurn:
-        drawEndTurn(pen);
-        break;
-    case MuiIcon::EndCombat:
-        drawEndCombat(pen);
-        break;
-    case MuiIcon::SwapHands:
-        drawSwapHands(pen);
-        break;
-    case MuiIcon::ActionPoints:
-        drawActionPoints(pen);
-        break;
-    case MuiIcon::HitPoints:
-        drawHitPoints(pen);
-        break;
-    case MuiIcon::Aim:
-        drawAim(pen);
-        break;
-    case MuiIcon::Reload:
-        drawReload(pen);
-        break;
-    case MuiIcon::Fist:
-        drawFist(pen);
-        break;
-    case MuiIcon::Weight:
-        drawWeight(pen);
-        break;
-    case MuiIcon::Back:
-        drawBack(pen);
-        break;
-    case MuiIcon::Turn:
-        drawTurn(pen);
-        break;
-    case MuiIcon::PartyOrders:
-        drawPartyOrders(pen);
-        break;
-    case MuiIcon::TacticalView:
-        drawTacticalView(pen);
-        break;
-    case MuiIcon::Holster:
-        drawHolster(pen);
-        break;
-    case MuiIcon::Regroup:
-        drawCrossArrows(pen, true);
-        break;
-    case MuiIcon::Spread:
-        drawCrossArrows(pen, false);
-        break;
-    case MuiIcon::Burst:
-        drawBurst(pen);
-        break;
-    case MuiIcon::AutoLoot:
-        drawAutoLoot(pen);
-        break;
-    case MuiIcon::Lockpick:
-        drawLockpick(pen);
-        break;
-    case MuiIcon::Steal:
-        drawSteal(pen);
-        break;
-    case MuiIcon::Traps:
-        drawTraps(pen);
-        break;
-    case MuiIcon::Doctor:
-        drawDoctor(pen);
-        break;
-    case MuiIcon::Science:
-        drawScience(pen);
-        break;
-    case MuiIcon::Repair:
-        drawRepair(pen);
-        break;
-    case MuiIcon::Target:
-        drawTarget(pen);
-        break;
-    case MuiIcon::Talk:
-        drawTalk(pen);
-        break;
-    case MuiIcon::Barter:
-        drawBarter(pen);
-        break;
-    case MuiIcon::Review:
-        drawReview(pen);
-        break;
-    case MuiIcon::FilterWeapons:
-        drawWeapon(pen, 0.0f, 0.0f, 1.0f);
-        break;
-    case MuiIcon::FilterWeaponsAndAmmo:
-        drawWeapon(pen, -0.2f, 0.0f, 0.7f);
-        drawAmmo(pen, 0.38f, 0.0f, 0.6f);
-        break;
-    case MuiIcon::FilterArmor:
-        drawArmor(pen);
-        break;
-    case MuiIcon::FilterDrugs:
-        drawDrugs(pen);
-        break;
-    case MuiIcon::FilterAmmo:
-        drawAmmo(pen, 0.0f, 0.0f, 1.0f);
-        break;
-    case MuiIcon::FilterMisc:
-        drawMisc(pen);
-        break;
-    case MuiIcon::Cancel:
-        drawCancel(pen);
-        break;
-    case MuiIcon::Drop:
-        drawDrop(pen);
-        break;
-    case MuiIcon::Look:
-        drawEye(pen);
-        break;
-    case MuiIcon::Rotate:
-        drawRotate(pen);
-        break;
-    case MuiIcon::Use:
-        drawUse(pen);
-        break;
-    case MuiIcon::Unload:
-        drawUnload(pen);
-        break;
-    case MuiIcon::Push:
-        drawPush(pen);
-        break;
-    case MuiIcon::Plus:
-        drawPlus(pen);
-        break;
-    case MuiIcon::Minus:
-        drawMinus(pen);
-        break;
-    case MuiIcon::Edit:
-        drawEdit(pen);
-        break;
-    case MuiIcon::Play:
-        drawPlay(pen);
-        break;
-    case MuiIcon::Pause:
-        drawPause(pen);
-        break;
-    case MuiIcon::Stop:
-        drawStop(pen);
-        break;
-    case MuiIcon::Expand:
-        drawCorners(pen, true);
-        break;
-    case MuiIcon::Collapse:
-        drawCorners(pen, false);
-        break;
-    case MuiIcon::Count:
-        break;
-    }
-}
-
-namespace {
 
     // An icon drawn in white into a texture (alpha premultiplied), tinted
-    // when drawn. Icons are made of many lines and round joins; drawing them
-    // again every frame was most of the HUD's time.
+    // when drawn: rasterized once per size.
     struct IconTexture {
         SDL_Texture* texture = nullptr;
         int extent = 0;
     };
 
-    using IconKey = std::tuple<int, int, int>;
+    using IconKey = std::tuple<int, int>;
     std::map<IconKey, IconTexture> gIconTextures;
 
     // Sizes change during animations; the cache is dropped when it grows
     // past this.
     constexpr size_t kMaxIconTextures = 256;
 
-    const IconTexture* iconTexture(SDL_Renderer* renderer, MuiIcon icon, float size, float thickness)
+    const IconTexture* iconTexture(SDL_Renderer* renderer, MuiIcon icon, float size)
     {
-        IconKey key(static_cast<int>(icon), static_cast<int>(lroundf(size * 4.0f)), static_cast<int>(lroundf(thickness * 4.0f)));
+        IconKey key(static_cast<int>(icon), static_cast<int>(lroundf(size * 4.0f)));
         auto it = gIconTextures.find(key);
         if (it != gIconTextures.end()) {
             return it->second.texture != nullptr ? &(it->second) : nullptr;
@@ -893,28 +717,39 @@ namespace {
 
         IconTexture& entry = gIconTextures[key];
 
-        // Room for strokes and round joins sticking out of the icon square.
-        entry.extent = static_cast<int>(std::ceil(size + thickness * 2.0f)) + 4;
-        entry.texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, entry.extent, entry.extent);
+        // The whole grid with room for strokes sticking out of it.
+        float scale = size / kSizeUnits;
+        float halfWidth = kStroke * scale / 2.0f;
+        entry.extent = static_cast<int>(std::ceil(kGrid * scale + halfWidth * 2.0f)) + 4;
+        float origin = entry.extent / 2.0f - kGrid / 2.0f * scale;
+
+        const IconShapes& shapes = iconShapes(icon);
+        std::vector<std::vector<SDL_FPoint>> contours;
+        auto toPixels = [&](std::vector<SDL_FPoint> points) {
+            for (SDL_FPoint& point : points) {
+                point = { origin + point.x * scale, origin + point.y * scale };
+            }
+            return points;
+        };
+        for (const Polyline& line : shapes.strokes) {
+            addStroke(&contours, { toPixels(line.points), line.closed }, halfWidth);
+        }
+        for (const std::vector<SDL_FPoint>& fill : shapes.fills) {
+            addContour(&contours, toPixels(fill));
+        }
+
+        std::vector<unsigned char> coverage = muiRasterizeContours(contours, entry.extent, entry.extent);
+        std::vector<Uint32> pixels(coverage.size());
+        for (size_t index = 0; index < coverage.size(); index++) {
+            Uint32 value = coverage[index];
+            pixels[index] = (value << 24) | (value << 16) | (value << 8) | value;
+        }
+
+        entry.texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, entry.extent, entry.extent);
         if (entry.texture == nullptr) {
             return nullptr;
         }
-
-        SDL_Texture* previousTarget = SDL_GetRenderTarget(renderer);
-        if (SDL_SetRenderTarget(renderer, entry.texture) != 0) {
-            SDL_DestroyTexture(entry.texture);
-            entry.texture = nullptr;
-            return nullptr;
-        }
-
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-        SDL_RenderClear(renderer);
-        // White with alpha blended over transparent black is premultiplied.
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        float center = entry.extent / 2.0f;
-        drawIconShapes(icon, center, center, size, thickness, muiRgb(0xFFFFFF));
-        SDL_SetRenderTarget(renderer, previousTarget);
-
+        SDL_UpdateTexture(entry.texture, nullptr, pixels.data(), entry.extent * static_cast<int>(sizeof(Uint32)));
         SDL_SetTextureBlendMode(entry.texture, muiPremultipliedBlendMode());
         SDL_SetTextureScaleMode(entry.texture, SDL_ScaleModeNearest);
         return &entry;
@@ -922,20 +757,24 @@ namespace {
 
 } // namespace
 
-void muiDrawIcon(MuiIcon icon, float x, float y, float size, float thickness, MuiColor color)
+void muiDrawIcon(MuiIcon icon, float x, float y, float size, MuiColor color)
 {
     SDL_Renderer* renderer = muiDrawGetRenderer();
-    const IconTexture* entry = renderer != nullptr ? iconTexture(renderer, icon, size, thickness) : nullptr;
+    if (renderer == nullptr || icon == MuiIcon::Count || size <= 0.0f) {
+        return;
+    }
+
+    const IconTexture* entry = iconTexture(renderer, icon, size);
     if (entry == nullptr) {
-        drawIconShapes(icon, x, y, size, thickness, color);
         return;
     }
 
     // Premultiplied: the tint's alpha scales the color too.
+    color.a = static_cast<Uint8>(color.a * muiLayerAlpha());
     SDL_SetTextureColorMod(entry->texture, color.r * color.a / 255, color.g * color.a / 255, color.b * color.a / 255);
     SDL_SetTextureAlphaMod(entry->texture, color.a);
 
-    // Whole pixels keep the icon as sharp as drawn.
+    // Whole pixels keep the icon as sharp as rasterized.
     SDL_Rect dest = {
         static_cast<int>(lroundf(x - entry->extent / 2.0f)),
         static_cast<int>(lroundf(y - entry->extent / 2.0f)),

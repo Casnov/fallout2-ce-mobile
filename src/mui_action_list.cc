@@ -132,7 +132,7 @@ namespace {
             }
 
             MuiColor color = pressed ? theme.buttonText : (enabled ? theme.accent : theme.textDim);
-            muiDrawIcon(items[index].icon, row.x + padding + iconSize / 2.0f, row.centerY(), iconSize, ui.dp(1.7f), color.withAlpha(alpha));
+            muiDrawIcon(items[index].icon, row.x + padding + iconSize / 2.0f, row.centerY(), iconSize, color.withAlpha(alpha));
             MuiRect label = { row.x + padding + iconSize + padding, row.y, row.right() - row.x - padding * 3.0f - iconSize, row.h };
             muiDrawTextAligned(items[index].label, label, textSize, (pressed ? theme.buttonText : (enabled ? theme.text : theme.textDim)).withAlpha(alpha), MuiAlign::Start, MuiAlign::Center);
             if (!items[index].detail.empty()) {

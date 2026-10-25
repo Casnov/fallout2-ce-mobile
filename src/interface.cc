@@ -1542,6 +1542,57 @@ bool interfaceGetItemButtonInfo(InterfaceItemButtonInfo* info)
     return true;
 }
 
+bool interfaceGetHandInfo(Hand hand, InterfaceHandInfo* info)
+{
+    if (!gInterfaceBarCreated) {
+        return false;
+    }
+
+    InterfaceItemState* itemState = &(gInterfaceItemStates[hand]);
+    info->item = itemState->item;
+    info->itemFrmId = itemState->item != nullptr ? FrmId(itemState->itemFid) : FrmId();
+    info->attackFrmId = itemState->isWeapon != 0 ? interfaceGetHitModeFrmId(itemState->primaryHitMode) : InterfaceFrmId();
+    info->disabled = itemState->isDisabled != 0;
+    info->ammoQuantity = 0;
+    info->ammoCapacity = 0;
+    info->ammoPid = ProtoId();
+    if (itemState->item != nullptr && itemState->isWeapon != 0) {
+        info->ammoCapacity = std::max(ammoGetCapacity(itemState->item), 0);
+        if (info->ammoCapacity > 0) {
+            info->ammoQuantity = ammoGetQuantity(itemState->item);
+            info->ammoPid = weaponGetAmmoTypeProtoId(itemState->item);
+        }
+    }
+    return true;
+}
+
+int interfaceGetItemActionCost(InterfaceItemAction action)
+{
+    if (!gInterfaceBarCreated) {
+        return -1;
+    }
+
+    InterfaceItemState* itemState = &(gInterfaceItemStates[gInterfaceCurrentHand]);
+    if (itemState->isDisabled != 0) {
+        return -1;
+    }
+
+    switch (action) {
+    case INTERFACE_ITEM_ACTION_USE:
+        return itemState->isWeapon == 0 ? itemGetActionPointCost(gDude, itemState->primaryHitMode, false) : -1;
+    case INTERFACE_ITEM_ACTION_PRIMARY:
+    case INTERFACE_ITEM_ACTION_PRIMARY_AIMING:
+        return weaponGetActionPointCost(gDude, itemState->primaryHitMode, action == INTERFACE_ITEM_ACTION_PRIMARY_AIMING);
+    case INTERFACE_ITEM_ACTION_SECONDARY:
+    case INTERFACE_ITEM_ACTION_SECONDARY_AIMING:
+        return weaponGetActionPointCost(gDude, itemState->secondaryHitMode, action == INTERFACE_ITEM_ACTION_SECONDARY_AIMING);
+    case INTERFACE_ITEM_ACTION_RELOAD:
+        return itemGetActionPointCost(gDude, gInterfaceCurrentHand == HAND_LEFT ? HIT_MODE_LEFT_WEAPON_RELOAD : HIT_MODE_RIGHT_WEAPON_RELOAD, false);
+    default:
+        return -1;
+    }
+}
+
 bool interfaceGetCurrentItemAmmo(int* quantity, int* capacity)
 {
     if (!gInterfaceBarCreated) {
@@ -1593,6 +1644,52 @@ int interfaceCycleItemAction()
     return 0;
 }
 
+// The reload action of the current hand: in combat only with its AP, which
+// it spends.
+static void interfaceReloadSpendingActionPoints()
+{
+    if (isInCombat()) {
+        HitMode hitMode = gInterfaceCurrentHand == HAND_LEFT
+            ? HIT_MODE_LEFT_WEAPON_RELOAD
+            : HIT_MODE_RIGHT_WEAPON_RELOAD;
+
+        int actionPointsRequired = itemGetActionPointCost(gDude, hitMode, false);
+        if (actionPointsRequired <= gDude->data.critter.combat.ap) {
+            if (_intface_item_reload() == 0) {
+                if (actionPointsRequired > gDude->data.critter.combat.ap) {
+                    gDude->data.critter.combat.ap = 0;
+                } else {
+                    gDude->data.critter.combat.ap -= actionPointsRequired;
+                }
+                interfaceRenderActionPoints(gDude->data.critter.combat.ap, _combat_free_move);
+            }
+        }
+    } else {
+        _intface_item_reload();
+    }
+}
+
+void interfaceReloadCurrentWeapon()
+{
+    if (!gInterfaceBarCreated) {
+        return;
+    }
+
+    InterfaceItemState* itemState = &(gInterfaceItemStates[gInterfaceCurrentHand]);
+    if (itemState->isWeapon == 0 || !interfaceItemActionIsAvailable(itemState, INTERFACE_ITEM_ACTION_RELOAD)) {
+        return;
+    }
+
+    // Reloading cycles to the next action (the bar's way back from the
+    // reload action): the one chosen before comes back.
+    InterfaceItemAction chosen = itemState->action;
+    itemState->action = INTERFACE_ITEM_ACTION_RELOAD;
+    interfaceReloadSpendingActionPoints();
+    if (chosen != INTERFACE_ITEM_ACTION_RELOAD && !interfaceSetCurrentItemAction(chosen)) {
+        interfaceBarRefreshMainAction();
+    }
+}
+
 // 0x45F5EC intface_use_item
 void _intface_use_item()
 {
@@ -1604,25 +1701,7 @@ void _intface_use_item()
 
     if (ptr->isWeapon != 0) {
         if (ptr->action == INTERFACE_ITEM_ACTION_RELOAD) {
-            if (isInCombat()) {
-                HitMode hitMode = gInterfaceCurrentHand == HAND_LEFT
-                    ? HIT_MODE_LEFT_WEAPON_RELOAD
-                    : HIT_MODE_RIGHT_WEAPON_RELOAD;
-
-                int actionPointsRequired = itemGetActionPointCost(gDude, hitMode, false);
-                if (actionPointsRequired <= gDude->data.critter.combat.ap) {
-                    if (_intface_item_reload() == 0) {
-                        if (actionPointsRequired > gDude->data.critter.combat.ap) {
-                            gDude->data.critter.combat.ap = 0;
-                        } else {
-                            gDude->data.critter.combat.ap -= actionPointsRequired;
-                        }
-                        interfaceRenderActionPoints(gDude->data.critter.combat.ap, _combat_free_move);
-                    }
-                }
-            } else {
-                _intface_item_reload();
-            }
+            interfaceReloadSpendingActionPoints();
         } else {
             gameMouseSetCursor(MOUSE_CURSOR_CROSSHAIR);
             gameMouseSetMode(GAME_MOUSE_MODE_CROSSHAIR);
@@ -2651,7 +2730,7 @@ static int indicatorBarInit()
     }
 
     char path[COMPAT_MAX_PATH];
-    snprintf(path, sizeof(path), "%s%s", asc_5186C8, "intrface.msg");
+    snprintf(path, sizeof(path), "%s%s", gGameMsgPath, "intrface.msg");
 
     if (rc != -1) {
         if (!messageListLoad(&messageList, path)) {

@@ -37,6 +37,22 @@ constexpr bool muiIsEnabled() { return true; }
 bool muiIsEnabled();
 #endif
 
+// `[touch] windows`: game screens as windows on tablets (by the screen's
+// size), never, always.
+constexpr int kMuiWindowsAuto = 0;
+constexpr int kMuiWindowsNever = 1;
+constexpr int kMuiWindowsAlways = 2;
+
+// `[touch] layout`: game screens' layouts by the room (the roomy ones in
+// windows where they fit), the phone's, the roomy ones.
+constexpr int kMuiLayoutAuto = 0;
+constexpr int kMuiLayoutPhone = 1;
+constexpr int kMuiLayoutTablet = 2;
+
+// Game screens open as windows over the world instead of covering the
+// screen (`[touch] windows`).
+bool muiUsesWindows();
+
 struct MuiTheme {
     MuiColor dim;
     MuiColor panel;
@@ -109,12 +125,26 @@ public:
     // under it (a game screen the game shows over the map: the elevator).
     virtual bool hidesHud() { return false; }
 
+    // A game screen (inventory, character...): covers the screen on phones,
+    // a window over the world with windows (`muiUsesWindows`,
+    // `muiScreenFrame`). Switching between game screens holds the last frame
+    // until the next one shows (`muiHoldFrameForSwitch`).
+    virtual bool isGameScreen() { return false; }
+
     bool modal = true;
     bool finished = false;
 
     // Set when pushed, for appear animations.
     unsigned int openTime = 0;
+    // Fades in and out as a whole (`muiRunModal`'s windows), from
+    // [closeTime] on going away.
+    bool animated = false;
+    unsigned int closeTime = 0;
 };
+
+// Android's "Remove animations" (animator duration scale 0): screens and
+// notices appear and go at once.
+bool muiReduceMotion();
 
 class MuiContext {
 public:
@@ -130,8 +160,9 @@ public:
     // 0..1 progress of the screen's appear animation.
     float appear() const;
 
-    // Darkens everything below (for modal screens).
-    void dim();
+    // Darkens everything below (for modal screens), fading in as the
+    // screen opens unless [fadeIn] is off (it was dark already).
+    void dim(bool fadeIn = true);
 
     void panel(const MuiRect& rect);
 
@@ -153,9 +184,11 @@ public:
     // finger drag scrolls, a fling continues with inertia. Widgets inside
     // must use ids starting with "<id>." - they lose their press when the
     // finger starts scrolling. Returns scroll offset (0 - top of content).
-    float scroll(const std::string& id, const MuiRect& rect, float contentHeight);
+    // Content that doesn't fit gets the scroll marks (`drawScrollMarks`)
+    // unless [marks] is off (an area showing its own).
+    float scroll(const std::string& id, const MuiRect& rect, float contentHeight, bool marks = true);
     // The same sideways over content of [contentWidth] (0 - its left end).
-    float scrollHorizontal(const std::string& id, const MuiRect& rect, float contentWidth);
+    float scrollHorizontal(const std::string& id, const MuiRect& rect, float contentWidth, bool marks = true);
     void setScroll(const std::string& id, float offset);
     bool isScrolling(const std::string& id) const;
 
@@ -201,7 +234,12 @@ public:
     // "<id>.<index>"): a tap picks it. Returns true when [selected] changed.
     bool segmented(const std::string& id, const MuiRect& rect, const std::vector<std::u32string>& labels, int* selected);
 
-    float scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal);
+    float scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal, bool marks);
+
+    // Bars and edge fades of the areas scrolled since the last call: the
+    // bar beside the area (in its padding), the fades over its content;
+    // before `dim` and after each screen's build.
+    void drawScrollMarks();
 
     // Internal state, filled by mui.cc.
     float pixelsPerDp = 1.0f;
@@ -314,9 +352,14 @@ void muiMovieScreenRun();
 // Main menu (mui_main_menu.cc, mainmenu.cc): shown while the title menu is.
 // The tapped button is taken by the menu's loop as a `MainMenuOption`.
 void muiMainMenuShow();
-// It faded in: taps count from now (not ones made in the dark before).
-void muiMainMenuReady();
+
+// The title menu's picture (fit to the screen's height at its right edge,
+// its left part fading into black up to [fadeRight]) over black.
+void muiDrawTitleArt(MuiContext& ui, float fadeRight);
 void muiMainMenuHide();
+// In windows: the buttons fade out over the picture before a screen opens
+// over it (waits for it).
+void muiMainMenuLeave();
 // The button tapped since the last call, -1 - none.
 int muiMainMenuTakeChoice();
 
@@ -446,6 +489,13 @@ int muiShowDialogBox(const char* title, const char** body, int bodyLength, const
 // Automated tests: center of widget [id] of the last frame in normalized
 // screen coordinates.
 bool muiGetWidgetCenter(const char* id, float* x, float* y);
+
+// Automated tests: rect of widget [id] of the last frame, normalized.
+bool muiGetWidgetRect(const char* id, MuiRect* rect);
+
+// Mark of a game screen's window and its tabs: a tap outside closes it
+// (`muiScreenFrame`).
+constexpr const char* kMuiWindowTapArea = "window.tap_area";
 
 } // namespace fallout
 

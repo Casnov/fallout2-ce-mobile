@@ -1937,7 +1937,7 @@ static Object* gCalledShotCritter;
 static int gCalledShotWindow;
 
 // 0x56D378 combat_elev
-static int _combat_elev;
+static MapElevation _combat_elev;
 
 // 0x56D37C list_total
 static int _list_total;
@@ -2043,7 +2043,7 @@ int combatInit()
         return -1;
     }
 
-    snprintf(path, sizeof(path), "%s%s", asc_5186C8, "combat.msg");
+    snprintf(path, sizeof(path), "%s%s", gGameMsgPath, "combat.msg");
 
     if (!messageListLoad(&gCombatMessageList, path)) {
         return -1;

@@ -158,7 +158,7 @@ typedef struct LoadSaveSlotData {
     short gameDay;
     short gameYear;
     unsigned int gameTime;
-    short elevation;
+    MapElevation elevation;
     Map map;
     char fileName[16];
 } LoadSaveSlotData;
@@ -379,7 +379,7 @@ static bool loadSaveMessageListLoad()
     }
 
     char path[COMPAT_MAX_PATH];
-    snprintf(path, sizeof(path), "%s%s", asc_5186C8, LSGAME_MSG_NAME);
+    snprintf(path, sizeof(path), "%s%s", gGameMsgPath, LSGAME_MSG_NAME);
     if (!messageListLoad(&gLoadSaveMessageList, path)) {
         return false;
     }
@@ -1314,7 +1314,7 @@ int lsgLoadGame(int mode)
         }
 
         char path[COMPAT_MAX_PATH];
-        snprintf(path, sizeof(path), "%s\\%s", asc_5186C8, "LSGAME.MSG");
+        snprintf(path, sizeof(path), "%s\\%s", gGameMsgPath, "LSGAME.MSG");
         if (!messageListLoad(&gLoadSaveMessageList, path)) {
             return -1;
         }
@@ -1367,9 +1367,9 @@ int lsgLoadGame(int mode)
         if (rc == 1 && mode == LOAD_SAVE_MODE_FROM_MAIN_MENU) {
             // The title menu fades the game's indexed palette to black.
             // The classic picker restores it before play; the mobile picker
-            // returns here, so restore it after a successful load as well.
+            // returns here: the colors are loaded, the main menu's loop
+            // fades the world in once the curtain is gone.
             colorPaletteLoad("color.pal");
-            paletteFadeTo(_cmap);
         }
         return rc;
     }
@@ -1815,7 +1815,7 @@ static int lsgWindowInit(int windowType)
         return -1;
     }
 
-    snprintf(_str, sizeof(_str), "%s%s", asc_5186C8, LSGAME_MSG_NAME);
+    snprintf(_str, sizeof(_str), "%s%s", gGameMsgPath, LSGAME_MSG_NAME);
     if (!messageListLoad(&gLoadSaveMessageList, _str)) {
         return -1;
     }
@@ -2436,7 +2436,7 @@ static int lsgSaveHeaderInSlot(int slot)
     }
 
     ptr->elevation = gElevation;
-    if (fileWriteInt16(_flptr, ptr->elevation) == -1) {
+    if (fileWriteInt16Enum<MapElevation>(_flptr, ptr->elevation) == -1) {
         return -1;
     }
 
@@ -2536,7 +2536,7 @@ static int lsgLoadHeaderInSlot(int slot)
         return -1;
     }
 
-    if (fileReadInt16(_flptr, &(ptr->elevation)) == -1) {
+    if (fileReadInt16Enum<MapElevation>(_flptr, &(ptr->elevation)) == -1) {
         return -1;
     }
 
@@ -2876,10 +2876,9 @@ int lsgContinueGame()
     loadSaveMessageListReset();
 
     if (rc == 1) {
-        // As the load screen from the main menu: the title menu faded the
-        // palette to black.
+        // As the load screen from the main menu: the colors, faded in by the
+        // main menu's loop.
         colorPaletteLoad("color.pal");
-        paletteFadeTo(_cmap);
     }
     return rc;
 }

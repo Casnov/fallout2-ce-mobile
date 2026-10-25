@@ -61,12 +61,12 @@ struct roof_fill_task {
 };
 
 static void tileSetBorder(int windowWidth, int windowHeight, int hexGridWidth, int hexGridHeight);
-static void tileRefreshMapper(Rect* rect, int elevation);
-static void tileRefreshGame(Rect* rect, int elevation);
+static void tileRefreshMapper(Rect* rect, MapElevation elevation);
+static void tileRefreshGame(Rect* rect, MapElevation elevation);
 static void roof_fill_push_task_if_in_bounds(std::stack<roof_fill_task>& tasks_stack, int x, int y);
-static void roof_fill_off_process_task(std::stack<roof_fill_task>& tasks_stack, int elevation, bool on, Rect* changed);
+static void roof_fill_off_process_task(std::stack<roof_fill_task>& tasks_stack, MapElevation elevation, bool on, Rect* changed);
 static void tileRenderRoof(const TileFrmId& frmId, int x, int y, Rect* rect, int light);
-static void _draw_grid(int tile, int elevation, Rect* rect);
+static void _draw_grid(int tile, MapElevation elevation, Rect* rect);
 static void tileRenderFloor(const TileFrmId& frmId, int x, int y, Rect* rect);
 static int _tile_make_line(int currentCenterTile, int newCenterTile, int* tiles, int tilesCapacity);
 
@@ -299,7 +299,7 @@ void tileSetMapperOverlayProc(TileMapperOverlayProc* proc)
     gTileMapperOverlayProc = proc;
 }
 
-void tileMapperOverlayRender(unsigned char* buffer, int pitch, int elevation, const Rect* clip)
+void tileMapperOverlayRender(unsigned char* buffer, int pitch, MapElevation elevation, const Rect* clip)
 {
     if (gTileMapperOverlayProc != nullptr) {
         gTileMapperOverlayProc(buffer, pitch, elevation, clip);
@@ -608,7 +608,7 @@ void tileEndDeferredRefresh()
     gTileRefreshDeferred = false;
 }
 
-void tileWindowRefreshRect(Rect* rect, int elevation)
+void tileWindowRefreshRect(Rect* rect, MapElevation elevation)
 {
     if (gTileEnabled && gTileRefreshDeferred && elevation == gElevation) {
         tileDeferRefresh(*rect);
@@ -754,7 +754,7 @@ bool checkRectNeedsClear(const Rect* rect, bool hasVisArea, const Rect* visArea)
 
 // TODO: these two functions are exact copies of isoWindowRefreshRect*. gTileWindowBuffer == gIsoWindowBuffer, these are the same window!
 // 0x4B1554 refresh_mapper
-static void tileRefreshMapper(Rect* rect, int elevation)
+static void tileRefreshMapper(Rect* rect, MapElevation elevation)
 {
     Rect rectToUpdate;
 
@@ -807,7 +807,7 @@ static void tileRefreshMapper(Rect* rect, int elevation)
 }
 
 // 0x4B15E8 refresh_game
-static void tileRefreshGame(Rect* rect, int elevation)
+static void tileRefreshGame(Rect* rect, MapElevation elevation)
 {
     Rect rectToUpdate;
 
@@ -1253,7 +1253,7 @@ bool tileScrollLimitingIsEnabled()
 }
 
 // 0x4B1DC0 square_coord
-int squareTileToScreenXY(int squareTile, int* coordX, int* coordY, int elevation)
+int squareTileToScreenXY(int squareTile, int* coordX, int* coordY, MapElevation elevation)
 {
     *coordX = 0;
     *coordY = 0;
@@ -1280,7 +1280,7 @@ int squareTileToScreenXY(int squareTile, int* coordX, int* coordY, int elevation
 }
 
 // 0x4B1E60 square_coord_roof
-int squareTileToRoofScreenXY(int squareTile, int* screenX, int* screenY, int elevation)
+int squareTileToRoofScreenXY(int squareTile, int* screenX, int* screenY, MapElevation elevation)
 {
     int v5;
     int v6;
@@ -1316,7 +1316,7 @@ int squareTileToRoofScreenXY(int squareTile, int* screenX, int* screenY, int ele
 }
 
 // 0x4B1F04 square_num
-int squareTileFromScreenXY(int screenX, int screenY, int elevation)
+int squareTileFromScreenXY(int screenX, int screenY, MapElevation elevation)
 {
     int coordY;
     int coordX;
@@ -1331,7 +1331,7 @@ int squareTileFromScreenXY(int screenX, int screenY, int elevation)
 }
 
 // 0x4B1F94 square_xy
-void squareTileScreenToCoord(int screenX, int screenY, int elevation, int* coordX, int* coordY)
+void squareTileScreenToCoord(int screenX, int screenY, MapElevation elevation, int* coordX, int* coordY)
 {
     int v4;
     int v5;
@@ -1353,7 +1353,7 @@ void squareTileScreenToCoord(int screenX, int screenY, int elevation, int* coord
 }
 
 // 0x4B203C square_xy_roof
-void squareTileScreenToCoordRoof(int screenX, int screenY, int elevation, int* coordX, int* coordY)
+void squareTileScreenToCoordRoof(int screenX, int screenY, MapElevation elevation, int* coordX, int* coordY)
 {
     int v4;
     int v5;
@@ -1376,7 +1376,7 @@ void squareTileScreenToCoordRoof(int screenX, int screenY, int elevation, int* c
 }
 
 // 0x4B20E8 square_render_roof
-void tileRenderRoofsInRect(Rect* rect, int elevation)
+void tileRenderRoofsInRect(Rect* rect, MapElevation elevation)
 {
     if (!gTileRoofIsVisible) {
         return;
@@ -1443,7 +1443,7 @@ static void roof_fill_push_task_if_in_bounds(std::stack<roof_fill_task>& tasks_s
     };
 };
 
-static void roof_fill_off_process_task(std::stack<roof_fill_task>& tasks_stack, int elevation, bool on, Rect* changed)
+static void roof_fill_off_process_task(std::stack<roof_fill_task>& tasks_stack, MapElevation elevation, bool on, Rect* changed)
 {
     auto [x, y] = tasks_stack.top();
     tasks_stack.pop();
@@ -1505,7 +1505,7 @@ static void roof_fill_off_process_task(std::stack<roof_fill_task>& tasks_stack, 
 }
 
 // 0x4B23D4 tile_fill_roof
-void tile_fill_roof(int x, int y, int elevation, bool on, Rect* changed)
+void tile_fill_roof(int x, int y, MapElevation elevation, bool on, Rect* changed)
 {
     std::stack<roof_fill_task> tasks_stack;
 
@@ -1637,7 +1637,7 @@ static void tileRenderRoof(const TileFrmId& frmId, int x, int y, Rect* rect, int
 }
 
 // 0x4B2944 square_render_floor
-void tileRenderFloorsInRect(Rect* rect, int elevation)
+void tileRenderFloorsInRect(Rect* rect, MapElevation elevation)
 {
     int minY;
     int maxX;
@@ -1690,7 +1690,7 @@ void tileRenderFloorsInRect(Rect* rect, int elevation)
 }
 
 // Port of sfall HRP ViewMap::square_obj_render
-void tileRenderEdgeBlackSquares(Rect* rect, int elevation, bool drawOnTop)
+void tileRenderEdgeBlackSquares(Rect* rect, MapElevation elevation, bool drawOnTop)
 {
     if (!mapEdgeIsEnabled() || !mapEdgeHasSquareRect(elevation)) {
         return;
@@ -1738,7 +1738,7 @@ void tileRenderEdgeBlackSquares(Rect* rect, int elevation, bool drawOnTop)
 }
 
 // 0x4B2B10 square_roof_intersect
-bool _square_roof_intersect(int x, int y, int elevation)
+bool _square_roof_intersect(int x, int y, MapElevation elevation)
 {
     if (!gTileRoofIsVisible) {
         return false;
@@ -1783,7 +1783,7 @@ bool _square_roof_intersect(int x, int y, int elevation)
 }
 
 // 0x4B2E98 grid_render
-void _grid_render(Rect* rect, int elevation)
+void _grid_render(Rect* rect, MapElevation elevation)
 {
     if (!gTileGridIsVisible) {
         return;
@@ -1798,7 +1798,7 @@ void _grid_render(Rect* rect, int elevation)
 }
 
 // 0x4B2F4C draw_grid
-static void _draw_grid(int tile, int elevation, Rect* rect)
+static void _draw_grid(int tile, MapElevation elevation, Rect* rect)
 {
     if (tile == -1) {
         return;
@@ -1863,7 +1863,7 @@ static void tileRenderFloor(const TileFrmId& frmId, int x, int y, Rect* rect)
         return;
     }
 
-    int elev = gElevation;
+    MapElevation elev = gElevation;
     int left = rect->left;
     int top = rect->top;
     int width = rect->right - rect->left + 1;

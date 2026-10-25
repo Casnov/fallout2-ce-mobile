@@ -13,6 +13,8 @@
 
 namespace fallout {
 
+struct InventoryTextPart;
+
 // Parts shared by the mobile UI game screens (talk, barter, later loot and
 // inventory).
 
@@ -28,6 +30,40 @@ enum class MuiDialogTab {
 // Dialog screens' content area and the tab column at the right edge, the
 // same on every dialog screen.
 void muiDialogLayout(MuiContext& ui, MuiRect* content, MuiRect* tabs);
+
+// Where a game screen lays out. Phones: the safe area with the tab column at
+// the right edge (`muiDialogLayout`). With windows (`muiUsesWindows`): a
+// window centered over the dimmed world (smaller than the screen, the UI
+// size included), the tab column outside it at its top right, the window
+// moved left when the column doesn't fit next to it (4:3).
+struct MuiScreenFrame {
+    // The window (phones: the screen).
+    MuiRect window;
+    MuiRect content;
+    // Tab column (`muiGameScreenTabs`, `muiDialogTabs`).
+    MuiRect tabs;
+    bool windowed = false;
+    // A tap on the world outside the window and its tabs: the screen's Back.
+    bool tappedOutside = false;
+};
+
+// Lays out a game screen and draws its background: phones - [background]
+// over the screen; windows - the world (screens of the title menu: its
+// picture, [overTitle]) dimmed as under the game menu and the window's panel
+// of [background].
+MuiScreenFrame muiScreenFrame(MuiContext& ui, MuiColor background, bool overTitle = false);
+
+// The same layout, nothing drawn (`tappedOutside` not set).
+MuiScreenFrame muiScreenFrameLayout(MuiContext& ui);
+
+// Room for the screens' tall layouts (the tablet windows' mockups, 7"
+// tablets too) - in windows only; smaller areas and screens covering the
+// screen (phones) keep the compact ones.
+bool muiIsTallContent(MuiContext& ui, const MuiRect& content);
+
+// Tab column outside [rect] at its top right (screens with a card of their
+// own size, the elevator).
+MuiRect muiTabsBeside(MuiContext& ui, const MuiRect& rect);
 
 // Tab buttons in [column] (barter only when available), returns the tapped
 // tab or -1.
@@ -73,8 +109,9 @@ void muiDrawCostBadge(MuiContext& ui, const MuiRect& button, const std::u32strin
 // Sections inside one screen (settings): text buttons down [column] (ids
 // "<idPrefix>.<index>"), [selected] highlighted, [marked] ones with a dot
 // (changed). Returns the section tapped, else [selected]. Moving between
-// screens stays with the tab column at the right edge.
-int muiSectionList(MuiContext& ui, const std::string& idPrefix, const MuiRect& column, const std::vector<std::u32string>& labels, int selected, const std::vector<bool>& marked);
+// screens stays with the tab column at the right edge. [roomy] - the tablet
+// windows' sizes.
+int muiSectionList(MuiContext& ui, const std::string& idPrefix, const MuiRect& column, const std::vector<std::u32string>& labels, int selected, const std::vector<bool>& marked, bool roomy = false);
 
 // Where [map] / [elevation] is: "city · map" as the game names them (empty
 // for an unknown map).
@@ -171,12 +208,40 @@ std::vector<MuiListItem> muiInventoryItems(Object* owner, const MuiItemFilterSta
 // Total weight of the listed items.
 int muiItemsWeight(const std::vector<MuiListItem>& items);
 
+// The one item cell size of every screen's grid, px ([roomy] - the tablet
+// windows' tall layouts): grids take the column count keeping their cells
+// nearest it (`muiItemColumns`).
+float muiItemCellSize(MuiContext& ui, bool roomy);
+
+// Columns of [gap]-spaced cells across [width] nearest that size.
+int muiItemColumns(MuiContext& ui, float width, float gap, bool roomy);
+
+// What [owner] carries: critters - weight / carry weight ([over] when above
+// it), the rest - weight.
+std::u32string muiCarriedText(Object* owner, bool* over);
+
+// Containers' room as the game's inventory tells it: their items' size and
+// the capacity (`containerGetMaxSize`) - a volume, not a weight. False for
+// the rest (no limit).
+bool muiContainerVolume(Object* owner, int* used, int* capacity);
+
+// Weight above what can be carried.
+constexpr MuiColor kMuiOverLimit = muiRgb(0xFF4A3A);
+
+// A summary line (`InventoryTextPart`s) from [x, y] in [width]: labels
+// dim, values bright; a part goes on the next line where it doesn't fit
+// (one too long for a line wraps on its own), and with [labelOnNewLine]
+// every label after the first starts one. Returns the height; measures
+// only without [draw].
+float muiDrawTextParts(const std::vector<InventoryTextPart>& parts, float x, float y, float width, float lineHeight, float size, bool labelOnNewLine, bool draw);
+
 // Item cell without the count: frame and inventory art (crisp pixels).
 void muiDrawItemImage(MuiContext& ui, const MuiRect& rect, Object* item, bool pressed);
 
 // Item cell: `muiDrawItemImage` and how many of it [quantity] of its stack
-// are (`itemStackAmount`: ammo in rounds, always, as the game shows).
-void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed);
+// are (`itemStackAmount`: ammo in rounds, always, as the game shows), at the
+// top right [price] (barter: of one in the deal; < 0: not shown).
+void muiDrawItemCell(MuiContext& ui, const MuiRect& rect, Object* item, int quantity, bool pressed, int price = -1);
 
 // The dragged item under the finger: its cell ([quantity] of its stack) and,
 // above, its name with how many the least part that moves is (one, ammo's

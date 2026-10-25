@@ -6,6 +6,10 @@
 #include <deque>
 #include <vector>
 
+#ifdef __ANDROID__
+#include <jni.h>
+#endif
+
 #include "dev_autotest.h"
 #include "game.h"
 #include "game_charset.h"
@@ -52,6 +56,7 @@ namespace {
     std::u32string gTextInput;
 
     constexpr unsigned int kAppearDurationMs = 160;
+    constexpr unsigned int kCloseDurationMs = 120;
     constexpr const char* kDragActiveId = "#drag";
 
     enum class PointerEventType {
@@ -149,6 +154,17 @@ namespace {
     };
 
     std::unordered_map<std::string, ScrollState> gScrolls;
+
+    // Scroll areas whose content doesn't fit, waiting for their marks
+    // (`MuiContext::drawScrollMarks`).
+    struct ScrollMark {
+        MuiRect rect;
+        float contentSize;
+        float offset;
+        bool horizontal;
+    };
+
+    std::vector<ScrollMark> gScrollMarks;
 
     int gOutputWidth = 1;
     int gOutputHeight = 1;
@@ -294,6 +310,22 @@ bool muiIsEnabled()
 }
 #endif
 
+bool muiUsesWindows()
+{
+    if (!muiIsEnabled()) {
+        return false;
+    }
+
+    switch (settings.touch.windows) {
+    case kMuiWindowsNever:
+        return false;
+    case kMuiWindowsAlways:
+        return true;
+    default:
+        return hudIsTabletScreen();
+    }
+}
+
 const MuiTheme& muiTheme()
 {
     return kTheme;
@@ -301,18 +333,81 @@ const MuiTheme& muiTheme()
 
 float MuiContext::appear() const
 {
-    if (current == nullptr) {
+    if (current == nullptr || muiReduceMotion()) {
         return 1.0f;
+    }
+
+    // Going away: the same way back.
+    if (current->closeTime != 0) {
+        unsigned int elapsed = now - current->closeTime;
+        return 1.0f - std::min(static_cast<float>(elapsed) / kCloseDurationMs, 1.0f);
     }
 
     unsigned int elapsed = now - current->openTime;
     return std::min(static_cast<float>(elapsed) / kAppearDurationMs, 1.0f);
 }
 
-void MuiContext::dim()
+bool muiReduceMotion()
 {
+#ifdef __ANDROID__
+    // Asked once a second: the player may change it while playing.
+    static unsigned int checked = 0;
+    static bool reduce = false;
+    unsigned int now = SDL_GetTicks();
+    if (checked != 0 && now - checked < 1000) {
+        return reduce;
+    }
+    checked = now != 0 ? now : 1;
+
+    // Settings.Global.getFloat(activity.getContentResolver(),
+    // "animator_duration_scale", 1).
+    JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+    jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+    if (env == nullptr || activity == nullptr) {
+        return reduce;
+    }
+
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID getResolver = env->GetMethodID(activityClass, "getContentResolver", "()Landroid/content/ContentResolver;");
+    jclass globalClass = env->FindClass("android/provider/Settings$Global");
+    if (getResolver != nullptr && globalClass != nullptr) {
+        jmethodID getFloat = env->GetStaticMethodID(globalClass, "getFloat", "(Landroid/content/ContentResolver;Ljava/lang/String;F)F");
+        jobject resolver = env->CallObjectMethod(activity, getResolver);
+        jstring name = env->NewStringUTF("animator_duration_scale");
+        if (getFloat != nullptr && resolver != nullptr && name != nullptr) {
+            reduce = env->CallStaticFloatMethod(globalClass, getFloat, resolver, name, 1.0f) == 0.0f;
+        }
+        if (name != nullptr) {
+            env->DeleteLocalRef(name);
+        }
+        if (resolver != nullptr) {
+            env->DeleteLocalRef(resolver);
+        }
+    }
+
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    if (globalClass != nullptr) {
+        env->DeleteLocalRef(globalClass);
+    }
+    env->DeleteLocalRef(activityClass);
+    env->DeleteLocalRef(activity);
+    return reduce;
+#else
+    return false;
+#endif
+}
+
+void MuiContext::dim(bool fadeIn)
+{
+    // The scroll marks of what goes under the dim.
+    drawScrollMarks();
+
     MuiColor color = kTheme.dim;
-    color.a = static_cast<Uint8>(color.a * appear());
+    if (fadeIn) {
+        color.a = static_cast<Uint8>(color.a * appear());
+    }
     muiFillRect(screen, color);
 }
 
@@ -401,17 +496,17 @@ bool MuiContext::button(const std::string& id, const MuiRect& rect, const std::u
     return clicked;
 }
 
-float MuiContext::scroll(const std::string& id, const MuiRect& rect, float contentHeight)
+float MuiContext::scroll(const std::string& id, const MuiRect& rect, float contentHeight, bool marks)
 {
-    return scrollAlong(id, rect, contentHeight, false);
+    return scrollAlong(id, rect, contentHeight, false, marks);
 }
 
-float MuiContext::scrollHorizontal(const std::string& id, const MuiRect& rect, float contentWidth)
+float MuiContext::scrollHorizontal(const std::string& id, const MuiRect& rect, float contentWidth, bool marks)
 {
-    return scrollAlong(id, rect, contentWidth, true);
+    return scrollAlong(id, rect, contentWidth, true, marks);
 }
 
-float MuiContext::scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal)
+float MuiContext::scrollAlong(const std::string& id, const MuiRect& rect, float contentSize, bool horizontal, bool marks)
 {
     region(rect);
     gFrameWidgets[id] = rect;
@@ -482,7 +577,62 @@ float MuiContext::scrollAlong(const std::string& id, const MuiRect& rect, float 
         }
     }
 
+    if (marks && maxOffset > 0.0f) {
+        gScrollMarks.push_back({ rect, contentSize, state.offset, horizontal });
+    }
+
     return state.offset;
+}
+
+// Where the shown part is: a thin bar just past the far edge (its track and
+// thumb, in the area's padding, off its content), a light fade at each edge
+// with more content beyond. Drawn only, touches go to what is under them.
+void MuiContext::drawScrollMarks()
+{
+    for (const ScrollMark& mark : gScrollMarks) {
+        const MuiRect& rect = mark.rect;
+        float length = mark.horizontal ? rect.w : rect.h;
+        float maxOffset = mark.contentSize - length;
+        if (maxOffset <= 0.0f) {
+            continue;
+        }
+
+        float fade = std::min(dp(28.0f), length * 0.2f);
+        MuiColor clear = muiRgb(0x000000, 0);
+        MuiColor shade = muiRgb(0x000000, 120);
+        bool before = mark.offset > 0.5f;
+        bool after = mark.offset < maxOffset - 0.5f;
+        if (mark.horizontal) {
+            if (before) {
+                muiFillHorizontalGradient({ rect.x, rect.y, fade, rect.h }, shade, clear);
+            }
+            if (after) {
+                muiFillHorizontalGradient({ rect.right() - fade, rect.y, fade, rect.h }, clear, shade);
+            }
+        } else {
+            if (before) {
+                muiFillGradient({ rect.x, rect.y, rect.w, fade }, shade, shade, clear, clear);
+            }
+            if (after) {
+                muiFillGradient({ rect.x, rect.bottom() - fade, rect.w, fade }, clear, clear, shade, shade);
+            }
+        }
+
+        float thickness = dp(2.5f);
+        float inset = dp(3.0f);
+        float outside = dp(1.0f);
+        float thumbLength = std::max(length * length / mark.contentSize, dp(24.0f));
+        float position = (length - inset * 2.0f - thumbLength) * std::clamp(mark.offset / maxOffset, 0.0f, 1.0f);
+        MuiRect track = mark.horizontal
+            ? MuiRect { rect.x + inset, rect.bottom() + outside, rect.w - inset * 2.0f, thickness }
+            : MuiRect { rect.right() + outside, rect.y + inset, thickness, rect.h - inset * 2.0f };
+        MuiRect thumb = mark.horizontal
+            ? MuiRect { track.x + position, track.y, thumbLength, thickness }
+            : MuiRect { track.x, track.y + position, thickness, thumbLength };
+        muiFillRoundRect(track, thickness / 2.0f, kTheme.buttonBorder.withAlpha(60));
+        muiFillRoundRect(thumb, thickness / 2.0f, kTheme.accent.withAlpha(170));
+    }
+    gScrollMarks.clear();
 }
 
 void MuiContext::setScroll(const std::string& id, float offset)
@@ -771,6 +921,9 @@ void muiPush(MuiScreen* screen)
     muiRemove(screen);
     screen->finished = false;
     screen->openTime = SDL_GetTicks();
+    // A screen run before by `muiRunModal` and pushed again.
+    screen->animated = false;
+    screen->closeTime = 0;
     gScreens.push_back(screen);
 
     // New screen doesn't continue a touch that started below it.
@@ -841,11 +994,11 @@ bool muiHoldsFrame()
         }
     }
 
-    // Until the next screen covers everything.
+    // Until the next screen covers everything (or shows its window).
     if (gSwitchPending) {
         bool arrived = false;
         for (MuiScreen* screen : gScreens) {
-            if (screen != gSwitchFrom && screen->isActive() && screen->coversScreen()) {
+            if (screen != gSwitchFrom && screen->isActive() && (screen->coversScreen() || screen->isGameScreen())) {
                 arrived = true;
                 break;
             }
@@ -879,6 +1032,7 @@ bool muiHoldsFrame()
 void muiRunModal(MuiScreen* screen)
 {
     muiPush(screen);
+    screen->animated = true;
 
     while (!screen->finished) {
         sharedFpsLimiter.mark();
@@ -894,6 +1048,17 @@ void muiRunModal(MuiScreen* screen)
 
         renderPresent();
         sharedFpsLimiter.throttle();
+    }
+
+    // Fades out (not touchable) before it's gone.
+    if (!muiReduceMotion()) {
+        screen->closeTime = SDL_GetTicks();
+        while (SDL_GetTicks() - screen->closeTime < kCloseDurationMs) {
+            sharedFpsLimiter.mark();
+            inputGetInput();
+            renderPresent();
+            sharedFpsLimiter.throttle();
+        }
     }
 
     muiRemove(screen);
@@ -943,9 +1108,10 @@ void muiRender(SDL_Renderer* renderer)
         return;
     }
 
-    gPixelsPerDp = hudGetScreenDensity() * static_cast<float>(settings.touch.hud_scale) / 100.0f;
+    gPixelsPerDp = hudGetScreenDensity() * hudGetInterfaceScale();
 
     unsigned int now = SDL_GetTicks();
+    muiSceneFadeUpdate(now, muiReduceMotion(), muiCoversScreen());
     updateSafeRect(now);
     processEvents();
 
@@ -981,8 +1147,14 @@ void muiRender(SDL_Renderer* renderer)
             continue;
         }
         context.current = screen;
-        context.isInteractive = screen == top;
+        context.isInteractive = screen == top && screen->closeTime == 0;
+        // A window fading in or out as a whole.
+        if (screen->animated) {
+            muiSetLayerAlpha(context.appear());
+        }
         screen->build(context);
+        context.drawScrollMarks();
+        muiSetLayerAlpha(1.0f);
     }
 
     // Over every screen, not touchable.
@@ -1116,6 +1288,17 @@ bool muiGetWidgetCenter(const char* id, float* x, float* y)
 
     *x = it->second.centerX() / gOutputWidth;
     *y = it->second.centerY() / gOutputHeight;
+    return true;
+}
+
+bool muiGetWidgetRect(const char* id, MuiRect* rect)
+{
+    auto it = gWidgets.find(id);
+    if (it == gWidgets.end() || gOutputWidth <= 0 || gOutputHeight <= 0) {
+        return false;
+    }
+
+    *rect = { it->second.x / gOutputWidth, it->second.y / gOutputHeight, it->second.w / gOutputWidth, it->second.h / gOutputHeight };
     return true;
 }
 
