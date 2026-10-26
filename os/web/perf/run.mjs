@@ -93,7 +93,8 @@ async function waitFor(check, {timeout, every = 500, waiting}) {
   const until = Date.now() + timeout;
   let said = false;
   for (;;) {
-    const value = await check();
+    // A page reloading under the check (an app update) is not ready yet.
+    const value = await check().catch(() => null);
     if (value) return value;
     if (waiting && !said) { console.log(waiting); said = true; }
     if (Date.now() > until) throw new Error('Timed out: ' + (waiting || 'waiting'));
@@ -132,6 +133,14 @@ function markdown(report, extra) {
     lines.push(`| ${item.name} | ${fixed(item.ms)} | ${p.readwrite.count} | ${fixed(p.readwrite.ms)} (${fixed(p.readwrite.maxMs)}) | ${p.readonly.count} | ${fixed(p.readonly.ms)} (${fixed(p.readonly.maxMs)}) | ${p.digest.count} / ${fixed(p.digest.bytes / 1024)} KiB / ${fixed(p.digest.ms)} ms | ${p.longTasks.count}: ${fixed(p.longTasks.ms)} (${fixed(p.longTasks.maxMs)}) | ${p.audio.late} / ${p.audio.callbacks} | ${fixed(p.audio.maxGapMs)} |`);
   }
   lines.push('', 'RW/RO: IndexedDB transactions started in the phase, their summed duration and the longest one. Transaction time overlaps; it is not wall time.');
+  const calls = report.timeline.filter(item => Object.keys(report.phases[item.name]?.store ?? {}).length);
+  if (calls.length) {
+    lines.push('', '## User storage calls per phase', '', '| Phase | Calls |', '|---|---|');
+    for (const item of calls) {
+      const counts = Object.entries(report.phases[item.name].store).sort((a, b) => b[1] - a[1]);
+      lines.push(`| ${item.name} | ${counts.map(([name, count]) => `${name} ${count}`).join(', ')} |`);
+    }
+  }
   const audio = report.audio;
   lines.push('', '## Audio output', '');
   if (!audio) lines.push('No audio analysed (the game produced no audio callbacks).');
@@ -183,10 +192,15 @@ async function main() {
   try {
     await session.send('Page.navigate', {url:options.origin + '/index.html'});
     await waitFor(() => session.evaluate(`!!window.__webPerf && document.readyState === 'complete'`), {timeout:60000});
-    const ready = await waitFor(() => session.evaluate(`(() => {
+    // A new build reloads an idle launcher once it is installed: Play must
+    // not be pressed on the page that is about to go away.
+    const ready = await waitFor(() => session.evaluate(`(async () => {
       if (location.pathname.endsWith('/files.html')) return 'no-game';
       const play = document.getElementById('play');
-      return play && !play.hidden && !play.disabled ? 'ready' : null;
+      if (!play || play.hidden || play.disabled) return null;
+      const registration = await navigator.serviceWorker?.getRegistration();
+      await registration?.update().catch(() => {});
+      return registration?.installing || registration?.waiting ? null : 'ready';
     })()`), {timeout:5 * 60000, waiting:'Waiting for the launcher\'s Play button (turn the phone to landscape; an app update may reload it first)…'});
     if (ready === 'no-game') throw new Error('The app has no game installed at this address');
     if (options.adb) {

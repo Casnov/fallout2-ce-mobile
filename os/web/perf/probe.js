@@ -1,7 +1,7 @@
 // Injected by run.mjs before the launcher's own scripts; never part of the
 // app. Starts the engine's webperf autotest with the game and measures, per
-// phase (the autotest's marks): IndexedDB transactions, SHA-256 work, long
-// main-thread tasks and the audio output. run.mjs reads window.__webPerf over
+// phase (the autotest's marks): IndexedDB transactions, user storage calls,
+// SHA-256 work, long main-thread tasks and the audio output. run.mjs reads window.__webPerf over
 // the DevTools protocol. Expects createAudioAnalysisSource (audio-analysis.js).
 (() => {
   const ARGS = ['--dev-autotest=/tmp/webperf', '--dev-autotest-scenario=webperf', '--dev-skip-opening-movies'];
@@ -15,6 +15,7 @@
         readonly:{count:0, ms:0, maxMs:0, strict:0, failed:0},
         digest:{count:0, bytes:0, ms:0},
         longTasks:{count:0, ms:0, maxMs:0},
+        store:{},
         audio:{callbacks:0, late:0, maxGapMs:0, workMs:0, maxWorkMs:0},
       });
     }
@@ -96,6 +97,24 @@
         worker.postMessage({type:'block', samples, phase}, [samples.buffer]);
       }
     };
+  }, 250);
+
+  // Calls of the user store's methods, nested ones included (read inside
+  // seal): which storage operations the transactions come from. A save
+  // exchange reopens the store, so a new store object is wrapped again.
+  const wrapped = new WeakSet();
+  setInterval(() => {
+    const store = module?.UserIO?.backend?.store;
+    if (!store || wrapped.has(store)) return;
+    wrapped.add(store);
+    for (const [name, method] of Object.entries(store)) {
+      if (typeof method !== 'function' || name === 'close') continue;
+      store[name] = function(...args) {
+        const calls = bucket().store;
+        calls[name] = (calls[name] || 0) + 1;
+        return method.apply(this, args);
+      };
+    }
   }, 250);
 
   const readLog = () => {
