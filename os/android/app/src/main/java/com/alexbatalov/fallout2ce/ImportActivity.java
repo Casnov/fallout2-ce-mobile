@@ -94,21 +94,33 @@ public class ImportActivity extends Activity {
         return MODE_SAVES_IMPORT.equals(mode) || MODE_SAVES_EXPORT.equals(mode);
     }
 
-    // The mobile UI's font (PT Mono, in ce.dat which comes with the app).
+    // Match TouchSettings: Classic by default, PT Mono when the player chose it.
     private void applyFont(View view) {
+        boolean mono = false;
+        try {
+            File config = new File(getExternalFilesDir(null), "fallout2.cfg");
+            if (config.isFile()) {
+                mono = "1".equals(GameSaves.configValue(GameFiles.readText(config), "touch", "font"));
+            }
+        } catch (IOException ignored) {
+            // An absent/unreadable first-run config uses the game's default.
+        }
         Typeface font;
         try {
-            font = Typeface.createFromAsset(getAssets(), "ce.dat/fonts/PTM55FT.ttf");
+            font = Typeface.createFromAsset(getAssets(), "ce.dat/fonts/" + (mono ? "PTM55FT.ttf" : "FalloutClassicDialog.ttf"));
         } catch (RuntimeException e) {
             font = Typeface.MONOSPACE;
         }
+        applyFont(view, font);
+    }
 
+    private void applyFont(View view, Typeface font) {
         if (view instanceof TextView) {
             ((TextView) view).setTypeface(font);
         } else if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int index = 0; index < group.getChildCount(); index++) {
-                applyFont(group.getChildAt(index));
+                applyFont(group.getChildAt(index), font);
             }
         }
     }
