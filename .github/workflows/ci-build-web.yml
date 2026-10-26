@@ -1,8 +1,4 @@
-name: Build webassembly version
-
-# The port: only builds the engine with Emscripten (does the code compile
-# for the browser). Upstream's web launcher and its GitHub Pages deploy are
-# not used by the port.
+name: Build mobile web app
 
 on:
   push:
@@ -22,24 +18,56 @@ permissions:
 
 jobs:
   build_webassembly_version:
-    name: Build webassembly version
+    name: Build mobile web app
     runs-on: ubuntu-latest
     steps:
       - name: Clone
         uses: actions/checkout@v4
 
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install SDL2 for audio conversion checks
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+
+      - name: Node for storage tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install storage test dependency
+        # Node's Web Locks implementation exercises actual exclusive leases.
+        run: npm ci --prefix os/web --ignore-scripts --no-audit --no-fund
+
+      - name: Test browser integration and local development server
+        run: |
+          python -m unittest discover -s os/web -p 'test_*.py'
+          node --test os/web/test_*.mjs
+
       - name: Install Emscripten SDK
         run: |
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd emsdk
-          ./emsdk install 4.0.4
-          ./emsdk activate 4.0.4
+          mkdir -p out/web
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git out/web/emsdk
+          WEB_EMSCRIPTEN_VERSION="$(cat os/web/emscripten-version.txt)"
+          python out/web/emsdk/emsdk.py install "$WEB_EMSCRIPTEN_VERSION"
+          python out/web/emsdk/emsdk.py activate "$WEB_EMSCRIPTEN_VERSION"
 
-      - name: Build fallout2 wasm module
+      - name: Build engine and package current ce.dat
+        run: python os/web/build.py --emsdk out/web/emsdk --jobs 4
+
+      - name: Test asynchronous engine shutdown
         run: |
-          source emsdk/emsdk_env.sh
-          git config --global --add safe.directory "*"
-          mkdir -p build
-          cd build
-          emcmake cmake ../ -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain/Emscripten.cmake -DCMAKE_BUILD_TYPE=Release && emmake make VERBOSE=1 -j 4
-          cd ..
+          python os/web/test_lifecycle.py
+          python os/web/test_storage_runtime.py
+          python os/web/test_user_saves.py
+          node --test os/web/test_save_streams.mjs
+
+      - name: Upload static app
+        uses: actions/upload-artifact@v4
+        with:
+          name: fallout2-ce-mobile-web
+          path: out/web/dist/
+          if-no-files-found: error
+          retention-days: 7

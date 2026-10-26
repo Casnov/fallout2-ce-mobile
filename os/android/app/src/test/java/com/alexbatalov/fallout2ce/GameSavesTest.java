@@ -120,6 +120,36 @@ public class GameSavesTest {
     }
 
     @Test
+    public void webExportIsImportedAndExportedByAndroid() throws IOException {
+        File root = new File(System.getProperty("user.dir"));
+        while (root != null && !new File(root, "os/web/fixtures/web-exchange.zip").isFile()) {
+            root = root.getParentFile();
+        }
+        assertTrue("web synthetic fixture is available", root != null);
+        byte[] exported = java.nio.file.Files.readAllBytes(new File(root, "os/web/fixtures/web-exchange.zip").toPath());
+        GameFilesTest.MemorySource source = unzip(exported);
+        GameSaves.Found found = GameSaves.find(source, game, "mods/rpu.dat=0123:L", "", COMPARER);
+        assertEquals(1, found.saves.size());
+        assertEquals("mods/rpu.dat=0123:L", found.saves.get(0).record.composition);
+        assertEquals(123L, found.saves.get(0).record.created);
+        GameSaves.apply(source, GameSaves.plan(found, game, false), game, records, NO_PROGRESS);
+        File payload = new File(GameSaves.savesFolder(game), "SLOT01/SAVE.DAT");
+        assertTrue(payload.isFile());
+        assertTrue(Arrays.equals(source.files.get("SAVEGAME/SLOT01/SAVE.DAT"), java.nio.file.Files.readAllBytes(payload.toPath())));
+        ByteArrayOutputStream roundtrip = new ByteArrayOutputStream();
+        assertEquals(1, GameSaves.export(game, records, "mods/rpu.dat=0123:L", roundtrip, NO_PROGRESS));
+        GameSaves.Found reopened = GameSaves.find(unzip(roundtrip.toByteArray()), game, "mods/rpu.dat=0123:L", "", COMPARER);
+        assertEquals(1, reopened.saves.size());
+        assertTrue(reopened.saves.get(0).duplicate);
+        assertEquals(GameSaves.SAME, reopened.saves.get(0).level);
+        File artifact = new File(root, "out/web/iphone-test/stage6-android-exchange.zip");
+        artifact.getParentFile().mkdirs();
+        try (FileOutputStream output = new FileOutputStream(artifact)) {
+            output.write(roundtrip.toByteArray());
+        }
+    }
+
+    @Test
     public void identityIsTheEngines() {
         // src/save_records.cc: FNV-1a 64 of the first 4 KB, then the size.
         byte[] data = "abc".getBytes(StandardCharsets.ISO_8859_1);
