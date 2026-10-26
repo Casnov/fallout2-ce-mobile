@@ -33,6 +33,10 @@
 
 #include <SDL.h>
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 #ifdef __ANDROID__
 #include <jni.h>
 #endif
@@ -321,43 +325,65 @@ namespace {
     // Sets [values] as the game's window's Done does, then this port's and
     // CE's settings; all written to fallout2.cfg. Asked first
     // (`confirmApply`).
-    void applyValues(const Values& values)
+    bool applyValues(const Values& values)
     {
+        const Values previous = currentValues();
+#ifdef __EMSCRIPTEN__
+        const int previousSession = lsgSessionLoadSlot();
+        const bool persistQuickRange = false; // The final settings commit owns the whole Apply.
+#else
+        const bool persistQuickRange = true;
+#endif
         // The saves rearranged first: the setting is written only when they
         // are (`lsgSetQuickSaveCount`).
-        if (values.quickSaves != lsgQuickSaveCount() && !lsgSetQuickSaveCount(values.quickSaves)) {
+        if (values.quickSaves != lsgQuickSaveCount() && !lsgSetQuickSaveCount(values.quickSaves, persistQuickRange)) {
             soundPlayFile("iisxxxx1");
             const char* body[] = { muiText(kTextQuickSavesFailed, "Could not rearrange the quick saves, their number stays.") };
             showDialogBox(muiText(kTextQuickSaves, "Quick saves"), body, 1, 0, 0, COLOR_AMBER, nullptr, COLOR_AMBER, 0);
+#ifdef __EMSCRIPTEN__
+            return false;
+#endif
         }
 
-        settings.enhancements.combat_speed_all_animations = values.allAnimations;
-        settings.enhancements.main_menu_continue = values.mainMenuContinue;
-        settings.enhancements.worldmap_follow_party = values.worldmapFollow;
-        settings.enhancements.tactical_view = values.tacticalView;
-        settings.enhancements.save_compatibility = values.saveCompatibility;
-        settings.enhancements.barter_unit_price = values.barterUnitPrice;
-        settings.touch.hud_scale = values.interfaceSize;
-        settings.touch.windows = values.windows;
-        settings.touch.layout = values.layout;
-        settings.touch.windows_tap_outside = values.windowsTapOutside;
-        // The text is made again in it (`muiTextWidth`, `muiDrawText`).
-        settings.touch.font = values.font;
-        settings.world_view.filter = values.mapFilter;
-        worldViewSetFilter(values.mapFilter);
-        settings.qol.auto_open_doors = values.autoOpenDoors;
-        settings.qol.walk_when_sneaking = values.walkWhenSneaking;
-        settings.qol.fast_ammo_load = values.fastAmmoLoad;
-        settings.qol.party_trade_from_menu = values.partyTradeFromMenu;
-        settings.qol.party_loot_and_barter = values.partyLootAndBarter;
-        settings.ui.party_member_extra_info = values.partyMemberExtraInfo;
-        // Both read when shown (the karma message, the damage line), so they
-        // apply at once.
-        settings.ui.display_karma_changes = values.karmaChanges;
-        settings.ui.display_bonus_damage = values.bonusDamage;
+        const auto applyPort = [](const Values& values) {
+            settings.enhancements.combat_speed_all_animations = values.allAnimations;
+            settings.enhancements.main_menu_continue = values.mainMenuContinue;
+            settings.enhancements.worldmap_follow_party = values.worldmapFollow;
+            settings.enhancements.tactical_view = values.tacticalView;
+            settings.enhancements.save_compatibility = values.saveCompatibility;
+            settings.enhancements.barter_unit_price = values.barterUnitPrice;
+            settings.touch.hud_scale = values.interfaceSize;
+            settings.touch.windows = values.windows;
+            settings.touch.layout = values.layout;
+            settings.touch.windows_tap_outside = values.windowsTapOutside;
+            // The text is made again in it (`muiTextWidth`, `muiDrawText`).
+            settings.touch.font = values.font;
+            settings.world_view.filter = values.mapFilter;
+            worldViewSetFilter(values.mapFilter);
+            settings.qol.auto_open_doors = values.autoOpenDoors;
+            settings.qol.walk_when_sneaking = values.walkWhenSneaking;
+            settings.qol.fast_ammo_load = values.fastAmmoLoad;
+            settings.qol.party_trade_from_menu = values.partyTradeFromMenu;
+            settings.qol.party_loot_and_barter = values.partyLootAndBarter;
+            settings.ui.party_member_extra_info = values.partyMemberExtraInfo;
+            // Both read when shown (the karma message, the damage line), so they
+            // apply at once.
+            settings.ui.display_karma_changes = values.karmaChanges;
+            settings.ui.display_bonus_damage = values.bonusDamage;
+        };
+        applyPort(values);
 
         // Writes the settings file too.
-        preferencesApply(values.preferences);
+        if (!preferencesApply(values.preferences)) {
+            applyPort(previous);
+#ifdef __EMSCRIPTEN__
+            if (previous.quickSaves != values.quickSaves) lsgWebRestoreQuickRange(previous.quickSaves, previousSession);
+#endif
+            settingsWriteToConfig();
+            muiNotify(muiText(433, "Could not save this setting."), MuiNoticeKind::Warning);
+            return false;
+        }
+        return true;
     }
 
     enum class Section {
@@ -386,7 +412,7 @@ namespace {
     // work); elsewhere for automated tests only.
     bool gameFilesAvailable()
     {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
         return true;
 #else
         return devAutotestIsEnabled();
@@ -417,6 +443,9 @@ namespace {
         }
         env->DeleteLocalRef(activityClass);
         env->DeleteLocalRef(activity);
+#elif defined(__EMSCRIPTEN__)
+        webOpenGameFiles(mode);
+        _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
 #else
         debugPrint("game files: %s\n", mode != nullptr ? mode : "replace game");
 #endif
@@ -1179,6 +1208,24 @@ namespace {
             return;
         }
 
+#ifdef __EMSCRIPTEN__
+        // Like Android's activity, the browser overlay waits over this live
+        // preferences screen. Asyncify pauses the engine until the user store
+        // has been handed back and all filesystem caches have been refreshed.
+        if (action == FilesAction::ImportSaves || action == FilesAction::ExportSaves) {
+            // Keep un-applied edits in this screen, just as Android does.
+            // Exchange operates on the committed library and actual settings.
+            webExchangeSaves(action == FilesAction::ImportSaves ? "saves_import" : "saves_export");
+            inputEventQueueReset();
+            // Rotation/browser chrome may have resized SDL behind the overlay.
+            // The input reset discarded those events too; apply the current
+            // output mapping before rendering this retained screen again.
+            handleWindowSizeChanged();
+            lsgMobileSavesMayHaveChanged();
+            return;
+        }
+#endif
+
         // The saves' import and export: the app's screen over the game (it
         // waits behind, paused; reads the saves again when back).
         if (action == FilesAction::ImportSaves) {
@@ -1192,14 +1239,20 @@ namespace {
 
         // Replacing the game: its files can't change under it - it closes
         // (said first) and starts again after.
-        const char* body[] = { inGame ? muiText(kTextCloseGameInGame, "The game closes for this and opens again after. Progress since the last save will be lost.")
-                                      : muiText(kTextCloseGameMenu, "The game closes for this and opens again after.") };
-        if (showDialogBox(muiText(kTextCloseGameTitle, "Close the game?"), body, 1, 0, 0, COLOR_AMBER, nullptr, COLOR_AMBER, DIALOG_BOX_YES_NO) == 0) {
-            return;
+        bool warnBeforeClosing = true;
+#ifdef __EMSCRIPTEN__
+        warnBeforeClosing = inGame;
+#endif
+        if (warnBeforeClosing) {
+            const char* body[] = { inGame ? muiText(kTextCloseGameInGame, "The game closes for this and opens again after. Progress since the last save will be lost.")
+                                          : muiText(kTextCloseGameMenu, "The game closes for this and opens again after.") };
+            if (showDialogBox(muiText(kTextCloseGameTitle, "Close the game?"), body, 1, 0, 0, COLOR_AMBER, nullptr, COLOR_AMBER, DIALOG_BOX_YES_NO) == 0) {
+                return;
+            }
         }
         // Settings changed here are kept.
         if (anyChanged() && confirmApply(edited, false)) {
-            applyValues(edited);
+            if (!applyValues(edited)) return;
         }
         openGameFiles(nullptr);
     }
@@ -1457,16 +1510,17 @@ namespace {
         if (pendingApply) {
             pendingApply = false;
             if (confirmApply(edited, false)) {
-                applyValues(edited);
-                applied = currentValues();
-                edited = applied;
+                if (applyValues(edited)) {
+                    applied = currentValues();
+                    edited = applied;
+                }
             }
         }
 
         if (pendingBack) {
             pendingBack = false;
             if (confirmApply(edited, true)) {
-                applyValues(edited);
+                if (!applyValues(edited)) return;
             } else {
                 // Volumes and brightness as they were.
                 preferencesPreview(applied.preferences);

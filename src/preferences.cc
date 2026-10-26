@@ -862,7 +862,7 @@ int _SavePrefs(bool save)
     settings.preferences.mouse_sensitivity = gPreferencesMouseSensitivity1;
 
     if (save) {
-        settingsSave();
+        if (!settingsSave()) return -1;
     }
 
     return 0;
@@ -960,14 +960,20 @@ void preferencesPreview(const PreferenceValues& values)
     colorSetBrightness(values.brightness);
 }
 
-void preferencesApply(const PreferenceValues& values)
+bool preferencesApply(const PreferenceValues& values)
 {
+    PreferenceValues previous = preferencesGetValues();
     preferencesSetValues(values);
 
     // As the window closing after a change (`preferencesWindowFree`).
-    _SavePrefs(1);
+    bool saved = _SavePrefs(1) == 0;
+    if (!saved) {
+        preferencesSetValues(previous);
+        _SavePrefs(false);
+    }
     _JustUpdate_();
     _combat_highlight_change();
+    return saved;
 }
 
 void preferencesPlaySoundEffectSample()

@@ -45,6 +45,9 @@ public:
     bool put(int slot, const std::string& identity, const SaveRecord& record);
     // Forgets [slot]'s, writes the file when there was one.
     bool remove(int slot);
+    // Sticky until reload: a whole web checkpoint cannot report success after
+    // an ignored record-file error in one of the catalog's sub-operations.
+    bool writesSucceeded() const { return writesSucceeded_; }
 
     // Records by slot (identity, record), to go through.
     const std::map<int, std::pair<std::string, SaveRecord>>& all() const { return records; }
@@ -52,6 +55,7 @@ public:
 private:
     std::string filePath;
     bool fileIsNew = false;
+    bool writesSucceeded_ = true;
     std::map<int, std::pair<std::string, SaveRecord>> records;
 
     bool write();

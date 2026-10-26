@@ -20,6 +20,11 @@ typedef enum LoadSaveMode {
 } LoadSaveMode;
 
 void _InitLoadSave();
+#ifdef __EMSCRIPTEN__
+// Commit the complete user operation, or restore the last durable user state.
+bool lsgWebCommitUserChanges(bool prepared, int previousSession = -1);
+void lsgWebRestoreQuickRange(int previousCount, int previousSession);
+#endif
 void _ResetLoadSave();
 int lsgSaveGame(int mode);
 // CE: Saves to [slot] (0-based) with [description] without the save window,
@@ -92,7 +97,7 @@ int lsgQuickSavesOverCount(int count);
 // with the saves moved so none is lost (`SaveCatalog::setQuickRange`), and
 // the setting (written by the caller with the settings file). False - a
 // move failed, the number stays.
-bool lsgSetQuickSaveCount(int count);
+bool lsgSetQuickSaveCount(int count, bool persist = true);
 // Slot quick load loads (the last save loaded or made in this session), -1.
 int lsgSessionLoadSlot();
 

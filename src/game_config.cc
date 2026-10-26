@@ -18,7 +18,7 @@
 #include "scan_unimplemented.h"
 
 #if defined(__EMSCRIPTEN__)
-#include <emscripten.h>
+#include "loadsave.h"
 #endif
 
 namespace fallout {
@@ -173,14 +173,6 @@ bool gameConfigInit(bool isMapper, int argc, char** argv)
     return true;
 }
 
-#if defined(__EMSCRIPTEN__)
-// clang-format off
-EM_ASYNC_JS(void, do_save_idbfs_gameconfig, (), {
-    await new Promise((resolve, reject) => FS.syncfs(err => err ? reject(err) : resolve()))
-});
-// clang-format on
-#endif
-
 // Saves game config into the active config file.
 //
 // 0x444C14 gconfig_save
@@ -210,11 +202,14 @@ bool gameConfigSave()
     }
 
     if (!configWriteEx(savedConfig.get(), gGameConfigFilePath, CONFIG_RETAIN_ALL)) {
+#ifdef __EMSCRIPTEN__
+        lsgWebCommitUserChanges(false);
+#endif
         return false;
     }
 
 #if defined(__EMSCRIPTEN__)
-    do_save_idbfs_gameconfig();
+    return lsgWebCommitUserChanges(true);
 #endif
 
     return true;
