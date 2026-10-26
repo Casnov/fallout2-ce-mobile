@@ -32,6 +32,10 @@ EM_ASYNC_JS(int, webExchangeSavesJs, (const char* mode), {
         return 0;
     }
 });
+EM_JS(void, webPerfMarkJs, (const char* name), {
+    Module['webPerfMark']?.(UTF8ToString(name));
+});
+
 EM_JS(int, webViewportWidthJs, (), {
     return Math.max(1, Math.round(Module['canvas'].getBoundingClientRect().width || innerWidth));
 });
@@ -99,6 +103,11 @@ void webOpenGameFiles(const char* mode)
 bool webExchangeSaves(const char* mode)
 {
     return webExchangeSavesJs(mode) != 0;
+}
+
+void webPerfMark(const char* name)
+{
+    webPerfMarkJs(name);
 }
 
 int webViewportWidth()

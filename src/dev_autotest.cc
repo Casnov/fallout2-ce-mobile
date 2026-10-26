@@ -71,6 +71,10 @@
 #include "world_view.h"
 #include "worldmap.h"
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 namespace fallout {
 
 void (*gDevAutotestInvenWieldObserver)(Object* critter, Object* item, int isWield, int isRemove) = nullptr;
@@ -469,6 +473,12 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_UPDATE_STATE,
     // Number of installer requests; closing an update window revokes intent.
     DEV_AUTOTEST_ACTION_CHECK_UPDATE_INSTALLS,
+    // Notes [widget] with the time, also for the browser page's own
+    // measurements (os/web/perf).
+    DEV_AUTOTEST_ACTION_MARK,
+    // [a] rounds of timed saving to a free manual slot, saving over it,
+    // loading it and deleting it again: never one of the player's saves.
+    DEV_AUTOTEST_ACTION_SAVE_LOAD_TIMING,
 };
 
 struct DevAutotestStep {
@@ -1106,6 +1116,35 @@ static Object* gDevAutotestPlacedItem = nullptr;
 
 // Trace scenarios: the items' state is logged after every step.
 static bool gDevAutotestTraceItems = false;
+
+// Performance scenarios save no frames: encoding them would be measured.
+static bool gDevAutotestCaptures = true;
+
+// The browser's performance run (os/web/perf): the player's newest save is
+// continued and played with its music, then timed saves and loads use a free
+// slot that is deleted again.
+static const DevAutotestStep kDevAutotestWebPerfSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "w00_menu" },
+    { DEV_AUTOTEST_ACTION_MARK, 0, 0, 0, 0, "w01_mark", "continue" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 1, "w02_continue", "mainmenu.continue" },
+    { DEV_AUTOTEST_ACTION_WAIT_MAP_LOADED, 600, 0, 0, 0, "w03_map" },
+    { DEV_AUTOTEST_ACTION_MARK, 0, 0, 0, 0, "w04_mark", "idle" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 1200, "w05_idle" },
+    { DEV_AUTOTEST_ACTION_MARK, 0, 0, 0, 0, "w06_mark", "walk" },
+    { DEV_AUTOTEST_ACTION_WALK, 8, 0, 0, 150, "w07_walk" },
+    { DEV_AUTOTEST_ACTION_SAVE_LOAD_TIMING, 3, 0, 0, 0, "w08_saves" },
+    { DEV_AUTOTEST_ACTION_MARK, 0, 0, 0, 0, "w09_mark", "after-saves" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 1200, "w10_after" },
+    { DEV_AUTOTEST_ACTION_MARK, 0, 0, 0, 0, "w11_mark", "end" },
+};
+
+static void devAutotestMark(const char* name)
+{
+    devAutotestLog("  mark %s at %u ms\n", name, getTicks());
+#ifdef __EMSCRIPTEN__
+    webPerfMark(name);
+#endif
+}
 
 // Windows there were at the first LOG_NEW_WINDOWS.
 static std::set<int> gDevAutotestStartWindows;
@@ -3301,6 +3340,10 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "hud") == 0) {
         gDevAutotestSteps = kDevAutotestHudSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestHudSteps) / sizeof(kDevAutotestHudSteps[0]);
+    } else if (strcmp(name, "webperf") == 0) {
+        gDevAutotestSteps = kDevAutotestWebPerfSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestWebPerfSteps) / sizeof(kDevAutotestWebPerfSteps[0]);
+        gDevAutotestCaptures = false;
     }
 }
 
@@ -4457,6 +4500,45 @@ void devAutotestTick()
                 dudeSetName(step->widget);
             }
             break;
+        case DEV_AUTOTEST_ACTION_MARK:
+            devAutotestMark(step->widget);
+            break;
+        case DEV_AUTOTEST_ACTION_SAVE_LOAD_TIMING: {
+            int slot = lsgFindFreeManualSlot();
+            if (slot == -1) {
+                devAutotestLog("FAIL: no free manual slot\n");
+                exit(EXIT_FAILURE);
+            }
+            for (int round = 1; round <= static_cast<int>(step->a); round++) {
+                unsigned int times[4];
+                bool ok[4];
+                devAutotestMark("save");
+                unsigned int start = getTicks();
+                ok[0] = lsgSaveGameToSlot(slot, "AUTOTEST") != -1;
+                times[0] = getTicksSince(start);
+                devAutotestMark("overwrite");
+                start = getTicks();
+                ok[1] = ok[0] && lsgSaveGameToSlot(slot, "AUTOTEST") != -1;
+                times[1] = getTicksSince(start);
+                devAutotestMark("load");
+                start = getTicks();
+                ok[2] = ok[1] && lsgLoadGameFromSlot(slot) != -1;
+                times[2] = getTicksSince(start);
+                devAutotestMark("delete");
+                start = getTicks();
+                ok[3] = lsgMobileDeleteSlot(slot);
+                times[3] = getTicksSince(start);
+                devAutotestMark("round-end");
+                devAutotestLog("  round %d in slot %d: save %u ms%s, overwrite %u ms%s, load %u ms%s, delete %u ms%s\n",
+                    round, slot + 1,
+                    times[0], ok[0] ? "" : " FAIL", times[1], ok[1] ? "" : " FAIL",
+                    times[2], ok[2] ? "" : " FAIL", times[3], ok[3] ? "" : " FAIL");
+                if (!(ok[0] && ok[1] && ok[2] && ok[3])) {
+                    exit(EXIT_FAILURE);
+                }
+            }
+            break;
+        }
         case DEV_AUTOTEST_ACTION_LOAD_GAME: {
             int rc = lsgLoadGameFromSlot(static_cast<int>(step->a));
             devAutotestLog("  loaded slot %d: %s\n", static_cast<int>(step->a) + 1, rc != -1 ? "ok" : "FAIL");
@@ -6456,6 +6538,11 @@ void devAutotestCapture(SDL_Renderer* renderer)
 
     const char* name = gDevAutotestPendingCapture;
     gDevAutotestPendingCapture = nullptr;
+
+    if (!gDevAutotestCaptures) {
+        devAutotestLog("%s: done at %u ms\n", name, getTicks());
+        return;
+    }
 
     if (gDevAutotestTraceItems) {
         devAutotestLog("%s: state\n", name);

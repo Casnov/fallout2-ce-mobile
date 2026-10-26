@@ -20,6 +20,8 @@ void webUpdateRendererInfo();
 void webExit(int status);
 void webOpenGameFiles(const char* mode);
 bool webExchangeSaves(const char* mode);
+// Development autotests: a named point in time for a page that measures them.
+void webPerfMark(const char* name);
 // browser.js createGameWindow.poll contract; consumed only on the native stack.
 enum WebWindowState {
     kWebWindowActive = 1,
