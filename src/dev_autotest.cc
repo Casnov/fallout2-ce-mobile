@@ -479,6 +479,9 @@ enum DevAutotestAction {
     // [a] rounds of timed saving to a free manual slot, saving over it,
     // loading it and deleting it again: never one of the player's saves.
     DEV_AUTOTEST_ACTION_SAVE_LOAD_TIMING,
+    // Waits up to [a] frames for mobile UI widget [widget] (a slow device's
+    // menu still fading in), fails without it.
+    DEV_AUTOTEST_ACTION_WAIT_WIDGET,
 };
 
 struct DevAutotestStep {
@@ -1124,7 +1127,7 @@ static bool gDevAutotestCaptures = true;
 // continued and played with its music, then timed saves and loads use a free
 // slot that is deleted again.
 static const DevAutotestStep kDevAutotestWebPerfSteps[] = {
-    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "w00_menu" },
+    { DEV_AUTOTEST_ACTION_WAIT_WIDGET, 1800, 0, 0, 30, "w00_menu", "mainmenu.continue" },
     { DEV_AUTOTEST_ACTION_MARK, 0, 0, 0, 0, "w01_mark", "continue" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 1, "w02_continue", "mainmenu.continue" },
     { DEV_AUTOTEST_ACTION_WAIT_MAP_LOADED, 600, 0, 0, 0, "w03_map" },
@@ -3636,6 +3639,23 @@ void devAutotestTick()
         round = -1;
     }
 
+    if (step->action == DEV_AUTOTEST_ACTION_WAIT_WIDGET && !gDevAutotestStepStarted) {
+        static int waited = 0;
+        float x;
+        float y;
+        bool found = step->widget != nullptr && muiGetWidgetCenter(step->widget, &x, &y);
+        if (!found && waited < static_cast<int>(step->a)) {
+            waited++;
+            return;
+        }
+        devAutotestLog("  mui %s %s after %d frames\n", step->widget != nullptr ? step->widget : "?", found ? "shown" : "NOT SHOWN", waited);
+        waited = 0;
+        if (!found) {
+            devAutotestLog("FAIL: mui %s never shown\n", step->widget != nullptr ? step->widget : "?");
+            exit(EXIT_FAILURE);
+        }
+    }
+
     if (step->action == DEV_AUTOTEST_ACTION_WAIT_MAP_LOADED && !gDevAutotestStepStarted) {
         static int waited = 0;
         if (mapIsLoading() && waited < static_cast<int>(step->a)) {
@@ -4504,6 +4524,10 @@ void devAutotestTick()
             devAutotestMark(step->widget);
             break;
         case DEV_AUTOTEST_ACTION_SAVE_LOAD_TIMING: {
+            if (!gGameLoaded) {
+                devAutotestLog("FAIL: no game loaded to save\n");
+                exit(EXIT_FAILURE);
+            }
             int slot = lsgFindFreeManualSlot();
             if (slot == -1) {
                 devAutotestLog("FAIL: no free manual slot\n");

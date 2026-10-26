@@ -89,6 +89,8 @@ static bool commandLineDevEndgame = false;
 static bool commandLineDevNewGame = false;
 static const char* commandLineDevMap = nullptr;
 static bool commandLineDevEndgameMovie = false;
+// CE: `--dev-skip-opening-movies`, for this run only (settings unchanged).
+static bool commandLineDevSkipOpeningMovies = false;
 
 // 0x48099C
 int falloutMain(int argc, char** argv)
@@ -105,7 +107,7 @@ int falloutMain(int argc, char** argv)
 
     // SFALL: Allow to skip intro movies
     int skipOpeningMovies = settings.ui.skip_opening_movies;
-    if (skipOpeningMovies < 1) {
+    if (skipOpeningMovies < 1 && !commandLineDevSkipOpeningMovies) {
         gameMoviePlay(MOVIE_IPLOGO, GAME_MOVIE_FADE_IN);
         gameMoviePlay(MOVIE_INTRO, 0);
         gameMoviePlay(MOVIE_CREDITS, 0);
@@ -315,6 +317,8 @@ static void mainParseCommandLineArguments(int argc, char** argv)
             commandLineDevEndgame = true;
         } else if (strcmp(argv[arg], "--dev-endgame-movie") == 0) {
             commandLineDevEndgameMovie = true;
+        } else if (strcmp(argv[arg], "--dev-skip-opening-movies") == 0) {
+            commandLineDevSkipOpeningMovies = true;
         }
     }
 }

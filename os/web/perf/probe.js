@@ -4,7 +4,7 @@
 // main-thread tasks and the audio output. run.mjs reads window.__webPerf over
 // the DevTools protocol. Expects createAudioAnalysisSource (audio-analysis.js).
 (() => {
-  const ARGS = ['--dev-autotest=/tmp/webperf', '--dev-autotest-scenario=webperf'];
+  const ARGS = ['--dev-autotest=/tmp/webperf', '--dev-autotest-scenario=webperf', '--dev-skip-opening-movies'];
   const LOG = '/tmp/webperf/log.txt';
   const marks = [], phases = new Map();
   let phase = 'start', module = null, exitStatus = null, finalLog = '', audioInfo = null;

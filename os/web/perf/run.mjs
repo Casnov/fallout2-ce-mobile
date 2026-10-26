@@ -12,6 +12,7 @@ import {spawn, execFileSync} from 'node:child_process';
 import {createWriteStream, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 const HERE = new URL('.', import.meta.url);
 const ROOT = new URL('../../../', import.meta.url);
@@ -155,7 +156,7 @@ function markdown(report, extra) {
 
 async function main() {
   const when = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const out = options.out || new URL('out/web/perf-runs/' + when + '/', ROOT).pathname;
+  const out = options.out || fileURLToPath(new URL('out/web/perf-runs/' + when + '/', ROOT));
   mkdirSync(out, {recursive:true});
   let device = 'desktop Chrome', logcat = null;
   if (!options.cdp) {
