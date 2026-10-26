@@ -75,6 +75,8 @@ cd os/android
 
 A release build is signed with your own key: point the Gradle property `fallout2ce.releaseKeystoreProperties` to a properties file with `storeFile`, `storePassword`, `keyAlias`, `keyPassword` (never commit it). Desktop builds are as upstream's (CMake).
 
+The browser target is currently for development. See [the web build instructions](os/web/README.md) for the complete static app build and local RPU testing.
+
 ## License
 
 The engine is under the [Sustainable Use License](LICENSE.md), as upstream: free, non-commercial distribution only, with the license and notices kept. Third-party components: SDL 2, zlib, LodePNG (zlib license), libarchive (BSD), liblzma from XZ Utils (0BSD), stb (MIT / public domain), fpattern, Fallout Classic Dialog font (MIT), PT Mono font (SIL OFL 1.1). The app shows all of them in Settings → About.
@@ -275,11 +277,10 @@ $ mv fallout2 /Applications/Fallout2
 
 ### Browser
 
-> **NOTE**: WebAssembly build with emscripten
-```
-docker run --rm -v $(pwd):/src emscripten/emsdk:3.1.74 sh -c 'git config --global --add safe.directory "*" && mkdir -p build && cd build && emcmake cmake ../ -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain/Emscripten.cmake && emmake make'
-```
-- Demo available at https://github.com/ololoken/fallout2-ce-ems.git
+The mobile browser target builds with Emscripten 4.0.4. Follow the
+[web build instructions](os/web/README.md) to package the current engine,
+mobile UI and `ce.dat`. Persistent game installation and offline startup
+are still under development.
 
 
 ## Contributing

@@ -37,18 +37,28 @@ add_library(archive_read STATIC
     "${LIBARCHIVE_DIR}/archive_read.c"
     "${LIBARCHIVE_DIR}/archive_read_add_passphrase.c"
     "${LIBARCHIVE_DIR}/archive_read_set_options.c"
-    "${LIBARCHIVE_DIR}/archive_read_support_filter_gzip.c"
-    "${LIBARCHIVE_DIR}/archive_read_support_filter_xz.c"
-    "${LIBARCHIVE_DIR}/archive_read_support_format_7zip.c"
-    "${LIBARCHIVE_DIR}/archive_read_support_format_rar.c"
-    "${LIBARCHIVE_DIR}/archive_read_support_format_rar5.c"
-    "${LIBARCHIVE_DIR}/archive_read_support_format_tar.c"
     "${LIBARCHIVE_DIR}/archive_string.c"
     "${LIBARCHIVE_DIR}/archive_string_sprintf.c"
     "${LIBARCHIVE_DIR}/archive_time.c"
     "${LIBARCHIVE_DIR}/archive_util.c"
     "${LIBARCHIVE_DIR}/archive_virtual.c"
 )
+if(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
+    # Sequential ZIP/ZIP64 decoding for web saves. The seekable reader's
+    # central-directory tree is not used by our streaming adapter.
+    target_sources(archive_read PRIVATE "${LIBARCHIVE_DIR}/archive_read_support_format_zip.c"
+        "${LIBARCHIVE_DIR}/archive_digest.c" "${LIBARCHIVE_DIR}/archive_ppmd8.c")
+    target_compile_options(archive_read PRIVATE --use-port=zlib)
+    target_link_options(archive_read PUBLIC --use-port=zlib)
+else()
+    target_sources(archive_read PRIVATE
+        "${LIBARCHIVE_DIR}/archive_read_support_filter_gzip.c"
+        "${LIBARCHIVE_DIR}/archive_read_support_filter_xz.c"
+        "${LIBARCHIVE_DIR}/archive_read_support_format_7zip.c"
+        "${LIBARCHIVE_DIR}/archive_read_support_format_rar.c"
+        "${LIBARCHIVE_DIR}/archive_read_support_format_rar5.c"
+        "${LIBARCHIVE_DIR}/archive_read_support_format_tar.c")
+endif()
 
 target_compile_definitions(archive_read
     PRIVATE "PLATFORM_CONFIG_H=\"${CMAKE_CURRENT_SOURCE_DIR}/archive_config.h\""

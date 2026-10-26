@@ -1,0 +1,9 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Проверка большого ZIP</title><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="files.css">
+<body><main id="launcher"><section id="panel"><h1>Проверка большого ZIP</h1>
+<p>Отдельный тест, без доступа к игре и сейвам. Создаёт ZIP размером чуть больше 4 ГиБ во временном хранилище сайта. Для сохранения копии в «Файлы» понадобится ещё столько же места. Оставь страницу открытой.</p>
+<p id="status" role="status">Готов к проверке.</p><progress id="progress" max="1" value="0"></progress>
+<button id="large">Создать ZIP больше 4 ГиБ</button><button id="many">Проверить 70 000 файлов</button><button id="cancel" hidden>Отмена</button>
+<a id="download" class="button" hidden>Сохранить ZIP</a>
+<label for="check">Проверка скачанного ZIP: выбери сохранённый тестовый файл.</label><input id="check" type="file" accept=".zip"><button id="clear">Удалить временные файлы теста</button>
+<button id="copy">Скопировать отчёт</button><pre id="report"></pre><a href="device-check.html">Техническая страница</a>
+</section></main><script type="module" src="large-zip-probe.js"></script></body></html>

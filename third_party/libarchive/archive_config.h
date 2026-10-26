@@ -7,16 +7,20 @@
  * old RARs' DOS names are decoded by the importer. */
 #ifndef FALLOUT_ARCHIVE_CONFIG_H
 #define FALLOUT_ARCHIVE_CONFIG_H
+#define __LIBARCHIVE_CONFIG_H_INCLUDED 1
 
 #define HAVE_LIBZ 1
 #define HAVE_ZLIB_H 1
+#if !defined(__EMSCRIPTEN__)
 #define HAVE_LIBLZMA 1
 #define HAVE_LZMA_H 1
+#endif
 
 #define HAVE_CTYPE_H 1
 #define HAVE_DIRENT_H 1
 #define HAVE_ERRNO_H 1
 #define HAVE_FCNTL_H 1
+#define HAVE_FCNTL 1
 #define HAVE_INTTYPES_H 1
 #define HAVE_LIMITS_H 1
 #define HAVE_LOCALE_H 1
@@ -48,7 +52,9 @@
 #define HAVE_DECL_UINT64_MAX 1
 #define HAVE_DECL_UINTMAX_MAX 1
 
+#if !defined(__EMSCRIPTEN__)
 #define HAVE_ARC4RANDOM_BUF 1
+#endif
 #define HAVE_EILSEQ 1
 #define HAVE_FSTAT 1
 #define HAVE_GMTIME_R 1

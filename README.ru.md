@@ -75,6 +75,8 @@ cd os/android
 
 Релизная сборка подписывается вашим ключом: свойство Gradle `fallout2ce.releaseKeystoreProperties` указывает на файл с `storeFile`, `storePassword`, `keyAlias`, `keyPassword` (никогда не кладите его в репозиторий). Сборки для компьютеров — как в оригинале (CMake).
 
+Веб-версия пока предназначена для разработки. [Инструкция веб-сборки](os/web/README.md) описывает создание полного статического приложения и локальную проверку с RPU.
+
 ## Лицензия
 
 Движок — под [Sustainable Use License](LICENSE.md), как и оригинал: распространение только бесплатное и некоммерческое, с сохранением лицензии и уведомлений. Сторонние компоненты: SDL 2, zlib, LodePNG (лицензия zlib), libarchive (BSD), liblzma из XZ Utils (0BSD), stb (MIT / общественное достояние), fpattern, шрифты Fallout Classic Dialog (MIT) и PT Mono (SIL OFL 1.1). Приложение показывает их все в «Настройки → О программе».

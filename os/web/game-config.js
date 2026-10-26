@@ -1,0 +1,55 @@
+// Byte-preserving INI handling: game configs may use an 8-bit game code page.
+export const decodeConfig = bytes => Array.from(bytes,byte => String.fromCharCode(byte)).join('');
+export const encodeConfig = text => Uint8Array.from(text,character => character.charCodeAt(0));
+export function configValue(text,section,key) {
+  let current = '';
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim(), heading = /^\[([^\]]+)\]$/.exec(line);
+    if (heading) current = heading[1].trim().toLowerCase();
+    else if (!/^[;#]/.test(line) && current === section.toLowerCase()) {
+      const at = line.indexOf('=');
+      if (at >= 0 && line.slice(0,at).trim().toLowerCase() === key.toLowerCase()) return line.slice(at + 1).split(/[;#]/)[0].trim();
+    }
+  }
+  return null;
+}
+export function fixGameConfig(text) {
+  const defaults = {master_dat:'master.dat',critter_dat:'critter.dat',master_patches:'data',critter_patches:'data',music_path1:'sound/music/',music_path2:'data/sound/music/'};
+  return text.split(/\r?\n/).map(line => {
+    const match = /^\s*([^;#=]+?)\s*=(.*)$/.exec(line);
+    if (!match) return line;
+    const key = match[1].toLowerCase(), value = match[2].trim().replaceAll('\\','/');
+    if (key in defaults && (value.includes(':') || value.startsWith('/') || value.split('/').includes('..'))) return key + '=' + defaults[key];
+    return line;
+  }).join('\n');
+}
+export function mergePlayerSettings(template,previous) {
+  const settings = new Map(); let section = '';
+  const player = (section,key) => section && section !== 'system' && !(section === 'sound' && /^music_path[12]$/.test(key));
+  for (const raw of previous.split(/\r?\n/)) {
+    const line = raw.trim(), heading = /^\[([^\]]+)\]$/.exec(line);
+    if (heading) section = heading[1].trim().toLowerCase();
+    else {
+      const match = /^([^;#=]+?)\s*=(.*)$/.exec(line), key = match?.[1].trim().toLowerCase();
+      if (match && player(section,key)) settings.set(section + '\t' + key,match[2]);
+    }
+  }
+  section = '';
+  const lines = template.split(/\r?\n/).map(line => {
+    const heading = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if (heading) { section = heading[1].trim().toLowerCase(); return line; }
+    const match = /^\s*([^;#=]+?)\s*=(.*)$/.exec(line), id = section + '\t' + match?.[1].trim().toLowerCase();
+    if (!match || !settings.has(id)) return line;
+    const value = settings.get(id); settings.delete(id); return line.slice(0,line.indexOf('=') + 1) + value;
+  });
+  // Repeated INI sections are supported by the engine; append missing player keys.
+  for (const [id,value] of settings) { const [section,key] = id.split('\t'); lines.push('[' + section + ']',key + '=' + value); }
+  return fixGameConfig(lines.join('\n'));
+}
+export const originalFile = path => /^(master\.dat|critter\.dat|patch000\.dat)$/i.test(path)
+  || /^(data\/)?sound\/music\//i.test(path);
+export function describeGame(files,config = '') {
+  return {language:configValue(config,'system','language') || 'english',
+    mods:files.filter(file => /^mods\/[^/]+\.dat$/i.test(file.path)).map(file => file.path.slice(5,-4)),
+    looseLogic:files.some(file => /^(data\/)?(scripts|maps|proto)\//i.test(file.path))};
+}
