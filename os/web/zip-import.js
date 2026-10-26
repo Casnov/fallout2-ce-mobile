@@ -272,7 +272,6 @@ export async function importGameZip(file,options = {}) {
   const plan = await prepareGameZip(file,options);
   return plan.install(options);
 }
-export const importProbeZip = importGameZip;
 export function importErrorInfo(error) {
   let code = error instanceof ImportError ? error.code : 'io';
   if (error?.name === 'AbortError') code = 'cancelled';
@@ -282,23 +281,4 @@ export function importErrorInfo(error) {
   else if (Object.entries(globalThis.zip).some(([key,value]) => key.startsWith('ERR_') && typeof value === 'string'
       && String(error?.message).startsWith(value))) code = 'invalid_zip';
   return {code,message:String(error?.message || error)};
-}
-export async function checkProbeReads(storeFactory = openResourceStore) {
-  const started = performance.now(), store = await storeFactory();
-  try {
-    const manifest = await store.active();
-    if (!manifest) throw new Error('No completed local installation');
-    const openMs = performance.now() - started;
-    const files = [...manifest.files].filter(file => file.size).sort((a,b) => b.size-a.size).slice(0,3);
-    const times = [];
-    let bytes = 0;
-    for (let index = 0; index < 24; index++) {
-      const file = files[index % files.length], count = Math.min(BLOCK_SIZE,file.size);
-      const offset = Math.floor((file.size - count) * ((index * 7 % 23) / 22)), now = performance.now();
-      await store.read(manifest,file,offset,count);
-      times.push(performance.now() - now); bytes += count;
-    }
-    times.sort((a,b) => a-b);
-    return {run:manifest.run,openMs,reads:times.length,bytes,medianMs:times[Math.floor(times.length / 2)],maxMs:times.at(-1),verified:true};
-  } finally { await store.close(); }
 }

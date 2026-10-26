@@ -236,7 +236,6 @@ export async function lazyUserFilesystem(module,options = {}) {
       await store.commit(job); job = null; jobPromise = null;
       for (const node of dirty.values()) { delete node.user.mutable; if (node.user.deleted) { nodes.delete(node.user.id); FS.destroyNode(node); } }
       dirty.clear(); directories.clear(); prune();
-      await store.confirmMigration().catch(error => console.warn('Legacy user cleanup deferred',error));
       await store.collect({limit:32}).catch(error => console.warn('User garbage cleanup deferred',error));
     },
     async close() { if (!closed) { closed = true; cache.clear(); bytes = 0; lookups.clear(); directories.clear(); await store.close(); } },

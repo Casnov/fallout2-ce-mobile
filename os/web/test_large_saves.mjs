@@ -7,12 +7,14 @@ import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {openUserStore,USER_DB_VERSION,USER_FORMAT} from './user-store.js';
 import {BLOCK_SIZE} from './storage-common.js';
-import {ZipOutput,crc32,combineCrc,zeroCrc,repeatCrc} from './zip-output.js';
+import {ZipOutput,crc32} from './zip-output.js';
+import {combineCrc,zeroCrc,repeatCrc} from './fixtures/zip-crc.mjs';
 const name = () => 'large-user-' + crypto.randomUUID();
 const request = r => new Promise((resolve,reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
 const source = data => ({size:data.length,read:async (at,n) => data.subarray(at,at + n)});
 async function raw(database,action) { const db = await request(indexedDB.open(database)); try { return await action(db); } finally { db.close(); } }
-async function legacy(database) {
+// The IDBFS layout of earlier test builds (format 2, schema 21).
+async function oldLayout(database) {
   const r = indexedDB.open(database,21); r.onupgradeneeded = () => r.result.createObjectStore('FILE_DATA');
   const db = await request(r), tx = db.transaction('FILE_DATA','readwrite'), store = tx.objectStore('FILE_DATA');
   for (const [path,data] of [['format.json',JSON.stringify({format:2,minReader:2,minWriter:2})],['savegame/slot001/save.dat','old save'],['port/saves.txt','old records']]) {
@@ -74,40 +76,19 @@ test('page shutdown aborts an active publication; the previous checkpoint also s
   const reopened = await openUserStore({name:database}), port = await reopened.resolve('port'), node = await reopened.lookup(port.id,'test');
   assert.deepEqual(await reopened.read(node.content,0,1),Uint8Array.of(1)); await reopened.close();
 });
-test('legacy migration resumes after interruption, retains old rows, guards future readers',async () => {
-  const database = name(); await legacy(database); let count = 0;
-  await assert.rejects(openUserStore({name:database,progress:() => { if (++count === 2) throw new Error('power loss'); }}),/power loss/);
+test('earlier IDBFS user databases are refused without upgrading or changing their rows',async () => {
+  const database = name(); await oldLayout(database);
+  await assert.rejects(openUserStore({name:database}),/Unknown user database layout/);
+  await raw(database,async db => { assert.equal(db.version,21); assert.equal(await request(db.transaction('FILE_DATA').objectStore('FILE_DATA').count()),3); });
+});
+test('future user formats fail closed',async () => {
+  const database = name(); await (await openUserStore({name:database})).close();
   await raw(database,async db => {
-    assert.equal(db.version,USER_DB_VERSION); assert.equal(await request(db.transaction('FILE_DATA').objectStore('FILE_DATA').count()),3);
-    assert.equal(await request(db.transaction('state').objectStore('state').get('active')),undefined);
-  });
-  const s = await openUserStore({name:database});
-  const slot = await s.resolve('savegame/slot001'), save = await s.lookup(slot.id,'save.dat');
-  assert.equal(new TextDecoder().decode(await s.read(save.content,0,save.size)),'old save'); await s.close();
-  await assert.rejects(request(indexedDB.open(database,21)),e => e.name === 'VersionError');
-  await raw(database,async db => {
+    assert.equal(db.version,USER_DB_VERSION);
     const tx = db.transaction('state','readwrite'); tx.objectStore('state').put({format:4,minReader:4,minWriter:4},'format');
     await new Promise(resolve => { tx.oncomplete = resolve; });
   });
   await assert.rejects(openUserStore({name:database}),/Unsupported/);
-});
-test('insufficient migration space refuses before upgrading or deleting legacy data',async () => {
-  const database = name(); await legacy(database);
-  await assert.rejects(openUserStore({name:database,estimate:async () => ({quota:1,usage:1})}),e => e.name === 'QuotaExceededError');
-  await raw(database,async db => { assert.equal(db.version,21); assert.equal(await request(db.transaction('FILE_DATA').objectStore('FILE_DATA').count()),3); });
-});
-test('legacy case collisions fail migration without activating or removing either source file',async () => {
-  const database = name(); await legacy(database);
-  await raw(database,async db => {
-    const tx = db.transaction('FILE_DATA','readwrite');
-    tx.objectStore('FILE_DATA').put({mode:0o100600,timestamp:new Date(),contents:Uint8Array.of(99)},database + '/savegame/slot001/SAVE.DAT');
-    await new Promise((r,j) => { tx.oncomplete = r; tx.onabort = j; });
-  });
-  await assert.rejects(openUserStore({name:database}),/Conflicting legacy user paths/);
-  await raw(database,async db => {
-    assert.equal(await request(db.transaction('FILE_DATA').objectStore('FILE_DATA').count()),4);
-    assert.equal(await request(db.transaction('state').objectStore('state').get('active')),undefined);
-  });
 });
 test('paged tree supports 1000 slots, stable inode directory rename and abandoned staging GC',async () => {
   const s = await openUserStore({name:name()}), job = await s.begin();

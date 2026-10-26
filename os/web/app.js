@@ -8,14 +8,14 @@ import {createSaveDownloads} from './save-download.js';
 const ru = navigator.language.toLowerCase().startsWith('ru');
 const text = ru ? {
   title:'Fallout 2', loading:'Загружаю…', checking:'Проверяю файлы игры…', play:'Начать игру', retry:'Попробовать снова',
-  technical:'Техническая проверка', repair:'Файлы игры',
+  repair:'Файлы игры',
   rotate:'Поверните устройство горизонтально', unsupported:'Этот браузер не поддерживает WebAssembly.',
   error:'Не удалось запустить игру.',
   build:'Проверочная сборка:',
   devNote:'Тестовый запуск с Mac. Держите Mac включённым и оставайтесь в одной сети Wi-Fi. Прогресс исчезнет после перезагрузки страницы.',
 } : {
   title:'Fallout 2', loading:'Loading…', checking:'Checking game files…', play:'Play', retry:'Try again',
-  technical:'Technical check', repair:'Game files',
+  repair:'Game files',
   rotate:'Turn the device to landscape', unsupported:'This browser does not support WebAssembly.', error:'The game could not start.',
   build:'Test build:',
   devNote:'Test session from your Mac. Keep it awake and stay on the same Wi-Fi. Progress disappears on page reload.',
@@ -37,7 +37,6 @@ let diagnosticsTimer = null;
 $('text-input').setAttribute('aria-label', ru ? 'Текст игры' : 'Game text');
 document.documentElement.lang = ru ? 'ru' : 'en';
 $('title').textContent = text.title;
-$('technical').textContent = text.technical;
 $('repair').textContent = text.repair;
 $('message').textContent = text.checking;
 $('play').textContent = text.play;
@@ -114,11 +113,7 @@ async function prepare() {
   document.body.dataset.version = build.version;
   document.body.dataset.webBuild = build.buildId || build.files['fallout2-ce.wasm'].sha256.slice(0, 8);
   $('build-tag').textContent = document.body.dataset.webBuild;
-  const localCheck = new URLSearchParams(location.search).get('device-check') === '1';
-  const local = () => localFiles({progress:() => {
-    $('message').textContent = ru ? 'Подготавливаю местное хранилище…' : 'Preparing local storage…';
-  }});
-  source = localCheck ? await local() : await developmentFiles() || await local();
+  source = await developmentFiles() || await localFiles();
   if (!source) { location.replace('./files.html'); return; }
   $('play').hidden = !source;
   $('dev-note').textContent = text.devNote;
@@ -177,7 +172,7 @@ async function play() {
     }) : async () => { throw new Error('Save exchange requires locally installed game files'); };
     // Explicit test URLs only; the ordinary installed launcher has no debug API.
     const parameters = new URLSearchParams(location.search);
-    const inspect = source && ['dev','device-check','stats'].some(key => parameters.has(key));
+    const inspect = source && ['dev','stats'].some(key => parameters.has(key));
     if (inspect) window.falloutDev = {module, stats:() => module.GameFS.stats(),
       audio:audio.status, geometry:() => ({viewport:[innerWidth, innerHeight],
         canvas:[$('canvas').width, $('canvas').height],

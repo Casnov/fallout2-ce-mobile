@@ -1,5 +1,5 @@
-// Permanent resource format. The historical database name is retained so the
-// stage-2 installation can be upgraded in place without another ZIP or DAT copy.
+// Permanent resource format. The database and lock keep their historical names
+// so installations made by earlier test builds stay readable.
 import {BLOCK_SIZE, MAX_READ, digest, WRITE_BATCH_BYTES, WRITE_BATCH_BLOCKS, checkCancelled} from './storage-common.js';
 export {BLOCK_SIZE, MAX_READ};
 export const RESOURCE_DB = 'fallout2-device-check-v1';
@@ -67,11 +67,6 @@ async function openDatabase(name) {
   pending.onupgradeneeded = () => {
     if (cancelled) { pending.transaction.abort(); return; }
     const db = pending.result;
-    // Keep the v1 stores until their contents have been migrated transactionally.
-    if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
-    if (!db.objectStoreNames.contains('blocks')) {
-      db.createObjectStore('blocks', {keyPath:['run','path','index']}).createIndex('run','run');
-    }
     db.createObjectStore('state');
     db.createObjectStore('generations', {keyPath:'run'});
     db.createObjectStore('chunks', {keyPath:'hash'});
@@ -90,9 +85,7 @@ async function openDatabase(name) {
   });
 }
 
-export async function openResourceStore({name = RESOURCE_DB, locks = globalThis.navigator?.locks,
-  progress = () => {}, migrationBatch = 8, maintenance = false} = {}) {
-  if (!Number.isInteger(migrationBatch) || migrationBatch < 1 || migrationBatch > 16) throw new Error('Invalid migration batch');
+export async function openResourceStore({name = RESOURCE_DB, locks = globalThis.navigator?.locks} = {}) {
   const release = await lease(locks, name === RESOURCE_DB ? RESOURCE_LOCK : name);
   let db, closed = false, closing = null;
   const fileIndexes = new WeakMap();
@@ -297,13 +290,6 @@ export async function openResourceStore({name = RESOURCE_DB, locks = globalThis.
         }
       }
     },
-    async clear() {
-      const names = ['state','generations','refs','chunks','meta','blocks'];
-      const [tx,done] = transaction(names,'readwrite');
-      for (const name of names) tx.objectStore(name).clear();
-      tx.objectStore('state').put({format:FORMAT,minReader:FORMAT,minWriter:FORMAT},'format');
-      await done;
-    },
     async read(manifest, file, offset, length) {
       live();
       if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0
@@ -342,65 +328,11 @@ export async function openResourceStore({name = RESOURCE_DB, locks = globalThis.
       return output;
     },
   };
-  async function migrate() {
-    if (await get('state','active')) {
-      // A crash after the active switch but before cleanup is harmless.
-      if (await get('meta','active')) {
-        const [tx,done] = transaction(['meta','blocks'],'readwrite');
-        tx.objectStore('meta').clear(); tx.objectStore('blocks').clear();
-        await done;
-      }
-      return;
-    }
-    const legacy = await get('meta','active');
-    if (!legacy) { await store.collect(); return; }
-    if (legacy.schema !== 1 || legacy.state !== 'complete' || typeof legacy.run !== 'string'
-        || !legacy.run || !Number.isSafeInteger(legacy.completed) || legacy.completed < 0) {
-      throw new Error('Unsupported legacy installation');
-    }
-    const files = filesOf(legacy.files);
-    if (!await get('generations',legacy.run)) {
-      const [tx,done] = transaction('generations','readwrite');
-      tx.objectStore('generations').put({run:legacy.run,state:'writing',format:FORMAT,minReader:FORMAT,minWriter:FORMAT});
-      await done;
-    }
-    for (;;) {
-      // Move a bounded batch (2 MiB by default). A moved block's new reference and
-      // deletion of its old copy commit together, making interruption resumable.
-      const [read,readDone] = transaction('blocks'), batch = [];
-      const cursor = read.objectStore('blocks').index('run').openCursor(legacy.run);
-      cursor.onsuccess = () => {
-        const row = cursor.result;
-        if (row) { batch.push(row.value); if (batch.length < migrationBatch) row.continue(); }
-      };
-      await readDone;
-      if (!batch.length) break;
-      for (const row of batch) {
-        if (!(row.data instanceof Uint8Array) || row.data.length > BLOCK_SIZE
-            || await digest(row.data) !== row.hash) throw new Error('Damaged legacy block: ' + row.path);
-        resourcePath(row.path);
-      }
-      const [tx,done] = transaction(['blocks','chunks','refs'],'readwrite');
-      for (const row of batch) {
-        const existing = tx.objectStore('chunks').getKey(row.hash);
-        existing.onsuccess = () => { if (existing.result === undefined) tx.objectStore('chunks').put({hash:row.hash,data:row.data}); };
-        tx.objectStore('refs').put({run:legacy.run,path:resourcePath(row.path),index:row.index,hash:row.hash,size:row.data.length});
-        tx.objectStore('blocks').delete([row.run,row.path,row.index]);
-      }
-      await done;
-      progress({phase:'migrate',blocks:batch.length});
-    }
-    await store.activate(legacy.run,files,legacy.measurements,{completedAt:legacy.completed});
-    progress({phase:'migrate',blocks:0,activated:true});
-    const [tx,done] = transaction(['meta','blocks'],'readwrite');
-    tx.objectStore('meta').clear(); tx.objectStore('blocks').clear();
-    await done;
-  }
   try {
     db = await openDatabase(name);
     db.onversionchange = () => { store.close(); };
     checkFormat(await get('state','format'));
-    if (!maintenance) { await migrate(); await store.recover(); }
+    await store.recover();
     return store;
   } catch (error) { await store.close(); throw error; }
 }

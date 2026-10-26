@@ -211,10 +211,10 @@ test('commit barrier ignores late cancellation; post-commit cleanup failure repo
   await expectOld(opts,active);
 });
 
-test('packaged synthetic CRC fixture cannot activate and preserves the previous installation',async () => {
+test('synthetic bad-CRC fixture cannot activate and preserves the previous installation',async () => {
   const {readFile} = await import('node:fs/promises');
   const opts = fixture(), old = await importGameZip(await archive(),opts);
-  const damaged = new Blob([await readFile(new URL('./checks/invalid-crc.zip',import.meta.url))]);
+  const damaged = new Blob([await readFile(new URL('./fixtures/invalid-crc.zip',import.meta.url))]);
   const plan = await prepareGameZip(damaged,opts);
   assert.equal(plan.summary.files,2);
   await assert.rejects(plan.install(),error => importErrorInfo(error).code === 'invalid_zip');

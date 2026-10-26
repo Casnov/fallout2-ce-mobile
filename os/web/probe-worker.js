@@ -1,12 +1,10 @@
-import {prepareGameZip,checkProbeReads,importErrorInfo} from './zip-import.js';
+import {prepareGameZip,importErrorInfo} from './zip-import.js';
 import {openResourceStore} from './resource-store.js';
-import {userStorageReport} from './user-report.js';
 import {prepareSaveZip,exportSaveZip,launcherFont} from './save-streams.js';
-import {exportLegacySaveZip} from './legacy-save-export.js';
 let controller = null, prepared = null, phase = 'idle';
 let resources = null;
 function resourceOwner() {
-  if (!resources) return openResourceStore({progress});
+  if (!resources) return openResourceStore();
   // The paused engine owns the immutable installation lease. Its two config
   // snapshots are the only resource payloads save exchange can read.
   return {active:async () => resources.active,close:async () => {},
@@ -24,8 +22,8 @@ async function disposePlan() {
   const old = prepared; prepared = null;
   await old?.dispose();
 }
-async function activeSnapshot(maintenance = false) {
-  const store = resources ? resourceOwner() : await openResourceStore({maintenance,progress});
+async function activeSnapshot() {
+  const store = resources ? resourceOwner() : await openResourceStore();
   try { return await store.active(); } finally { await store.close(); }
 }
 self.onmessage = async ({data}) => {
@@ -42,7 +40,7 @@ self.onmessage = async ({data}) => {
       resources = data.resources;
     }
     if (resources && !['status','discard','inspect-saves','install-saves','export-saves','export-before-replace'].includes(data.type)) throw new Error('Only save exchange is allowed over a live game');
-    let active, read, exchange;
+    let active, exchange;
     switch (data.type) {
       case 'inspect':
         await disposePlan();
@@ -79,31 +77,17 @@ self.onmessage = async ({data}) => {
       case 'export-saves':
         await disposePlan(); exchange = await exportSaveZip({signal:controller.signal,progress,storeFactory:resourceOwner});
         active = await activeSnapshot(); break;
-      case 'export-legacy':
-        await disposePlan(); exchange = await exportLegacySaveZip({signal:controller.signal,progress});
-        active = await activeSnapshot(); break;
       case 'discard':
         await disposePlan(); active = await activeSnapshot(); break;
-      case 'read':
-        read = await checkProbeReads(); active = await activeSnapshot();
-        if (read.run !== active?.run) read = null;
-        break;
-      case 'clear': {
-        await disposePlan();
-        const store = await openResourceStore({maintenance:true});
-        try { await store.clear(); } finally { await store.close(); }
-        active = null; break;
-      }
       case 'status': active = await activeSnapshot(); break;
       default: throw new Error('Unknown storage action');
     }
-    self.postMessage({type:'result',action:data.type,active,read,exchange,plan:prepared?.summary || null,
-      font:await launcherFont().catch(() => 0),userStorage:await userStorageReport()});
+    self.postMessage({type:'result',action:data.type,active,exchange,plan:prepared?.summary || null,
+      font:await launcherFont().catch(() => 0)});
   } catch (error) {
     await disposePlan().catch(() => {});
     const detail = importErrorInfo(error), response = {type:'error',...detail,cancelled:detail.code === 'cancelled'};
     try { response.active = await activeSnapshot(); } catch { /* Keep the UI's previous known installation. */ }
-    response.userStorage = await userStorageReport();
     self.postMessage(response);
   } finally { controller = null; phase = 'idle'; }
 };

@@ -9,9 +9,9 @@ import {execFileSync} from 'node:child_process';
 import {prepareSaveZip,exportSaveZip} from './save-streams.js';
 import {openUserStore} from './user-store.js';
 import {slotName,saveIdentity,recordText} from './save-format.js';
-import {ZipOutput,crc32,zeroCrc} from './zip-output.js';
+import {ZipOutput,crc32} from './zip-output.js';
+import {zeroCrc} from './fixtures/zip-crc.mjs';
 import {readSaveArchive} from './save-zip-reader.js';
-import {exportLegacySaveZip} from './legacy-save-export.js';
 const encode = text => new TextEncoder().encode(text), input = data => ({size:data.length,read:async (at,n) => data.subarray(at,at + n)});
 const available = existsSync(new URL('../../out/web/engine/fallout2-archive.wasm',import.meta.url));
 const create = available ? (await import('../../out/web/engine/fallout2-archive.js')).default : null;
@@ -173,17 +173,4 @@ archiveTest('libarchive actually decodes a sparse Store ZIP64 across the 4 GiB o
     for await (const entry of readSaveArchive(new DiskBlob(),{moduleFactory,catalog:store.archiveCatalog(job)})) { for await (const chunk of entry.chunks()) total += chunk.length; count++; }
     assert.equal(count,2); assert.equal(total,size + 2000); await store.discard(job);
   } finally { await store.close(); await disk.close(); }
-});
-test('interrupted migration can export untouched legacy saves before retrying migration',async t => {
-  const database = name(), opening = indexedDB.open(database,21);
-  opening.onupgradeneeded = () => opening.result.createObjectStore('FILE_DATA');
-  const db = await new Promise((r,j) => { opening.onsuccess = () => r(opening.result); opening.onerror = j; });
-  const tx = db.transaction('FILE_DATA','readwrite'), files = tx.objectStore('FILE_DATA');
-  for (const [path,data] of [['format.json',encode(JSON.stringify({format:2,minReader:2,minWriter:2}))],['savegame/SLOT01/SAVE.DAT',header(1)]]) files.put({mode:0o100600,timestamp:new Date(),contents:data},database + '/' + path);
-  await new Promise((r,j) => { tx.oncomplete = r; tx.onabort = j; }); db.close();
-  await assert.rejects(openUserStore({name:database,progress:() => { throw new Error('interruption'); }}),/interruption/);
-  const directory = await workspace(t), exported = await exportLegacySaveZip({userName:database,storeFactory:owner,temporary:() => temporary(directory)});
-  assert.equal(exported.slots,1); assert.ok(exported.blob.size > 2000);
-  const migrated = await openUserStore({name:database}), slot = await migrated.resolve('savegame/SLOT01'); assert.ok(await migrated.lookup(slot.id,'SAVE.DAT'));
-  await migrated.confirmMigration(); await migrated.close();
 });

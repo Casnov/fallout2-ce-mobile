@@ -85,7 +85,7 @@ def main():
             match = re.search(r'https://[a-z0-9-]+\.trycloudflare\.com', tunnel_log.read_text())
             if match:
                 state['origin'] = match[0]
-                state['url'] = match[0] + '/device-check.html'
+                state['url'] = match[0] + '/index.html'
                 state['build'] = json.loads((ROOT / 'out/web/dist/build-info.json').read_text())['buildId']
                 STATE.write_text(json.dumps(state,indent=2) + '\n')
                 print(state['url']); return

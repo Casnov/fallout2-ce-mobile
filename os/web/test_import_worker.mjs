@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import './zip-import.js';
-import {openResourceStore} from './resource-store.js';
+import {openResourceStore,RESOURCE_DB} from './resource-store.js';
 
 test('worker review/token/replace/cancel protocol preserves the committed installation on failure',async () => {
   const output = [], priorSelf = globalThis.self;
@@ -28,18 +28,18 @@ test('worker review/token/replace/cancel protocol preserves the committed instal
     const inspecting = self.onmessage({data:{type:'inspect',file}});
     await self.onmessage({data:{type:'cancel'}}); await inspecting;
     assert.equal(output.at(-1).code,'cancelled'); assert.equal(output.at(-1).active.run,old);
-    const damaged = new Blob([await readFile(new URL('./checks/invalid-crc.zip',import.meta.url))]);
+    const damaged = new Blob([await readFile(new URL('./fixtures/invalid-crc.zip',import.meta.url))]);
     const badPlan = await send({type:'inspect',file:damaged});
     const failed = await send({type:'install',token:badPlan.plan.token});
     assert.equal(failed.type,'error'); assert.equal(failed.code,'invalid_zip'); assert.equal(failed.active.run,old);
     await send({type:'inspect',file});
     const discarded = await send({type:'discard'});
     assert.equal(discarded.plan,null); assert.equal(discarded.active.run,old);
-    const read = await send({type:'read'}); assert.equal(read.read.verified,true); assert.equal(read.active.run,old);
+    const status = await send({type:'status'}); assert.equal(status.active.run,old);
     const holder = await openResourceStore();
     try {
       const busy = await send({type:'inspect',file}); assert.equal(busy.code,'busy');
     } finally { await holder.close(); }
-    const store = await openResourceStore(); await store.clear(); await store.close();
+    await new Promise((resolve,reject) => { const r = indexedDB.deleteDatabase(RESOURCE_DB); r.onsuccess = resolve; r.onerror = () => reject(r.error); });
   } finally { globalThis.self = priorSelf; }
 });

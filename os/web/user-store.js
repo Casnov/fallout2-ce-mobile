@@ -50,8 +50,8 @@ function open(name,version) {
     request.onsuccess = () => { if (cancelled) request.result.close(); else resolve(request.result); };
   });
 }
-function validateFormat(value,allowed = [3]) {
-  if (!value || !allowed.includes(value.format) || value.minReader !== value.format || value.minWriter !== value.format) throw new Error('Unsupported user storage format; existing files were not reset');
+function validateFormat(value) {
+  if (value?.format !== 3 || value.minReader !== 3 || value.minWriter !== 3) throw new Error('Unsupported user storage format; existing files were not reset');
 }
 function canonical(name) {
   if (typeof name !== 'string' || !name || /[\/\\\u0000-\u001f\u007f:]/.test(name) || ['.','..'].includes(name)) throw new Error('Invalid user filename');
@@ -85,10 +85,9 @@ async function deleteRefs(db,keyRange) {
   }
 }
 
-export async function openUserStore({name = USER_DATABASE,locks = globalThis.navigator?.locks,
-  estimate = () => globalThis.navigator?.storage?.estimate?.(),signal,progress = () => {},migrate = true,recovery = false} = {}) {
+export async function openUserStore({name = USER_DATABASE,locks = globalThis.navigator?.locks,signal} = {}) {
   // The application also holds its resource lease. This independent lease
-  // protects callers (tests, recovery/export tools) that do not open resources.
+  // protects callers (tests, tools) that do not open resources.
   if (!locks?.request) throw new Error('Web Locks are required for safe user storage');
   let release, acquired, lockError;
   const ready = new Promise(resolve => { acquired = resolve; });
@@ -106,30 +105,13 @@ export async function openUserStore({name = USER_DATABASE,locks = globalThis.nav
   };
   try {
     checkCancelled(signal);
-    // Opening without a version inspects an existing legacy DB without changing
-    // its schema. A fresh DB may be created empty; it has no confirmed progress.
+    // Opening without a version inspects an existing DB without changing its
+    // schema. A fresh DB may be created empty; it has no confirmed progress.
+    // Other layouts (such as earlier test builds' IDBFS rows) are refused and
+    // left as they are.
     db = await open(name);
     if (db.version > USER_DB_VERSION) throw new Error('A newer application created this user database');
-    if (db.objectStoreNames.length && !db.objectStoreNames.contains('FILE_DATA') && !db.objectStoreNames.contains('nodes')) throw new Error('Unknown user database layout');
-    if (db.version < USER_DB_VERSION && db.objectStoreNames.contains('FILE_DATA')) {
-      const marker = await get(db,'FILE_DATA',name + '/format.json');
-      if (!marker?.contents || marker.contents.length > 1024) throw new Error('Missing legacy user storage format');
-      validateFormat(JSON.parse(new TextDecoder().decode(marker.contents)),[1,2]);
-      if (!migrate) throw new Error('User storage migration has not been enabled');
-      let bytes = 0;
-      // IDBFS stores one typed array per file; a row-sized allocation is
-      // unavoidable for legacy migration (not for normal format-3 operation).
-      let after;
-      for (;;) {
-        checkCancelled(signal);
-        const page = await rows(db,'FILE_DATA',undefined,{after,limit:1}); if (!page.length) break;
-        bytes += page[0].value.contents?.byteLength || 0; after = page[0].key;
-      }
-      const space = await estimate();
-      if (space?.quota !== undefined && space?.usage !== undefined && space.quota - space.usage < bytes * 1.1 + 16 * 1024 ** 2) {
-        throw new DOMException('Not enough space to migrate safely; legacy saves are still intact','QuotaExceededError');
-      }
-    }
+    if (db.objectStoreNames.length && !db.objectStoreNames.contains('nodes')) throw new Error('Unknown user database layout');
     if (db.version !== USER_DB_VERSION) { db.close(); db = await open(name,USER_DB_VERSION); }
     db.onversionchange = () => { close(); };
     let state = await get(db,'state','format');
@@ -138,22 +120,6 @@ export async function openUserStore({name = USER_DATABASE,locks = globalThis.nav
     const store = {
       name,close,get closed() { return closed; },
       async state() { assertOpen(); return get(db,'state','active'); },
-      async resetMigration() {
-        if (await store.state() || !db.objectStoreNames.contains('FILE_DATA')) throw new Error('There is no pending legacy migration');
-        const migration = await get(db,'state','migration');
-        if (migration) { await store.discard(migration.job); await transaction(db,['state'],'readwrite',tx => tx.objectStore('state').delete('migration')); }
-        await store.collect();
-      },
-      async confirmMigration() {
-        if (!db.objectStoreNames.contains('FILE_DATA') || !await get(db,'state','legacyVerified')) return;
-        const migration = await get(db,'state','migration');
-        // Called only after a successful native checkpoint of the new view.
-        // Deleting the old layout is a separate, atomic, repeatable cleanup.
-        await transaction(db,['FILE_DATA','state','zipEntries'],'readwrite',tx => {
-          if (migration) tx.objectStore('zipEntries').delete(range([migration.job]));
-          tx.objectStore('FILE_DATA').clear(); tx.objectStore('state').delete('legacyVerified'); tx.objectStore('state').delete('migration');
-        });
-      },
       async begin(kind = 'native') {
         assertOpen(); const job = crypto.randomUUID(), active = await store.state();
         await transaction(db,['jobs'],'readwrite',tx => tx.objectStore('jobs').add({job,kind,base:active?.revision || 0,created:Date.now()},job));
@@ -424,7 +390,6 @@ export async function openUserStore({name = USER_DATABASE,locks = globalThis.nav
                     tx.objectStore('state').put(USER_FORMAT,'format');
                     tx.objectStore('state').put(stateRequest.result || null,'previous');
                     tx.objectStore('state').put({revision:pending.result.base + 1,job,completed:Date.now()},'active');
-                    if (pending.result.kind === 'migration') tx.objectStore('state').put({revision:pending.result.base + 1},'legacyVerified');
                     tx.objectStore('jobs').delete(job); return;
                   }
                   const {job:_job,deleted,...node} = cursor.value;
@@ -473,7 +438,7 @@ export async function openUserStore({name = USER_DATABASE,locks = globalThis.nav
         }
         return removed;
       },
-      // Test/recovery instrumentation exposes counts, never the database handle.
+      // Test instrumentation exposes counts, never the database handle.
       async counts() {
         const out = {}; for (const key of STORES) out[key] = await req(db.transaction(key).objectStore(key).count()); return out;
       },
@@ -494,60 +459,18 @@ export async function openUserStore({name = USER_DATABASE,locks = globalThis.nav
         } catch (error) { await store.discard(job); throw error; }
       },
     };
-    if (recovery && !await store.state()) return store;
     if (!await store.state()) {
-      if (!migrate && db.objectStoreNames.contains('FILE_DATA')) throw new Error('User migration is pending');
-      const legacy = db.objectStoreNames.contains('FILE_DATA');
-      if (legacy) {
-        const marker = await get(db,'FILE_DATA',name + '/format.json');
-        if (!marker?.contents || marker.contents.length > 1024) throw new Error('Missing legacy user storage format');
-        validateFormat(JSON.parse(new TextDecoder().decode(marker.contents)),[1,2]);
-      }
-      let migration = await get(db,'state','migration');
-      if (!migration) {
-        const job = await store.begin('migration'); migration = {job,last:null,files:0,bytes:0};
-        await store.stage(job,{id:'root',parent:'',name:'',key:'',mode:0o40700,size:0,time:Date.now()});
-        await transaction(db,['state'],'readwrite',tx => tx.objectStore('state').put(migration,'migration'));
-      }
-      if (legacy) {
-        for (;;) {
-          checkCancelled(signal);
-          const page = await rows(db,'FILE_DATA',undefined,{after:migration.last ?? undefined,limit:1});
-          if (!page.length) break;
-          const {key,value} = page[0];
-          if (!key.startsWith(name + '/')) throw new Error('Unexpected legacy user path');
-          const path = key.slice(name.length + 1), parts = path.split('/'); parts.forEach(canonical);
-          await transaction(db,['zipEntries'],'readwrite',(tx,abort) => {
-            const entries = tx.objectStore('zipEntries'), lookup = [migration.job,parts.map(canonical).join('/')], r = entries.get(lookup);
-            r.onsuccess = () => {
-              if (r.result && r.result.original !== key) { abort(new Error('Conflicting legacy user paths; original files are intact')); return; }
-              try { entries.put({original:key},lookup); } catch (error) { abort(error); }
-            };
-          });
-          if ((value.mode & 0o170000) === 0o040000) await store.resolve(path,{job:migration.job,create:true});
-          else if ((value.mode & 0o170000) === 0o100000 && value.contents instanceof Uint8Array) {
-            const bytes = path === 'format.json' ? new TextEncoder().encode(JSON.stringify(USER_FORMAT)) : value.contents;
-            await store.putFile(migration.job,path,{size:bytes.length,read:async (at,n) => bytes.subarray(at,at + n)},{signal,mode:value.mode,time:+value.timestamp});
-            migration.files++; migration.bytes += bytes.length;
-          } else throw new Error('Unsupported legacy user file');
-          migration.last = key;
-          await transaction(db,['state'],'readwrite',tx => tx.objectStore('state').put(migration,'migration'));
-          progress({phase:'user-migration',files:migration.files,bytes:migration.bytes,cancelAllowed:true});
-        }
-      } else {
-        const data = new TextEncoder().encode(JSON.stringify(USER_FORMAT));
-        await store.putFile(migration.job,'format.json',{size:data.length,read:async (at,n) => data.subarray(at,at + n)});
-      }
-      for (const dir of ['savegame','settings','exports','port']) await store.resolve(dir,{job:migration.job,create:true});
-      await store.commit(migration.job,{signal});
-      // Legacy rows deliberately survive activation. A later explicit verified
-      // cleanup may remove them; quota or a crash can never delete the fallback.
-      try {
-        await store.discard(migration.job);
-        await transaction(db,['state'],'readwrite',tx => tx.objectStore('state').delete('migration'));
-      } catch (error) { console.warn('Verified user migration cleanup deferred',error); }
+      // A new library: the format marker and the engine's directories are
+      // published as the first checkpoint. An interrupted attempt leaves only
+      // a staging job, discarded below; the next open starts again.
+      const job = await store.begin('init');
+      await store.stage(job,{id:'root',parent:'',name:'',key:'',mode:0o40700,size:0,time:Date.now()});
+      const data = new TextEncoder().encode(JSON.stringify(USER_FORMAT));
+      await store.putFile(job,'format.json',{size:data.length,read:async (at,n) => data.subarray(at,at + n)});
+      for (const dir of ['savegame','settings','exports','port']) await store.resolve(dir,{job,create:true});
+      await store.commit(job,{signal});
     }
-    // Jobs other than the resumable migration belong to a closed prior writer.
+    // Jobs left by a closed prior writer, including an unfinished first one.
     // Metadata cursor only, never payloads or the live tree at startup.
     for (;;) {
       const jobs = await rows(db,'jobs'); if (!jobs.length) break;

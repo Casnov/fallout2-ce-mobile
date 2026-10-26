@@ -6,12 +6,11 @@ private patch. `web-dist` packages the engine, a newly generated `ce.dat`,
 launcher, local fonts/licenses, and `build-info.json` with one version and
 asset sizes/SHA-256 hashes. Original Fallout files are never packaged.
 
-Local ZIP installation and Home Screen launch work in the technical check.
-Durable save/settings completion passed physical acceptance on Redmi 15C in
-Chrome PWA; the iPhone regression remains grouped for later.
-The format-3 save implementation is a separate candidate pending the early
-iPhone large-file handoff check. Cold offline startup and safe updates remain
-subsequent work. See [save-storage.md](save-storage.md). The development game adapter reads a local folder through the
+The player installs their own game from a ZIP in the file manager
+(`files.html`); resources, saves and settings stay in the browser's local
+storage ([storage.md](storage.md), [save-storage.md](save-storage.md)).
+Cold offline startup and safe updates remain subsequent work.
+The development game adapter reads a local folder through the
 local development server; changes and saves in this session exist only in WASM
 memory and disappear on reload. It does not read or alter the folder's saves.
 
@@ -191,33 +190,35 @@ with **Fallout Classic Dialog** as the default font and PT Mono as a glyph
 fallback. Full import states and matching the native Android import font
 are handled with the later import implementation.
 
-## Local resource storage and HTTPS check
+## Local storage and HTTPS check
 
 `python3 os/web/https-test.py` starts a verified static-only loopback server
 and an installed Cloudflare Quick Tunnel. It exposes no `--game` endpoints.
-Open the printed `/device-check.html` on the phone and add it to the Home
-Screen **before** importing the local ZIP. Full instructions:
-[iphone-storage-test.md](iphone-storage-test.md).
+Open the printed address on the phone; Home Screen installation is optional.
+Original files never cross the tunnel: the player selects their own ZIP on
+the device.
 
-The technical page streams Store/Deflate ZIP/ZIP64 in a dedicated module worker
-using vendored zip.js 2.24.0 (BSD-3-Clause). Resources live in their own IndexedDB;
-a completed manifest becomes active only after CRC-checked extraction. Cancel,
-quota failure and interruption do not activate partial data. Local range reads
-verify each block's SHA-256. Database v2 uses content-addressed chunks, references,
-completed manifests and a transactional active pointer. The v1 device-check DB
-upgrades in place in resumable batches; its historical name is retained. Old
-writers cannot open v2. One exclusive Web Lock owns a game or storage operation.
-See [storage.md](storage.md) for the format, file lifetimes and device acceptance.
+The file manager streams Store/Deflate ZIP/ZIP64 in a dedicated module worker
+(`probe-worker.js`) using vendored zip.js 2.24.0 (BSD-3-Clause). Resources live
+in their own IndexedDB; a completed manifest becomes active only after
+CRC-checked extraction. Cancel, quota failure and interruption do not activate
+partial data. Local range reads verify each block's SHA-256. One exclusive Web
+Lock owns a game or storage operation. A full game ZIP or a prepared complete
+mod set over the installed base is reviewed before replacement. The launcher
+mounts completed local resources through the same range-reader contract as
+the LAN adapter. Engine-owned ce.dat still comes from the matching app bundle;
+the writable game view cannot modify the stored resource chunks. See
+[storage.md](storage.md).
 
-The normal launcher and `index.html?device-check=1` mount completed local resources through the
-same range-reader contract as the LAN adapter. Original files never cross the
-HTTPS tunnel. Engine-owned ce.dat still comes from the matching app bundle;
-the writable game view cannot modify the stored resource chunks. The format-3 candidate uses a separate block store and a lazy writable VFS,
+Saves and settings use a separate block store with a lazy writable view,
 including paged directory metadata. A native checkpoint publishes the complete
-slot, records and settings atomically before returning save success. Normal engine fsync does not persist unfinished
-catalog state; SDK and FS.syncfs are not patched. See [saves-test.md](saves-test.md)
-for device acceptance. Cold offline app loading still needs the later
-service-worker/update work. No service worker or automatic telemetry is installed.
+slot, records and settings atomically before returning save success. Normal
+engine fsync does not persist unfinished catalog state; SDK and FS.syncfs are
+not patched. All slots are exchanged with Android and PCs as one ZIP/ZIP64 from
+the game's Settings, over the paused session. User databases in the IDBFS
+layout of earlier test builds are refused and left unchanged, not migrated.
+See [save-storage.md](save-storage.md). No service worker or automatic
+telemetry is installed.
 
 After the game's main returns, the web wrapper explicitly finishes the runtime
 with `emscripten_force_exit`, so pending asynchronous callbacks cannot defer
@@ -230,78 +231,13 @@ Storage tests need `npm ci --prefix os/web --ignore-scripts` first (fake-indexed
 is a pinned development dependency only) and Node 24+ with Web Locks. They exercise the actual importer
 with ZIP64/Store/Deflate, corruption, cancellation, quota errors, incomplete
 recovery and invalid paths. They do not establish iPhone performance or OS
-storage persistence. The physical iPhone report for 0935bb30 confirmed the full
-RPU ZIP import, Home Screen launch and local reads after closing/reopening the
-app. The user also confirmed local reads with the network disabled in 0935bb30
-and the exit fix on the physical iPhone in 8554dc12. The second report retained
-the same installed generation without another ZIP import. Stage 2 feasibility
-is accepted; peak Safari RAM remains unmeasured, and cold offline application
-loading is not implemented by this experiment.
-
-Stage 3 common storage acceptance was reported on Redmi 15C / Android 16 /
-Yandex Browser 26.8.7.49.00, build acf386ed: DB v2/format 1, successful game
-launch, Exit, close/reopen and verified local reads without another ZIP after
-reopening. This permits stage 4; the iPhone regression remains grouped for later.
-The report's stored import duration is not the duration of this short test or
-of the v1 migration. The user subsequently confirmed finding the old installation
-without selecting ZIP and waiting for conversion; migration is accepted on this
-Android browser. No previous Redmi raw manifest was supplied for comparison.
-
-Stage 4 user format is 2 (the resource format remains 1/database v2). Format 1
-user data upgrades without clearing saves; unknown future formats fail closed.
-The controlled user checkpoint uses IDBFS's pinned layout/restore helpers with
-an atomic strict-durability transaction and inode revisions for equal-time writes.
-Quota/request/abort errors restore the last durable user view before any retry.
-Failed settings Apply is surfaced and rolls back live preferences. Device reports
-include only committed user metadata (counts/format/records), not save contents.
-Tests compile the actual catalog/storage/records/web bridge and webExit in WASM;
-full game UI acceptance remains on the available phone, not simulated on Mac.
-
-The stage-4 Chrome PWA report (build 6a02d761) confirmed secure/standalone/
-persisted=true, user format 2, five saved slots, 19 settings files and records.
-The user confirmed manual/automatic quick saves and settings after relaunches.
-This was a fresh Chrome installation after deleting the Yandex version, not a
-migration between browsers. Its read=null does not establish a separate resource
-SHA range probe; save loading was confirmed by the user. Stage 4 is accepted
-on Android; cold offline app startup remains stage 8.
-
-Stage 5 adds a reviewed full-ZIP replacement through the same technical page.
-`zip-import.js` validates the directory and available-space estimate first,
-then stages a separate generation with bounded 1 MiB/64-block transactions.
-CRC/actual lengths must pass before the atomic active-manifest switch. Cancel,
-quota failure and interrupted staging preserve the old installation and user
-store. CP866/UTF-8, ZIP64, malformed ZIPs, actual transaction rollback, stale
-plans and the worker protocol are covered by the Node tests. A tiny synthetic
-bad-CRC fixture is explicitly packaged for physical phone testing; it contains
-no original game data and must never activate. See [import-test.md](import-test.md)
-and [storage.md](storage.md). Physical stage-5 acceptance passed on Redmi 15C / Chrome PWA, build5009c4e6:
-bad ZIP rejection, cancellation and app termination during staging, replacement
-and existing save/settings loading were confirmed by the user. Before/after
-reports retain five slots/19 settings files/records, verified range reads and
-show the new active generation with all resource blocks reused. iPhone regression
-remains grouped for later; cold offline app startup remains stage8.
-
-Stage6 adds `files.html`, the production file manager in the Android import
-panel style, with Fallout Classic Dialog and the saved PT Mono alternative.
-It supports a full game ZIP or a prepared full mod set over the installed base,
-a review before replacement, retained DAT/music references, removed obsolete
-mods, and a separate embedded-save import. Config templates preserve player
-settings while using new system/language/mod defaults after a mod update.
-
-Save exchange uses SAVEGAME/SLOTnn and fallout2-saves.txt, matching Android.
-The format-3 candidate exports all slots into one disk-backed ZIP/ZIP64, streams
-imports into staging, and provides native-style add/explicit replace/backup
-steps. The old 128 MiB selection implementation is retained only as a historical
-test fixture and is not packaged. Migration is resumable and preserves legacy
-rows through validation and a successful native checkpoint. Implementation,
-budgets and evidence: [save-storage.md](save-storage.md). Physical iPhone large
-ZIP handoff is still pending: [large-saves-test.md](large-saves-test.md).
+storage persistence.
 
 The ordinary launcher is now a compact Fallout2/Play screen. Resource inspection
 runs before showing Play; missing resources route to the importer. Play retains
 synchronous audio unlock/fullscreen requests before asynchronous engine setup.
 File management remains in the game's Settings; resource errors provide a
-recovery link. The optional technical page stays available during development.
+recovery link.
 PWA installation is not required: ordinary browser tabs use the same launch path.
 Stage 7 reuses native touch/MUI behavior and adds browser interruption handling;
 implementation and acceptance scope: [mobile-behavior.md](mobile-behavior.md).

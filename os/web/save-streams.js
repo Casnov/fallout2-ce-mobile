@@ -62,7 +62,7 @@ export async function prepareSaveZip(file,{signal,storeFactory = openResourceSto
   };
   try {
     owner = await storeFactory(); const active = await owner.active(); if (!active) fail('base_required','Install game files first');
-    store = await openUserStore({name:userName,signal,progress});
+    store = await openUserStore({name:userName,signal});
     scan = await store.begin('archive'); const scanRoot = 'archive-' + scan;
     await store.stage(scan,{id:scanRoot,parent:'',name:scanRoot,mode:0o40700,size:0,time:Date.now()});
     const roots = new Map(); let bytes = 0, headers = 0, extractedFiles = 0, comparer;
@@ -169,7 +169,7 @@ export async function exportSaveZip({signal,storeFactory = openResourceStore,use
   progress = () => {},temporary = temporaryExport} = {}) {
   const owner = await storeFactory(); let store;
   try {
-    store = await openUserStore({name:userName,signal,progress});
+    store = await openUserStore({name:userName,signal});
     return await writeExport(owner,store,{signal,progress,temporary});
   } finally { await store?.close(); await owner.close(); }
 }

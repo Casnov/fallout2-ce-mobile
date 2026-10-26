@@ -45,16 +45,7 @@ async function launch(mode,{fault,before} = {}) {
 }
 const deletion = indexedDB.deleteDatabase(USER_DATABASE); await new Promise((r,j) => { deletion.onsuccess = r; deletion.onerror = j; });
 await launch('seed'); await launch('verify');
-const legacyRows = await snapshot();
-await new Promise((r,j) => { const d = indexedDB.deleteDatabase(USER_DATABASE); d.onsuccess = r; d.onerror = j; });
-const legacyOpen = indexedDB.open(USER_DATABASE,21); legacyOpen.onupgradeneeded = () => legacyOpen.result.createObjectStore('FILE_DATA');
-const legacyDb = await new Promise((r,j) => { legacyOpen.onsuccess = () => r(legacyOpen.result); legacyOpen.onerror = j; });
-const legacyTx = legacyDb.transaction('FILE_DATA','readwrite');
-for (const [path,text] of legacyRows) legacyTx.objectStore('FILE_DATA').put({mode:0o100600,timestamp:new Date(12345),
-  contents:encode(path === 'format.json' ? JSON.stringify({format:2,minReader:2,minWriter:2}) : text)},USER_DATABASE + '/' + path);
-await new Promise((r,j) => { legacyTx.oncomplete = r; legacyTx.onabort = j; }); legacyDb.close();
-await launch('verify');
-console.log('format3 actual legacy progress migration opens in native catalog without game reimport OK');
+console.log('format3 native seed and verify OK');
 await launch('quick'); await launch('overwrite');
 assert.ok((await snapshot()).get('savegame/SLOT01/SAVE.DAT')?.endsWith('D'));
 console.log('format3 native manual/quick, overwrite, settings, reopen OK');
@@ -74,7 +65,7 @@ await launch('recovery',{before:async m => {
   await u.commit();
 }});
 await launch('verify');
-console.log('format3 native legacy journal recovery OK');
+console.log('format3 native interrupted catalog journal recovery OK');
 await launch('noop',{before:async m => {
   const path = USER_DATABASE + '/port/equal-time.txt';
   for (const value of ['one','two']) {

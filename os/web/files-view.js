@@ -15,7 +15,7 @@ const markup = `
       <progress id="progress" hidden aria-label="Обработка файлов"></progress>
       <p id="progress-text" hidden></p>
       <div id="actions"><button id="secondary" type="button" hidden></button><button id="primary" type="button" hidden></button><a id="download" class="button" hidden>Сохранить ZIP</a></div>
-      <p id="footer"><a id="technical" href="./device-check.html">Техническая проверка</a> · <span id="build"></span></p>
+      <p id="footer"><span id="build"></span></p>
     </section>
   </main>
   <button id="back" type="button" aria-label="Вернуться в игру" hidden><img src="./icons/import-back.svg" width="28" height="28" alt=""></button>

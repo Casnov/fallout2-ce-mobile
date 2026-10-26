@@ -1,16 +1,14 @@
 # Web user storage and save interchange
 
-Format 3 replaces the whole-library IDBFS/MEMFS restore and the temporary
-128 MiB exchange implementation. That implementation now exists only in
-`fixtures/legacy-v2-*` for regression/migration reference and is not packaged.
+Format 3 replaced the whole-library IDBFS/MEMFS restore and the temporary
+128 MiB exchange implementation of earlier test builds.
 
 ## Durable representation
 
 The existing user database name stays `/fallout2-ce-mobile-userdata`; its schema
 is 22, with reader/writer format guards `{format:3,minReader:3,minWriter:3}`.
-The resource database is unchanged. Game DAT files are never reimported for a
-user-store migration. All production writers retain the historical resource
-lease and acquire the separate user writer lease.
+The resource database is separate. All production writers retain the historical
+resource lease and acquire the separate user writer lease.
 
 * `nodes`: stable UUID inode, parent UUID, canonical name, type, size, time,
   immutable content ID and CRC. The unique parent/name index is the namespace.
@@ -48,25 +46,15 @@ files; archive/engine payloads do not use their whole-file helper. Block/node
 counters are budgets for our caches, not a measurement of total Safari RSS or
 the game's other allocations. The engine remains wasm32.
 
-## Migration and recovery
+## Earlier layouts and recovery
 
-Before schema upgrade, validate the legacy marker and estimate room for a safe
-second representation. Adding stores never deletes `FILE_DATA`. Conversion is
-row-by-row, sealed/verified in blocks, with a durable resume cursor. Legacy
-IndexedDB necessarily clones one old whole-file row; its largest-file peak
-cannot be promised to equal steady-state format-3 memory use.
+User databases in the IDBFS layout of earlier test builds (schema 21, formats
+1–2) are not migrated: opening one fails with an unknown-layout error and leaves
+its rows untouched. Old SDK clients cannot open schema 22 and cannot overwrite
+it. Unknown/future formats fail closed.
 
-The old rows survive migration activation. They are removed only after a
-successful native checkpoint of the new view. Cleanup is a separate atomic,
-repeatable transaction. A quota failure or interruption before activation keeps
-the old rows intact. The file manager offers recovery export without finishing
-migration; it can discard incomplete migrated blocks to reclaim room first.
-Recovery export still needs disk space and necessarily reads one legacy file
-row at a time. Old SDK clients cannot open schema 22 and cannot overwrite it.
-Unknown/future formats fail closed.
-
-Interrupted legacy catalog journals must first be recovered by the existing
-C++ catalog on game launch. Exchange refuses to bypass those journals.
+Interrupted native catalog journals (`.ce-write-N`) must first be recovered by
+the existing C++ catalog on game launch. Exchange refuses to bypass those journals.
 
 ## ZIP and UI contract
 
@@ -103,13 +91,13 @@ errors. The system copy in Files/downloads needs additional space outside OPFS.
 The final UI action downloads a disk-backed File. It reports preparation
 and handoff, not observed completion in Files. Temporary files are not deleted
 on pagehide; they are retained for seven days and old abandoned exports are
-collected on a later export. The isolated probe has its own explicit cleanup.
+collected on a later export.
 No service worker/cold offline startup is added here (release stage 8).
 
 ## Evidence and remaining acceptance
 
 Automated checks cover 1000-slot export/import, quick/manual allocation, native
-Android interchange, corruption/cancel/quota/abort, migration/resume/recovery,
+Android interchange, corruption/cancel/quota/abort, refused earlier layouts,
 previous checkpoints, equal timestamps and real C++ catalog operations in WASM.
 The native lazy-I/O fixture references 1000 slots with a **62.5 GiB logical**
 library using shared immutable synthetic data, checks cache budgets, seek/COW
@@ -123,10 +111,7 @@ WebKit desktop UI checked synthetic import, OPFS export, actual download,
 duplicate review and backup-before-replace. That downloaded ZIP passed Android
 GameSaves tests. It does not establish iPhone multi-GiB handoff or phone RSS.
 
-**Pending:** iPhone >4 GiB random-block Store ZIP handoff/reselection, then the
-grouped real-save restore/relaunch/game-load and Android↔web RPU transfer. The
-candidate is separate from the existing phone bundle until that early probe is
-accepted. See [large-saves-test.md](large-saves-test.md).
+**Pending:** a real Android↔web RPU save transfer on phones.
 
 References: [ZIP APPNOTE](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT),
 [WebKit OPFS](https://webkit.org/blog/12257/the-file-system-access-api-with-origin-private-file-system/),
@@ -135,7 +120,7 @@ References: [ZIP APPNOTE](https://pkware.cachefly.net/webdocs/casestudies/APPNOT
 
 ### Hardware gate update, 25 October 2026
 
-The Safari iPhone probe created a 4,311,744,764-byte Store ZIP in 3723 ms. The user confirmed downloading it and reselecting that downloaded file from Files: matching size and valid first/end records. Full phone CRC was not measured. Web Share failed reading; WebKit ShareDataReader uses ReadAsArrayBuffer for each entire file before opening its sheet. Production and probe now use direct download only, for every size. No arbitrary file-size threshold was introduced. Build 1d756577 is live on the existing test origin. Grouped PWA migration/real-save loading/export/restore acceptance remains pending.
+The Safari iPhone probe created a 4,311,744,764-byte Store ZIP in 3723 ms. The user confirmed downloading it and reselecting that downloaded file from Files: matching size and valid first/end records. Full phone CRC was not measured. Web Share failed reading; WebKit ShareDataReader uses ReadAsArrayBuffer for each entire file before opening its sheet. Production uses direct download only, for every size. No arbitrary file-size threshold was introduced. On build 1d756577 the user then confirmed save migration, real-save loading, export and restore in the iPhone PWA.
 
 Source: https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/ShareDataReader.cpp
 

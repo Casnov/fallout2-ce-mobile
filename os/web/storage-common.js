@@ -49,19 +49,8 @@ export function blockBatch(store, run, signal) {
     checkCancelled(signal);
     if (!pending.length) return;
     const batch = pending; pending = []; bytes = 0;
-    if (store.writeBlocks) {
-      const result = await store.writeBlocks(run,batch,{signal});
-      for (const key of ['transactions','hashMs','writeMs','newBytes','reusedBytes']) totals[key] += result[key] || 0;
-    } else {
-      // Legacy format fixtures implement the original block-reader contract.
-      for (const row of batch) {
-        checkCancelled(signal);
-        const started = performance.now();
-        await store.block(run,row.path,row.index,row.data);
-        totals.transactions++; totals.writeMs += performance.now() - started;
-        totals.newBytes += row.data.length;
-      }
-    }
+    const result = await store.writeBlocks(run,batch,{signal});
+    for (const key of ['transactions','hashMs','writeMs','newBytes','reusedBytes']) totals[key] += result[key] || 0;
   }
   return {
     async block(_run,path,index,data) {

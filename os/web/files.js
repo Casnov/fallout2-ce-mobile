@@ -92,7 +92,7 @@ export function createFilesManager({root = document, mode = null, resources = nu
     pendingAction = type;
     busy = true; cancelling = false; revoke(); $('saves-actions').hidden = true; back(null);
     $('progress').hidden = false; $('progress').removeAttribute('value'); $('progress-text').hidden = false;
-    buttons(null,['inspect','inspect-saves','install','install-saves','export-saves','export-before-replace','export-legacy'].includes(type)
+    buttons(null,['inspect','inspect-saves','install','install-saves','export-saves','export-before-replace'].includes(type)
       ? [labels.cancel,() => { cancelling = true; $('secondary').disabled = true; $('message').textContent = t('Отменяю…','Cancelling…'); worker.postMessage({type:'cancel'}); }] : null);
     if (type === 'install-saves') $('message').textContent = n('saves_copying');
     worker.postMessage({type,...extra,...(type === 'status' && resources ? {resources} : {})});
@@ -174,14 +174,12 @@ export function createFilesManager({root = document, mode = null, resources = nu
   async function start() {
     $('saves-import').textContent = t('Импорт сохранений','Import saves'); $('saves-export').textContent = t('Экспорт сохранений','Export saves');
     $('back').setAttribute('aria-label',n('import_back_to_game'));
-    $('technical').textContent = t('Техническая проверка','Technical check');
     if (!isSecureContext || !navigator.locks || !globalThis.indexedDB) throw new Error(t('Нужен современный браузер по HTTPS.','A modern browser over HTTPS is required.'));
     if (!buildId) {
       const response = await fetch('./build-info.json',{cache:'no-store'}); if (!response.ok) throw new Error('build-info');
       buildId = (await response.json()).buildId;
     }
     $('build').textContent = buildId;
-    if (resources) { $('technical').target = '_blank'; $('technical').rel = 'noopener'; }
     failedWorker = false;
     worker = new Worker(new URL('./probe-worker.js',import.meta.url),{type:'module'});
     worker.onerror = () => {
@@ -194,7 +192,6 @@ export function createFilesManager({root = document, mode = null, resources = nu
         const value = data.value;
         if (value.cancelAllowed === false) buttons(null,null);
         if (value.phase === 'commit' || value.phase === 'cleanup') { $('message').textContent = t('Завершаю установку…','Finishing installation…'); return; }
-        if (value.phase === 'migrate') { $('message').textContent = t('Обновляю местное хранилище…','Upgrading local storage…'); return; }
         if (value.phase === 'complete') return;
         $('progress').max = value.total || 1; $('progress').value = value.bytes || 0;
         $('progress-text').textContent = `${size(value.bytes || 0)} / ${size(value.total || 0)} · ${value.file || ''}`;
@@ -213,15 +210,12 @@ export function createFilesManager({root = document, mode = null, resources = nu
         }
         plan = null; show(resources ? labels.saves : labels.title,errors[data.code] || t('Операция не выполнена. Прежние данные не заменены.','Operation failed. Previous data was not replaced.'));
         $('details').textContent = data.message; surface.classList.add('error');
-        if (!resources && (data.userStorage?.migration || (data.userStorage?.format === 2 && data.code === 'no_space'))) {
-          $('note').textContent = t('Прежние сейвы сохранены. Можно экспортировать их без завершения переноса; для ZIP тоже потребуется свободное место.','Legacy saves are intact. You can export them without finishing migration; the ZIP also needs free space.');
-          buttons([t('Экспорт прежних сейвов','Export legacy saves'),() => send('export-legacy')],[t('Повторить','Retry'),welcome]);
-        } else buttons([t('Попробовать снова','Try again'),welcome],active ? [labels.play,play] : null);
+        buttons([t('Попробовать снова','Try again'),welcome],active ? [labels.play,play] : null);
         return;
       }
       plan = data.plan;
       if (returning) { returning = false; play(); return; }
-      if (['export-saves','export-before-replace','export-legacy'].includes(data.action)) { exported(data.exchange,data.action === 'export-before-replace' ? confirmReplace : null); return; }
+      if (['export-saves','export-before-replace'].includes(data.action)) { exported(data.exchange,data.action === 'export-before-replace' ? confirmReplace : null); return; }
       if (plan) { review(); return; }
       if (data.action === 'install' && oldPlan?.archiveSaves && file) {
         show(labels.title,t('Игра установлена. В архиве также есть сохранения.','Game installed. The archive also contains saves.'),t('Их можно проверить и добавить отдельно. Текущие слоты останутся.','Review and add them separately. Existing slots are preserved.'));

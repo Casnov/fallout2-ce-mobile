@@ -12,16 +12,12 @@ from import_ui import write_native_assets
 ROOT = Path(__file__).resolve().parents[2]
 SITE_FILES = ['index.html', 'app.css', 'app.js', 'filesystem.js', 'browser.js',
               'resource-store.js', 'working-files.js', 'storage-common.js', 'user-report.js',
-              'device-check.html', 'device-check.css', 'device-check.js',
               'zip-import.js', 'probe-worker.js', 'manifest.webmanifest',
               'game-config.js', 'files.html', 'files.css', 'files.js', 'files-view.js', 'files-page.js',
               'save-session.js', 'save-download.js',
               'user-store.js', 'user-lazy-filesystem.js', 'user-runtime.js',
               'save-format.js', 'save-streams.js', 'save-zip-reader.js', 'zip-directory.js',
-              'legacy-save-export.js',
               'zip-output.js', 'opfs-export.js',
-              'large-zip-probe.html', 'large-zip-probe.js', 'large-zip-probe-worker.js',
-              'checks/invalid-crc.zip',
               'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png',
               'vendor/zipjs/zip.min.js', 'vendor/zipjs/LICENSE', 'vendor/zipjs/README.md']
 FONT_FILES = ['FalloutClassicDialog.ttf', 'FalloutClassicDialog-LICENSE.txt', 'PTM55FT.ttf', 'OFL.txt']
