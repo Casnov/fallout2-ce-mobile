@@ -7,6 +7,10 @@
 #include "touch.h"
 #include "win32.h"
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 namespace fallout {
 
 static int gMouseWheelDeltaX = 0;
@@ -56,7 +60,11 @@ bool mouseDeviceInitMode()
 {
 #if FALLOUT_TOUCH_ONLY
     // CE: No mouse: the pointer isn't captured, no system cursor.
+#ifdef __EMSCRIPTEN__
+    SDL_ShowCursor(webMouseAsTouch() ? SDL_ENABLE : SDL_DISABLE);
+#else
     SDL_ShowCursor(SDL_DISABLE);
+#endif
     mouseRelativeMode = false;
     return true;
 #else

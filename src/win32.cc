@@ -4,6 +4,10 @@
 
 #include <SDL.h>
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 #if __APPLE__
 #include <TargetConditionals.h>
 #endif
@@ -103,6 +107,12 @@ int main(int argc, char* argv[])
     chdir(SDL_AndroidGetExternalStoragePath());
 #endif
 
+#ifdef __EMSCRIPTEN__
+    // Mouse-as-finger is opt-in for local development, never the mobile default.
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, webMouseAsTouch() ? "1" : "0");
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
+
     if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
         return EXIT_FAILURE;
     }
@@ -132,5 +142,9 @@ int main(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-    return fallout::main(argc, argv);
+    int result = fallout::main(argc, argv);
+#ifdef __EMSCRIPTEN__
+    fallout::webExit(result);
+#endif
+    return result;
 }

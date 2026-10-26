@@ -1190,6 +1190,12 @@ void muiRender(SDL_Renderer* renderer)
 void muiResetRenderer()
 {
     muiDrawReset();
+    muiInvalidateLayout();
+}
+
+void muiInvalidateLayout()
+{
+    gSafeRectValid = false;
 }
 
 void muiHandleTextInput(const char* text)
@@ -1285,6 +1291,17 @@ bool muiForgetMissingFingers(const SDL_FingerID* down, int count)
     }
 
     return forgotten;
+}
+
+void muiCancelTouches()
+{
+    gEvents.clear();
+    muiForgetMissingFingers(nullptr, 0);
+    // A queued physical Up may have released SDL capture while MUI is still
+    // presenting its Down frame. End that drag off-screen too, never as a tap.
+    if (gEvents.empty()) {
+        gEvents.push_back({ PointerEventType::Up, -1.0e6f, -1.0e6f, SDL_GetTicks() });
+    }
 }
 
 bool muiGetWidgetCenter(const char* id, float* x, float* y)

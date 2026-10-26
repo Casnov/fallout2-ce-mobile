@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 #include "character_editor.h"
 #include "color.h"
 #include "critter.h"
@@ -1670,7 +1674,11 @@ namespace {
         const MuiTheme& theme = muiTheme();
         ui.dim();
 
-        for (char32_t codepoint : ui.takeTextInput()) {
+        std::u32string typed = ui.takeTextInput();
+#ifdef __EMSCRIPTEN__
+        if (webTakeTextInput(typed)) name.clear();
+#endif
+        for (char32_t codepoint : typed) {
             // One line of the game's charset.
             if (codepoint < 0x20 || muiEncodeGameText(std::u32string(1, codepoint)).empty()) {
                 continue;
@@ -1700,6 +1708,13 @@ namespace {
         muiStrokeRoundRect(field, ui.dp(6.0f), ui.dp(1.2f), theme.buttonBorder);
 
         float size = ui.dp(18.0f);
+#ifdef __EMSCRIPTEN__
+        webTextInputField(name, field.x, field.y, field.w, field.h, size, kNameMaxLength);
+        if (webTextInputDone()) {
+            closeName(true);
+            return;
+        }
+#endif
         float textWidth = muiTextWidth(name, size);
         MuiRect textRect = field.inset(ui.dp(10.0f), 0.0f);
         muiDrawTextAligned(name, textRect, size, theme.accent, MuiAlign::Start, MuiAlign::Center);

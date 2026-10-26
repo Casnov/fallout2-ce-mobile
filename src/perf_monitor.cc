@@ -4,10 +4,25 @@
 
 #include <string>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include "game.h"
 #include "settings.h"
 
 namespace fallout {
+
+#ifdef __EMSCRIPTEN__
+// Reuse the existing per-second frame measurements in the local web overlay.
+// This is active only with perf_log, and never transmits device measurements.
+// clang-format off
+EM_JS(void, webPublishFrameTiming, (double fps, double longest, double logic, double upload, double ui, double present), {
+    Module['webFrameTiming'] = {fps:fps, longestMs:longest, logicMs:logic,
+        uploadMs:upload, uiMs:ui, presentMs:present};
+});
+// clang-format on
+#endif
 
 namespace {
 
@@ -140,6 +155,10 @@ void perfMonitorFrame(const PerfFrame& frame)
     }
 
     double n = gTotals.frames;
+#ifdef __EMSCRIPTEN__
+    webPublishFrameTiming(n * 1000.0 / elapsed, gTotals.longest,
+        gTotals.logic / n, gTotals.upload / n, gTotals.ui / n, gTotals.present / n);
+#endif
     fprintf(gLog, "%-18s %5.1f %6.1f | %5.2f %5.2f %5.2f %5.2f %5.2f | %5.2f %5.2f %5.2f %5.2f | %4.1f %6.1f %6.1f\n",
         perfMonitorGameModeNames(GameMode::getCurrentGameMode()).c_str(),
         n * 1000.0 / elapsed,

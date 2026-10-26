@@ -6,6 +6,10 @@
 #include <SDL.h>
 #include <lodepng.h>
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 #include "action_log.h"
 #include "audio_engine.h"
 #include "color.h"
@@ -1117,6 +1121,52 @@ static void inputResetTouchGestures()
     mouseResetTouchGesture();
 }
 
+// One native focus path for Android's SDL events and the browser's polled
+// visibility/focus. DOM callbacks never re-enter the Asyncify engine stack.
+static void inputSetWindowActive(bool active)
+{
+    if (active) {
+        touchLogFocus(true);
+        actionLog("the game came back");
+        gProgramIsActive = true;
+        movieHandleFocusGained();
+        if (!mouseDeviceInitMode()) {
+            debugPrint("Failed to initialize mouse mode on focus gained: %s\n", SDL_GetError());
+        }
+        windowRefreshAll(&_scr_size);
+        audioEngineResume();
+        // Android: the app's import or export of saves was over it,
+        // the system's touch & hold delay may have changed.
+        lsgMobileSavesMayHaveChanged();
+        touchRefreshLongPressMs();
+    } else {
+        // Autotests keep running in the background (several at once:
+        // only one window can have the focus).
+        if (devAutotestIsEnabled()) {
+            return;
+        }
+
+        touchLogFocus(false);
+        actionLog("the game went to the background");
+        actionLogFlush();
+#if FALLOUT_TOUCH_ONLY
+        // Android may close the app from the background without the
+        // game's exit, which writes the settings (the map's zoom).
+        settingsSave();
+#endif
+        gProgramIsActive = false;
+        mouseDeviceInitMode();
+        audioEnginePause();
+
+        // CE: Nothing stays pressed while the game is away (the
+        // ends may not come): fingers, their gestures, keys.
+        muiForgetMissingFingers(nullptr, 0);
+        touch_forget_missing(nullptr, 0);
+        inputResetTouchGestures();
+        keyboardReset();
+    }
+}
+
 void _GNW95_process_message()
 {
     // We need to process event loop even if program is not active or keyboard
@@ -1128,7 +1178,28 @@ void _GNW95_process_message()
 
     KeyboardData keyboardData;
     SDL_Event e;
-    while (SDL_PollEvent(&e)) {
+    for (;;) {
+#ifdef __EMSCRIPTEN__
+        // Poll again after each event: settingsSave/reads can suspend this
+        // stack, and an interruption may arrive before it resumes the loop.
+        int state = webPollWindowState();
+        if (state & kWebCancelTouches) {
+            SDL_FlushEvent(SDL_FINGERDOWN);
+            SDL_FlushEvent(SDL_FINGERMOTION);
+            SDL_FlushEvent(SDL_FINGERUP);
+            muiCancelTouches();
+            touch_cancel_all();
+            inputResetTouchGestures();
+            gameCommandsClear();
+        }
+        if (state & kWebViewportChanged) handleWindowSizeChanged();
+        // A mobile browser may freeze the loop until the page is visible
+        // again. Still run the native interruption/reset and resume sequence.
+        if ((state & kWebWindowInterrupted) && gProgramIsActive) inputSetWindowActive(false);
+        bool active = (state & kWebWindowActive) != 0;
+        if (active != gProgramIsActive) inputSetWindowActive(active);
+#endif
+        if (!SDL_PollEvent(&e)) break;
         switch (e.type) {
         case SDL_MOUSEMOTION:
         case SDL_MOUSEBUTTONDOWN:
@@ -1146,6 +1217,9 @@ void _GNW95_process_message()
         case SDL_FINGERDOWN:
         case SDL_FINGERMOTION:
         case SDL_FINGERUP:
+#ifdef __EMSCRIPTEN__
+            if (!gProgramIsActive) break;
+#endif
             // CE: A new finger: a finger of ours with its number is one
             // whose end never came (Android reuses numbers).
             if (e.type == SDL_FINGERDOWN) {
@@ -1231,45 +1305,14 @@ void _GNW95_process_message()
                 handleWindowSizeChanged();
                 break;
             case SDL_WINDOWEVENT_FOCUS_GAINED:
-                touchLogFocus(true);
-                actionLog("the game came back");
-                gProgramIsActive = true;
-                movieHandleFocusGained();
-                if (!mouseDeviceInitMode()) {
-                    debugPrint("Failed to initialize mouse mode on focus gained: %s\n", SDL_GetError());
-                }
-                windowRefreshAll(&_scr_size);
-                audioEngineResume();
-                // Android: the app's import or export of saves was over it,
-                // the system's touch & hold delay may have changed.
-                lsgMobileSavesMayHaveChanged();
-                touchRefreshLongPressMs();
+#ifndef __EMSCRIPTEN__
+                inputSetWindowActive(true);
+#endif
                 break;
             case SDL_WINDOWEVENT_FOCUS_LOST:
-                // Autotests keep running in the background (several at once:
-                // only one window can have the focus).
-                if (devAutotestIsEnabled()) {
-                    break;
-                }
-
-                touchLogFocus(false);
-                actionLog("the game went to the background");
-                actionLogFlush();
-#if FALLOUT_TOUCH_ONLY
-                // Android may close the app from the background without the
-                // game's exit, which writes the settings (the map's zoom).
-                settingsSave();
+#ifndef __EMSCRIPTEN__
+                inputSetWindowActive(false);
 #endif
-                gProgramIsActive = false;
-                mouseDeviceInitMode();
-                audioEnginePause();
-
-                // CE: Nothing stays pressed while the game is away (the
-                // ends may not come): fingers, their gestures, keys.
-                muiForgetMissingFingers(nullptr, 0);
-                touch_forget_missing(nullptr, 0);
-                inputResetTouchGestures();
-                keyboardReset();
                 break;
             }
             break;
@@ -1356,11 +1399,17 @@ void _GNW95_lost_focus()
 void beginTextInput()
 {
     SDL_StartTextInput();
+#ifdef __EMSCRIPTEN__
+    webBeginTextInput();
+#endif
 }
 
 void endTextInput()
 {
     SDL_StopTextInput();
+#ifdef __EMSCRIPTEN__
+    webEndTextInput();
+#endif
 }
 
 } // namespace fallout

@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 #include "color.h"
 #include "dbox.h"
 #include "dev_autotest.h"
@@ -783,7 +787,11 @@ namespace {
 
     void LoadSaveScreen::buildDescriptionEditor(MuiContext& ui)
     {
-        for (char32_t ch : ui.takeTextInput()) {
+        std::u32string typed = ui.takeTextInput();
+#ifdef __EMSCRIPTEN__
+        if (webTakeTextInput(typed)) description.clear();
+#endif
+        for (char32_t ch : typed) {
             // Only what the game's text can hold, as long as SAVE.DAT's field.
             if (ch >= 0x20
                 && !muiEncodeGameText(std::u32string(1, ch)).empty()
@@ -809,6 +817,13 @@ namespace {
         muiFillRoundRect(field, ui.dp(6.0f), kBackground);
         muiStrokeRoundRect(field, ui.dp(6.0f), ui.dp(1.0f), theme.accent);
         muiDrawTextAligned(description, field.inset(ui.dp(8.0f), 0.0f), ui.dp(17.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
+#ifdef __EMSCRIPTEN__
+        webTextInputField(description, field.x, field.y, field.w, field.h, ui.dp(17.0f), kDescriptionLength);
+        if (webTextInputDone()) {
+            closeEditor(true);
+            return;
+        }
+#endif
 
         // Tapping the field shows the keyboard again.
         if (ui.touchable("loadsave.description.field", field)) {

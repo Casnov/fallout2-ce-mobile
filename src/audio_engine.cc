@@ -23,6 +23,9 @@ struct AudioEngineSoundBuffer {
     bool looping = false;
     unsigned int pos = 0;
     SDL_AudioStream* stream = nullptr;
+#ifdef __EMSCRIPTEN__
+    bool flushed = false;
+#endif
     std::recursive_mutex mutex;
 
     AudioEngineSoundBuffer() = default;
@@ -65,6 +68,50 @@ static bool soundBufferIsValid(int soundBufferIndex)
     return soundBufferIndex >= 0 && soundBufferIndex < audioEngineSoundBufferCount;
 }
 
+#ifdef __EMSCRIPTEN__
+// Browser SDL mixes on the UI thread. Feed complete blocks rather than calling
+// the converter once for every source frame. Keep read-ahead bounded: streaming
+// sounds use pos to refill their source ring, so buffering the entire ring here
+// would skip those refills. SDL owns any resampler staging/padding.
+static void audioEngineMixWebBuffer(AudioEngineSoundBuffer* soundBuffer, Uint8* output, int length)
+{
+    const unsigned int frameSize = soundBuffer->bitsPerSample / 8 * soundBuffer->channels;
+    unsigned char converted[1024];
+    int written = 0;
+    while (written < length) {
+        int available = SDL_AudioStreamAvailable(soundBuffer->stream);
+        if (available < 0) break;
+        if (available > 0) {
+            int count = length - written;
+            if (count > sizeof(converted)) count = sizeof(converted);
+            int received = SDL_AudioStreamGet(soundBuffer->stream, converted, count);
+            if (received <= 0) break;
+            SDL_MixAudioFormat(output + written, converted, gAudioEngineSpec.format, received, soundBuffer->volume);
+            written += received;
+            continue;
+        }
+        if (soundBuffer->pos == soundBuffer->size) {
+            if (soundBuffer->looping) {
+                soundBuffer->pos = 0;
+            } else if (!soundBuffer->flushed) {
+                // One-shot effects must also emit their final converter block.
+                if (SDL_AudioStreamFlush(soundBuffer->stream) < 0) break;
+                soundBuffer->flushed = true;
+                continue;
+            } else {
+                soundBuffer->playing = false;
+                break;
+            }
+        }
+        unsigned int count = soundBuffer->size - soundBuffer->pos;
+        if (count > 256 * frameSize) count = 256 * frameSize;
+        if (SDL_AudioStreamPut(soundBuffer->stream, static_cast<Uint8*>(soundBuffer->data) + soundBuffer->pos, count) < 0) break;
+        soundBuffer->pos += count;
+        if (soundBuffer->looping && soundBuffer->pos == soundBuffer->size) soundBuffer->pos = 0;
+    }
+}
+#endif
+
 static void audioEngineMixin(void* userData, Uint8* stream, int length)
 {
     memset(stream, gAudioEngineSpec.silence, length);
@@ -78,6 +125,9 @@ static void audioEngineMixin(void* userData, Uint8* stream, int length)
         std::lock_guard<std::recursive_mutex> lock(soundBuffer->mutex);
 
         if (soundBuffer->active && soundBuffer->playing) {
+#ifdef __EMSCRIPTEN__
+            audioEngineMixWebBuffer(soundBuffer, stream, length);
+#else
             int srcFrameSize = soundBuffer->bitsPerSample / 8 * soundBuffer->channels;
 
             unsigned char buffer[1024];
@@ -110,6 +160,7 @@ static void audioEngineMixin(void* userData, Uint8* stream, int length)
 
                 pos += bytesRead;
             }
+#endif
         }
     }
 }
@@ -131,6 +182,11 @@ bool audioEngineInit(int soundBufferCount)
     desiredSpec.format = AUDIO_S16;
     desiredSpec.channels = 2;
     desiredSpec.samples = 1024;
+#ifdef __EMSCRIPTEN__
+    // SDL's browser mixer runs on the main thread. Give mobile frame/network
+    // jitter ~46 ms of headroom at 44.1 kHz (23 ms more than native's buffer).
+    desiredSpec.samples = 2048;
+#endif
     desiredSpec.callback = audioEngineMixin;
 
     int allowedChanges = SDL_AUDIO_ALLOW_FREQUENCY_CHANGE
@@ -176,6 +232,10 @@ void audioEngineResume()
 
 int audioEngineCreateSoundBuffer(unsigned int size, int bitsPerSample, int channels, int rate)
 {
+#ifdef __EMSCRIPTEN__
+    if ((bitsPerSample != 8 && bitsPerSample != 16) || channels <= 0 || channels > 2
+        || rate <= 0 || size == 0 || size % (bitsPerSample / 8 * channels) != 0) return -1;
+#endif
     if (!audioEngineIsInitialized()) {
         return -1;
     }
@@ -210,6 +270,9 @@ int audioEngineCreateSoundBuffer(unsigned int size, int bitsPerSample, int chann
             soundBuffer->pos = 0;
             soundBuffer->data = data;
             soundBuffer->stream = stream;
+#ifdef __EMSCRIPTEN__
+            soundBuffer->flushed = false;
+#endif
             soundBuffer->active = true;
             return index;
         }
@@ -414,6 +477,11 @@ bool audioEngineSoundBufferSetCurrentPosition(int soundBufferIndex, unsigned int
     }
 
     soundBuffer->pos = pos % soundBuffer->size;
+#ifdef __EMSCRIPTEN__
+    soundBuffer->pos -= soundBuffer->pos % (soundBuffer->bitsPerSample / 8 * soundBuffer->channels);
+    SDL_AudioStreamClear(soundBuffer->stream);
+    soundBuffer->flushed = false;
+#endif
 
     return true;
 }

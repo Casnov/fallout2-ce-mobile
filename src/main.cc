@@ -374,7 +374,13 @@ static void mainRunDevEndgameMovieIfNeeded()
 // 0x480D0C
 static int main_reset_system()
 {
+    // Leaving a session consumes a return-to-menu request, but a process
+    // exit must survive gameReset (including the web file-manager handoff).
+    bool exitRequested = _game_user_wants_to_quit == GAME_QUIT_REQUEST_EXIT;
     gameReset();
+    if (exitRequested) {
+        _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
+    }
 
     return 1;
 }

@@ -223,6 +223,13 @@ bool touch_forget_missing(const SDL_FingerID* down, int count)
     return forgotten;
 }
 
+void touch_cancel_all()
+{
+    touch_forget_missing(nullptr, 0);
+    currentGesture = Gesture();
+    gestureEventsQueue = std::queue<Gesture>();
+}
+
 void touch_process_gesture()
 {
     Uint32 sequenceStartTimestamp = -1;

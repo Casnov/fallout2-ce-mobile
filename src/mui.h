@@ -285,6 +285,8 @@ void muiRunModal(MuiScreen* screen);
 // svga.cc: draws screens over the game.
 void muiRender(SDL_Renderer* renderer);
 void muiResetRenderer();
+// Invalidate output-dependent layout without discarding GPU resources.
+void muiInvalidateLayout();
 
 // input.cc: returns true if the finger event belongs to the mobile UI.
 bool muiHandleFingerEvent(const SDL_Event* event);
@@ -296,6 +298,8 @@ bool muiForgetMissingFingers(const SDL_FingerID* down, int count);
 
 // input.cc: typed text (UTF-8).
 void muiHandleTextInput(const char* text);
+// Cancel queued/current pointer input without releasing on a widget.
+void muiCancelTouches();
 
 // Back (Android's back button): at the next frame the topmost active modal
 // screen's `back()`, or with none the overlays' (the HUD opens the game's
