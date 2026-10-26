@@ -57,6 +57,27 @@ test('blocks are stored compactly whatever array view a writer passes',async () 
     assert.deepEqual(chunks.map(chunk => [chunk.length,chunk.buffer.byteLength]).filter(([length]) => length >= 100).sort(),[[100,100],[1000,1000]]);
   });
 });
+test('reads, lookups and listings take one transaction each, not one per block or file',async () => {
+  // A phone pays a round trip per transaction: a save's dozens of files
+  // must not multiply them.
+  const s = await openUserStore({name:name()}), job = await s.begin();
+  const data = Uint8Array.from({length:BLOCK_SIZE * 3 + 5},(_,i) => i % 253);
+  const file = await s.putFile(job,'savegame/SLOT01/SAVE.DAT',source(data));
+  for (let n = 0; n < 40; n++) await s.putFile(job,`savegame/SLOT01/MAP${n}.SAV`,source(data.subarray(0,100)));
+  await s.commit(job);
+  const transaction = IDBDatabase.prototype.transaction;
+  let count = 0;
+  IDBDatabase.prototype.transaction = function(...args) { count++; return transaction.apply(this,args); };
+  const counted = async action => { count = 0; const value = await action(); return {value,count}; };
+  try {
+    const slot = await s.resolve('savegame/SLOT01');
+    const read = await counted(() => s.read(file.content,0,data.length));
+    assert.deepEqual([read.value,read.count],[data,1]);
+    assert.equal((await counted(() => s.lookup(slot.id,'map7.sav'))).count,1);
+    const listing = await counted(async () => { const names = []; for await (const node of s.children(slot.id)) names.push(node.name); return names; });
+    assert.deepEqual([listing.value.length,listing.count],[41,1]);
+  } finally { IDBDatabase.prototype.transaction = transaction; await s.close(); }
+});
 test('failed activation leaves the entire previous namespace and records intact',async () => {
   const s = await openUserStore({name:name()}), job = await s.begin();
   const save = await s.putFile(job,'savegame/slot001/save.dat',source(Uint8Array.of(1,2,3)));

@@ -228,14 +228,16 @@ export async function lazyUserFilesystem(module,options = {}) {
     async checkpoint() {
       if (!dirty.size) return;
       await getJob(); await flushDirty();
+      const values = [];
       for (const node of dirty.values()) {
         const {mutable,truncated,...value} = node.user;
         if (!value.deleted && FS.isFile(value.mode)) {
           if (!value.content) value.content = await content(node);
           const info = await store.seal(value.content,value.size); value.crc = info.crc;
         }
-        await store.stage(job,value);
+        values.push(value);
       }
+      await store.stageAll(job,values);
       await store.commit(job); job = null; jobPromise = null;
       for (const node of dirty.values()) { delete node.user.mutable; if (node.user.deleted) { nodes.delete(node.user.id); FS.destroyNode(node); } }
       dirty.clear(); directories.clear(); prune();
