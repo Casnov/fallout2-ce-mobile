@@ -226,6 +226,8 @@ export async function openUserStore({name = USER_DATABASE,locks = globalThis.nav
       async write(content,index,data) {
         assertOpen();
         if (!Number.isSafeInteger(index) || index < 0 || !(data instanceof Uint8Array) || !data.length || data.length > BLOCK_SIZE) throw new Error('Invalid user block');
+        // IndexedDB stores a view's whole ArrayBuffer: keep just this block.
+        if (data.byteOffset || data.byteLength !== data.buffer.byteLength) data = data.slice();
         const hash = await digest(data);
         await transaction(db,['contents','refs','chunks'],'readwrite',(tx,abort) => {
           const pending = tx.objectStore('contents').get(content);

@@ -44,8 +44,18 @@ async function launch(mode,{fault,before} = {}) {
   } finally { clearTimeout(timer); restore?.(); await m.webUserFiles.close(); }
 }
 const deletion = indexedDB.deleteDatabase(USER_DATABASE); await new Promise((r,j) => { deletion.onsuccess = r; deletion.onerror = j; });
-await launch('seed'); await launch('verify');
-console.log('format3 native seed and verify OK');
+// A save stores just its files' bytes: no padded blocks, no whole buffers
+// behind array views (IndexedDB clones a view's entire ArrayBuffer).
+let storedChunkBytes = 0;
+const addChunk = IDBObjectStore.prototype.add;
+IDBObjectStore.prototype.add = function(value,key) {
+  if (this.name === 'chunks') storedChunkBytes += value.buffer.byteLength;
+  return addChunk.call(this,value,key);
+};
+try { await launch('seed'); } finally { IDBObjectStore.prototype.add = addChunk; }
+assert.ok(storedChunkBytes < 64 * 1024,'stored chunk bytes: ' + storedChunkBytes);
+await launch('verify');
+console.log('format3 native seed (' + storedChunkBytes + ' stored bytes) and verify OK');
 await launch('quick'); await launch('overwrite');
 assert.ok((await snapshot()).get('savegame/SLOT01/SAVE.DAT')?.endsWith('D'));
 console.log('format3 native manual/quick, overwrite, settings, reopen OK');

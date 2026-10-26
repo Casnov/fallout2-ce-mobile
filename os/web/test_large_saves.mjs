@@ -47,6 +47,16 @@ test('user blocks publish atomically, COW truncation never resurrects data, reop
   assert.deepEqual(await reopened.node(node.id),changed);
   await reopened.close();
 });
+test('blocks are stored compactly whatever array view a writer passes',async () => {
+  const s = await openUserStore({name:name()}), job = await s.begin(), backing = new Uint8Array(BLOCK_SIZE).fill(7);
+  await s.putFile(job,'savegame/SLOT01/SAVE.DAT',{size:100,read:async (at,n) => backing.subarray(at,at + n)});
+  await s.putStream(job,'savegame/SLOT01/MAP.SAV',(async function* () { yield backing.subarray(0,1000); })());
+  await s.commit(job); await s.close();
+  await raw(s.name,async db => {
+    const chunks = await request(db.transaction('chunks').objectStore('chunks').getAll());
+    assert.deepEqual(chunks.map(chunk => [chunk.length,chunk.buffer.byteLength]).filter(([length]) => length >= 100).sort(),[[100,100],[1000,1000]]);
+  });
+});
 test('failed activation leaves the entire previous namespace and records intact',async () => {
   const s = await openUserStore({name:name()}), job = await s.begin();
   const save = await s.putFile(job,'savegame/slot001/save.dat',source(Uint8Array.of(1,2,3)));

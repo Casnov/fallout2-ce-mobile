@@ -2107,6 +2107,9 @@ static int lsgPerformSaveGame()
     });
 #ifdef __EMSCRIPTEN__
     if (saved) saveCompatibilityRecord(_slot_cursor);
+    // The checkpoint is part of writing the save: the music stays paused as
+    // during the files' writing, since the game loop can't refill its stream.
+    backgroundSoundPause();
     saved = lsgWebCommitUserChanges(saved, previousSession);
 #endif
     lsgInvalidateSlotCache();

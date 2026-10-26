@@ -21,7 +21,10 @@ export async function lazyUserFilesystem(module,options = {}) {
   };
   async function flush(entry) {
     if (!entry.dirty) return;
-    await store.write(await content(entry.node),entry.index,entry.data);
+    // Only the file's own bytes: sealing then keeps this block as written,
+    // instead of storing a padded block and rewriting it.
+    const length = Math.min(BLOCK_SIZE,entry.node.user.size - entry.index * BLOCK_SIZE);
+    if (length > 0) await store.write(await content(entry.node),entry.index,entry.data.subarray(0,length));
     entry.dirty = false;
   }
   async function evict() {
