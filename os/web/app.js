@@ -4,10 +4,12 @@ import {localFiles} from './resource-store.js';
 import {createFilesView} from './files-view.js';
 import {createSaveSession} from './save-session.js';
 import {createSaveDownloads} from './save-download.js';
+import {startAppCache} from './app-cache.js';
 
 const ru = navigator.language.toLowerCase().startsWith('ru');
 const text = ru ? {
   title:'Fallout 2', loading:'Загружаю…', checking:'Проверяю файлы игры…', play:'Начать игру', retry:'Попробовать снова',
+  updating:'Обновляю приложение…',
   repair:'Файлы игры',
   rotate:'Поверните устройство горизонтально', unsupported:'Этот браузер не поддерживает WebAssembly.',
   error:'Не удалось запустить игру.',
@@ -15,6 +17,7 @@ const text = ru ? {
   devNote:'Тестовый запуск с Mac. Держите Mac включённым и оставайтесь в одной сети Wi-Fi. Прогресс исчезнет после перезагрузки страницы.',
 } : {
   title:'Fallout 2', loading:'Loading…', checking:'Checking game files…', play:'Play', retry:'Try again',
+  updating:'Updating the app…',
   repair:'Game files',
   rotate:'Turn the device to landscape', unsupported:'This browser does not support WebAssembly.', error:'The game could not start.',
   build:'Test build:',
@@ -45,15 +48,18 @@ $('rotate').textContent = text.rotate;
 let source = null;
 let starting = false;
 let running = false;
+let updating = false;
 let filesMode = null;
+const appCache = startAppCache({idle:() => !!source && !starting && !running,
+  onApplying:value => { updating = value; rotatePrompt(); }});
 
 function rotatePrompt() {
   const portrait = innerHeight > innerWidth && matchMedia('(pointer:coarse)').matches;
   $('rotate').hidden = !(running && portrait);
   if (source && !starting && !running && !document.body.classList.contains('error')) {
-    $('play').disabled = portrait;
-    $('message').textContent = portrait ? text.rotate : '';
-    $('message').hidden = !portrait;
+    $('play').disabled = portrait || updating;
+    $('message').textContent = updating ? text.updating : portrait ? text.rotate : '';
+    $('message').hidden = !updating && !portrait;
   }
 }
 function error(message, detail) {
@@ -101,7 +107,9 @@ async function exited(status) {
     const mode = filesMode; filesMode = null;
     await source?.close();
     location.href = './files.html?mode=' + encodeURIComponent(mode);
+    return;
   }
+  appCache.check();
 }
 
 async function prepare() {
@@ -119,10 +127,11 @@ async function prepare() {
   $('dev-note').textContent = text.devNote;
   $('dev-note').hidden = source.kind === 'local';
   rotatePrompt();
+  appCache.check();
 }
 
 async function play() {
-  if (starting || running || !source) return;
+  if (starting || running || updating || !source) return;
   if (innerHeight > innerWidth && matchMedia('(pointer:coarse)').matches) return;
   starting = true;
   $('storage-warning').hidden = true;

@@ -1,8 +1,9 @@
 # Permanent local resource storage
 
 Resources, user data and the future application cache have separate owners.
-There is no service worker yet. Saves and settings live in the separate user
-store described in [save-storage.md](save-storage.md).
+The app's own files are cached by its service worker ([README](README.md#offline-start-and-updates)).
+Saves and settings live in the separate user store described in
+[save-storage.md](save-storage.md).
 
 ## Resource format
 

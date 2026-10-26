@@ -92,7 +92,6 @@ The final UI action downloads a disk-backed File. It reports preparation
 and handoff, not observed completion in Files. Temporary files are not deleted
 on pagehide; they are retained for seven days and old abandoned exports are
 collected on a later export.
-No service worker/cold offline startup is added here (release stage 8).
 
 ## Evidence and remaining acceptance
 

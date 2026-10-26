@@ -9,7 +9,8 @@ asset sizes/SHA-256 hashes. Original Fallout files are never packaged.
 The player installs their own game from a ZIP in the file manager
 (`files.html`); resources, saves and settings stay in the browser's local
 storage ([storage.md](storage.md), [save-storage.md](save-storage.md)).
-Cold offline startup and safe updates remain subsequent work.
+Once opened online, the app also starts without a network; new builds are
+applied without interrupting a game (see Offline start and updates).
 The development game adapter reads a local folder through the
 local development server; changes and saves in this session exist only in WASM
 memory and disappear on reload. It does not read or alter the folder's saves.
@@ -89,8 +90,8 @@ The game folder is never copied into `dist` or modified by the server.
 Reads use HTTP byte ranges on demand; the whole DAT is not loaded into RAM.
 The folder's `ce.dat` and SAVEGAME are excluded; the app uses its own
 freshly packed `ce.dat`. This development path needs the local server and
-does not demonstrate offline play. The future installed resource backend
-will implement the same range-reader contract using local browser storage.
+does not demonstrate offline play. Installed games use the same range-reader
+contract with local browser storage.
 
 For a phone on the same Wi-Fi, use `--lan`. On a Mac this chooses the Wi-Fi
 interface's private IPv4 address. Each LAN session gets a new random URL
@@ -217,8 +218,29 @@ engine fsync does not persist unfinished catalog state; SDK and FS.syncfs are
 not patched. All slots are exchanged with Android and PCs as one ZIP/ZIP64 from
 the game's Settings, over the paused session. User databases in the IDBFS
 layout of earlier test builds are refused and left unchanged, not migrated.
-See [save-storage.md](save-storage.md). No service worker or automatic
-telemetry is installed.
+See [save-storage.md](save-storage.md). No automatic telemetry is installed.
+
+## Offline start and updates
+
+`sw.js` is the app's service worker. `package.py` fills it with every other
+file of the build and its SHA-256, so each build is a new worker version.
+Installing it downloads each file past the HTTP cache, checks its size and
+hash, and stores the whole set in one cache per build (`fallout2-app:<scope>:<build>`).
+Any failure discards that cache and the previous build stays in use. The worker
+then answers requests for the build's own files from that cache, whatever the
+query string, so the launcher, file manager, engine, WASM and workers always
+come from one build and start without a network. Requests for anything else
+(the development `__dev__` endpoints, byte ranges, other origins) go to the
+network. Game resources and saves stay in IndexedDB; the worker never touches them.
+
+The worker never claims an open page: the first visit runs from the network and
+the next start is offline-capable. A new build installs in the background and
+waits. `app-cache.js` lets it take over only while the launcher is idle (no game
+starting or running) and the app has a single window; the launcher then shows
+"Updating the app…" and reloads. Otherwise the new build waits until every window
+is closed, as browsers do by default. Activation removes the older caches of the
+same scope only, so several copies of the app may share an origin. The launcher
+also looks for a new build when an idle app comes back to the foreground.
 
 After the game's main returns, the web wrapper explicitly finishes the runtime
 with `emscripten_force_exit`, so pending asynchronous callbacks cannot defer

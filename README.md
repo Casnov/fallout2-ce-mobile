@@ -279,8 +279,8 @@ $ mv fallout2 /Applications/Fallout2
 
 The mobile browser target builds with Emscripten 4.0.4. Follow the
 [web build instructions](os/web/README.md) to package the current engine,
-mobile UI and `ce.dat`. Persistent game installation and offline startup
-are still under development.
+mobile UI and `ce.dat`. It installs your own game from a ZIP, keeps saves in
+the browser and starts offline; it is still under development.
 
 
 ## Contributing

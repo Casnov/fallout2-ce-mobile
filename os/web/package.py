@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -11,7 +12,7 @@ from import_ui import write_native_assets
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE_FILES = ['index.html', 'app.css', 'app.js', 'filesystem.js', 'browser.js',
-              'resource-store.js', 'working-files.js', 'storage-common.js', 'user-report.js',
+              'app-cache.js', 'resource-store.js', 'working-files.js', 'storage-common.js', 'user-report.js',
               'zip-import.js', 'probe-worker.js', 'manifest.webmanifest',
               'game-config.js', 'files.html', 'files.css', 'files.js', 'files-view.js', 'files-page.js',
               'save-session.js', 'save-download.js',
@@ -29,13 +30,49 @@ def git(*args):
     return result.stdout.strip() if result.returncode == 0 else ''
 
 
+# sw.js is generated from this template with every other file's hash.
+SERVICE_WORKER = 'sw.js'
+BUILD_MARKER = '__FALLOUT_BUILD__'
+
+
+def service_worker(template, build_id, files):
+    if template.count(BUILD_MARKER) != 1:
+        raise ValueError('The service worker template needs one build marker')
+    build = json.dumps({'buildId': build_id, 'files': files}, sort_keys=True, separators=(',', ':'))
+    return template.replace(BUILD_MARKER, build)
+
+
+def seal(stage, app_version, configuration):
+    """List the staged files, add sw.js and build-info.json, then verify."""
+    files = {}
+    for path in sorted(stage.rglob('*')):
+        if path.is_file():
+            data = path.read_bytes()
+            files[path.relative_to(stage).as_posix()] = {'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+    # Include frontend assets: a keyboard/CSS-only fix must be identifiable
+    # on a tester's phone even when the WASM binary has not changed. The
+    # worker template counts too: a change to it is a new build.
+    template = (ROOT / 'os/web' / SERVICE_WORKER).read_text()
+    build_id = hashlib.sha256((json.dumps(files, sort_keys=True) + template).encode()).hexdigest()[:8]
+    worker = service_worker(template, build_id, files).encode()
+    (stage / SERVICE_WORKER).write_bytes(worker)
+    files[SERVICE_WORKER] = {'bytes': len(worker), 'sha256': hashlib.sha256(worker).hexdigest()}
+    info = {'schema': 1, 'version': app_version, 'buildId': build_id,
+            'source': {'commit': git('rev-parse', 'HEAD'), 'dirty': bool(git('status', '--porcelain'))},
+            'toolchain': {'emscripten': (ROOT / 'os/web/emscripten-version.txt').read_text().strip(),
+                          'configuration': configuration, 'wasm': 32, 'asyncify': True},
+            'files': files}
+    (stage / 'build-info.json').write_text(json.dumps(info, indent=2) + '\n')
+    return verify(stage)
+
+
 def verify(directory):
     info = json.loads((directory / 'build-info.json').read_text())
     if info['schema'] != 1 or not info['version']:
         raise ValueError('Invalid build metadata')
     files = info['files']
     for name in ['fallout2-ce.js', 'fallout2-ce.wasm', 'fallout2-archive.js', 'fallout2-archive.wasm',
-                 'ce.dat', 'LICENSE.md', 'licenses/libarchive.txt', *SITE_FILES, *NATIVE_FILES,
+                 'ce.dat', 'LICENSE.md', 'licenses/libarchive.txt', SERVICE_WORKER, *SITE_FILES, *NATIVE_FILES,
                  *['fonts/' + font for font in FONT_FILES]]:
         if name not in files:
             raise ValueError('Missing app asset: ' + name)
@@ -56,6 +93,12 @@ def verify(directory):
             raise ValueError('Wrong size: ' + name)
         if hashlib.sha256(data).hexdigest() != expected['sha256']:
             raise ValueError('Wrong hash: ' + name)
+    # The worker caches exactly these files; a stale copy would serve another build.
+    match = re.search(r'^const BUILD = (\{.*\});$', (directory / SERVICE_WORKER).read_text(), re.M)
+    embedded = json.loads(match[1]) if match else None
+    if not embedded or embedded['buildId'] != info['buildId'] or embedded['files'] != {
+            name: value for name, value in files.items() if name != SERVICE_WORKER}:
+        raise ValueError('The service worker does not match build-info.json')
     return info
 
 
@@ -99,21 +142,7 @@ def main():
             shutil.copyfile(ROOT / 'files/ce.dat/fonts' / name, stage / 'fonts' / name)
         shutil.copyfile(ROOT / 'LICENSE.md', stage / 'LICENSE.md')
         subprocess.run([str(args.dat_tool.resolve()), 'create', str(ROOT / 'files/ce.dat'), str(stage / 'ce.dat')], check=True)
-        files = {}
-        for path in sorted(stage.rglob('*')):
-            if path.is_file():
-                data = path.read_bytes()
-                files[path.relative_to(stage).as_posix()] = {'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
-        # Include frontend assets: a keyboard/CSS-only fix must be identifiable
-        # on a tester's phone even when the WASM binary has not changed.
-        build_id = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()[:8]
-        info = {'schema': 1, 'version': args.app_version, 'buildId': build_id,
-                'source': {'commit': git('rev-parse', 'HEAD'), 'dirty': bool(git('status', '--porcelain'))},
-                'toolchain': {'emscripten': (ROOT / 'os/web/emscripten-version.txt').read_text().strip(),
-                              'configuration': args.configuration, 'wasm': 32, 'asyncify': True},
-                'files': files}
-        (stage / 'build-info.json').write_text(json.dumps(info, indent=2) + '\n')
-        verify(stage)
+        info = seal(stage, args.app_version, args.configuration)
         previous = Path(temporary) / 'previous'
         if output.exists():
             output.rename(previous)
@@ -123,7 +152,7 @@ def main():
             if previous.exists():
                 previous.rename(output)
             raise
-    print('Packaged ' + args.app_version + ': ' + str(sum(f['bytes'] for f in files.values())) + ' bytes')
+    print('Packaged ' + args.app_version + ': ' + str(sum(f['bytes'] for f in info['files'].values())) + ' bytes')
 
 
 if __name__ == '__main__':
