@@ -144,16 +144,16 @@ function markdown(report, extra) {
   }
   const info = report.env.audio, period = info ? info.bufferSize / info.sampleRate * 1000 : null;
   lines.push('', '## Audio timing', '', info ? `Callback every ${fixed(period, 1)} ms (${info.bufferSize} frames at ${info.sampleRate} Hz), base latency ${fixed((info.baseLatency ?? 0) * 1000, 1)} ms.` : 'No audio callbacks.', '',
-    '| Phase | Callbacks | Gaps > 1.5 / 2 / 3 periods | > 2 during a long task | Max gap ms | Mix ms (max) | Played: sound s | Stale blocks (s) | Dropouts | Browser playout stats |',
-    '|---|---|---|---|---|---|---|---|---|---|');
+    '| Phase | Callbacks | Gaps > 1.5 / 2 / 3 periods | > 2 during a long task | Max gap ms | Mix ms (max) | Played: sound s | Stale blocks (s) | Dropouts | Queue underruns (frames at end) | Browser playout stats |',
+    '|---|---|---|---|---|---|---|---|---|---|---|');
   for (const item of report.timeline) {
     const p = report.phases[item.name];
     if (!p || !p.audio.callbacks) continue;
     const playout = p.playout ? Object.entries(p.playout).map(([key, value]) => `${key} ${fixed(value, value % 1 ? 1 : 0)}`).join(', ') : '–';
     const out = p.output;
-    lines.push(`| ${item.name} | ${p.audio.callbacks} | ${p.gaps.over1_5} / ${p.gaps.over2} / ${p.gaps.over3} | ${p.gaps.over2InLongTask} | ${fixed(p.audio.maxGapMs)} | ${fixed(p.audio.workMs)} (${fixed(p.audio.maxWorkMs, 1)}) | ${out ? fixed(out.soundingSeconds, 1) : '–'} | ${out ? `${out.staleBlocks} (${fixed(out.staleSeconds, 2)})` : '–'} | ${out ? out.dropouts : '–'} | ${playout} |`);
+    lines.push(`| ${item.name} | ${p.audio.callbacks} | ${p.gaps.over1_5} / ${p.gaps.over2} / ${p.gaps.over3} | ${p.gaps.over2InLongTask} | ${fixed(p.audio.maxGapMs)} | ${fixed(p.audio.workMs)} (${fixed(p.audio.maxWorkMs, 1)}) | ${out ? fixed(out.soundingSeconds, 1) : '–'} | ${out ? `${out.staleBlocks} (${fixed(out.staleSeconds, 2)})` : '–'} | ${out ? out.dropouts : '–'} | ${p.underruns ?? '–'}${p.queue ? ` (${p.queue})` : ''} | ${playout} |`);
   }
-  lines.push('', 'A gap over two periods cannot be covered by the browser\'s double buffering: that output is a glitch. Played: what the browser output, seen on the audio thread: a stale block repeats the output of two periods before, a dropout is one block of exact silence inside sound; both are audible.');
+  lines.push('', 'A gap over two periods cannot be covered by the browser\'s double buffering: that output is a glitch. Played: what the browser output, seen on the audio thread: a stale block repeats the output of two periods before, a dropout is one block of exact silence inside sound; both are audible. With the queued output (AudioWorklet), a queue underrun is a gap the main thread could not fill in time.');
   const audio = report.audio;
   lines.push('', '## Audio output', '');
   if (!audio) lines.push('No audio analysed (the game produced no audio callbacks).');

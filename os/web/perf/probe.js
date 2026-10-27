@@ -22,6 +22,7 @@
         gaps:{over1_5:0, over2:0, over3:0, over2InLongTask:0},
         playout:null,
         output:null,
+        underruns:null,
         audio:{callbacks:0, maxGapMs:0, workMs:0, maxWorkMs:0},
       });
     }
@@ -90,7 +91,8 @@
     for (const key in stats) if (typeof stats[key] === 'number') value[key] = stats[key];
     return value;
   };
-  const counters = () => ({playout:playout(), output:output && {...output}});
+  let host = null;
+  const counters = () => ({playout:playout(), output:output && {...output}, underruns:host?.underruns ?? null, queue:host?.target ?? null});
 
   // What the ScriptProcessor actually handed to the output, seen on the audio
   // thread. When its event runs late, Chrome plays the buffer from two
@@ -141,7 +143,7 @@
       await context.audioWorklet.addModule(URL.createObjectURL(new Blob([TAP], {type:'text/javascript'})));
       const tap = new AudioWorkletNode(context, 'webperf-output-tap', {processorOptions:{period:node.bufferSize}});
       tap.port.onmessage = ({data}) => { output = data; };
-      node.connect(tap);
+      (node.node ?? node).connect(tap);
       tap.connect(context.destination); // Silent: keeps the tap pulled.
     } catch (error) { console.warn('webperf: no output tap', error); }
   }
@@ -154,10 +156,15 @@
       else if (data.type === 'block') analysis?.push(data.samples, data.phase);
       else postMessage(analysis?.result() ?? null);
     };`], {type:'text/javascript'})));
+  // The game's queued output (browser.js routeAudioOutput) replaces SDL's
+  // ScriptProcessor once its worklet loads; that one only plays without it.
+  let waits = 0;
   const watchAudio = setInterval(() => {
-    const node = module?.SDL2?.audio?.scriptProcessorNode;
+    const processor = module?.SDL2?.audio?.scriptProcessorNode;
+    const node = module?.SDL2?.output ?? (processor && (typeof AudioWorkletNode === 'undefined' || ++waits > 20) ? processor : null);
     if (!node || typeof node.onaudioprocess !== 'function') return;
     clearInterval(watchAudio);
+    host = node;
     context = node.context;
     const original = node.onaudioprocess;
     const periodMs = node.bufferSize / context.sampleRate * 1000;
@@ -239,6 +246,8 @@
         stats.playout = delta(item.counters.playout, next.playout);
         // The tap starts with the audio: a phase before it counts from zero.
         stats.output = delta(item.counters.output ?? (next.output && {}), next.output);
+        if (next.underruns !== null) stats.underruns = next.underruns - (item.counters.underruns ?? 0);
+        stats.queue = next.queue;
       });
       const audio = await new Promise(resolve => {
         worker.onmessage = ({data}) => resolve(data);
