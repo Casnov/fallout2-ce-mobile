@@ -208,7 +208,8 @@ async function play() {
         const frame = module.webFrameTiming;
         $('diagnostics').hidden = false;
         $('diagnostics').textContent = `${text.build} ${document.body.dataset.webBuild}\n`
-          + `Audio: ${state.state}, ${state.sampleRate || '?'} Hz, ${timing.bufferSize || '?'} frames\n`
+          + `Audio: ${state.state}, ${state.sampleRate || '?'} Hz, ${timing.bufferSize || '?'} frames, `
+          + (state.queue ? `queue ${state.queue.frames}, underruns ${state.queue.underruns}\n` : 'ScriptProcessor\n')
           + `5s gap: ${timing.recent.maxGapMs.toFixed(1)} ms; work: ${timing.recent.maxWorkMs.toFixed(1)} ms; late: ${timing.recent.late}\n`
           + `All gap: ${timing.maxGapMs.toFixed(1)} ms; work: ${timing.maxWorkMs.toFixed(1)} ms`
           + (frame ? `\nFrame: ${frame.fps.toFixed(0)} fps; UI/present: ${frame.uiMs.toFixed(1)}/${frame.presentMs.toFixed(1)} ms` : '');
