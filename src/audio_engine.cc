@@ -183,12 +183,10 @@ bool audioEngineInit(int soundBufferCount)
     desiredSpec.channels = 2;
     desiredSpec.samples = 1024;
 #ifdef __EMSCRIPTEN__
-    // SDL's browser output is a ScriptProcessor fed by the main thread: Chrome
-    // replays or zeroes a block whenever that thread answers more than one
-    // block late. Android phones play in 2048-frame bursts (Redmi 15C: about
-    // 1.5 such glitches a second with 2048); 4096 frames give the game ~85 ms
-    // to answer, for ~43 ms more latency.
-    desiredSpec.samples = 4096;
+    // The block the browser asks the main-thread mixer for. It feeds a queue
+    // played on the audio thread (os/web/browser.js routeAudioOutput), or
+    // SDL's ScriptProcessor where AudioWorklet is missing.
+    desiredSpec.samples = 2048;
 #endif
     desiredSpec.callback = audioEngineMixin;
 

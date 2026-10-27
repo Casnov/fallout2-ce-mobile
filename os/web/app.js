@@ -202,7 +202,7 @@ async function play() {
       window.falloutDev.audioTiming = audioTiming.status;
       window.falloutDev.frameTiming = () => module.webFrameTiming;
       diagnosticsTimer = setInterval(() => {
-        audioTiming.attach(module.SDL2?.audio?.scriptProcessorNode);
+        audioTiming.attach(module.SDL2?.output ?? module.SDL2?.audio?.scriptProcessorNode);
         const timing = audioTiming.status();
         const state = audio.status();
         const frame = module.webFrameTiming;

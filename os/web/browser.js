@@ -178,8 +178,71 @@ export function createTextInput(input, canvas, viewport) {
   };
 }
 
+// SDL2 plays through a ScriptProcessor, filled on the main thread one block at
+// a time. An output that takes audio in bursts of another size (Bluetooth,
+// many Android phones) reaches a block before it is written and plays stale
+// samples, a few times a second. Where AudioWorklet exists, SDL's block
+// callback fills a queue that the audio thread plays from instead
+// (audio-worklet.js). The result, shaped like the ScriptProcessor for timing
+// probes (onaudioprocess, bufferSize, context), becomes sdl2.output.
+function routeAudioOutput(context, sdl2, environment) {
+  const create = context.createScriptProcessor, Node = environment.AudioWorkletNode;
+  if (!context.audioWorklet || typeof create !== 'function' || !Node) return;
+  const ready = context.audioWorklet.addModule(new URL('./audio-worklet.js', import.meta.url).href)
+    .then(() => true, () => false);
+  context.createScriptProcessor = function(bufferSize, inputs, channels) {
+    const processor = create.call(this, bufferSize, inputs, channels);
+    // SDL sets the handler and connects the node right after creating it;
+    // until the worklet is ready, the ScriptProcessor plays as before.
+    ready.then(loaded => {
+      if (loaded && typeof processor.onaudioprocess === 'function') sdl2.output = queueOutput(context, processor, channels, Node);
+    });
+    return processor;
+  };
+}
+
+function queueOutput(context, processor, channels, Node, now = () => performance.now()) {
+  const frames = processor.bufferSize, node = new Node(context, 'fallout2-output', {numberOfInputs:0, outputChannelCount:[channels]});
+  // The output's own latency covers the bursts it takes audio in; one block
+  // more covers a late main thread.
+  const base = Math.max(2 * frames, Math.round((context.baseLatency || 0) * context.sampleRate) + frames);
+  const output = {node, context, bufferSize:frames, onaudioprocess:processor.onaudioprocess, target:base, underruns:0};
+  let queued = 0, sent = 0, calm = now();
+  const fill = () => {
+    while (queued < output.target) {
+      const planes = Array.from({length:channels}, () => new Float32Array(frames));
+      output.onaudioprocess({outputBuffer:{numberOfChannels:channels, length:frames, sampleRate:context.sampleRate,
+        getChannelData:channel => planes[channel]}});
+      node.port.postMessage(planes, planes.map(plane => plane.buffer));
+      queued += frames; sent += frames;
+    }
+  };
+  node.port.onmessage = ({data}) => {
+    // Blocks still in flight to the audio thread count as queued.
+    queued = data.queued + sent - data.received;
+    // Each underrun deepens the queue; after 5 calm seconds it returns
+    // towards the base, so stalls while loading leave no lasting latency.
+    if (data.underruns > output.underruns) {
+      output.underruns = data.underruns;
+      output.target = Math.min(8 * frames, output.target + frames / 2);
+      calm = now();
+    } else if (output.target > base && now() - calm > 5000) {
+      output.target = Math.max(base, output.target - frames / 4);
+      calm = now();
+    }
+    fill();
+  };
+  processor.onaudioprocess = null;
+  processor.disconnect();
+  node.connect(context.destination);
+  // A suspended context keeps SDL's own silence timer running the game; the
+  // worklet's first report after it starts playing fills the queue.
+  if (context.state === 'running') fill();
+  return output;
+}
+
 export function createGameAudio(environment = globalThis) {
-  let context = null;
+  let context = null, sdl2 = null;
   let lastError = null;
   let paused = false;
   const resume = () => {
@@ -211,7 +274,10 @@ export function createGameAudio(environment = globalThis) {
         });
         resume();
         // SDL2 uses this exact context instead of creating a locked second one.
-        return {audioContext:context};
+        sdl2 = {audioContext:context};
+        // Optional: without the queued output SDL's ScriptProcessor plays.
+        try { routeAudioOutput(context, sdl2, environment); } catch (error) { lastError = String(error); }
+        return sdl2;
       } catch (error) { lastError = String(error); return {}; }
     },
     resume,
@@ -221,7 +287,8 @@ export function createGameAudio(environment = globalThis) {
     },
     unpause() { paused = false; resume(); },
     status:() => ({state:context?.state || 'unavailable', sampleRate:context?.sampleRate,
-      baseLatency:context?.baseLatency, outputLatency:context?.outputLatency, error:lastError}),
+      baseLatency:context?.baseLatency, outputLatency:context?.outputLatency, error:lastError,
+      queue:sdl2?.output ? {frames:sdl2.output.target, underruns:sdl2.output.underruns} : null}),
     stop() { if (context && context.state !== 'closed') context.close().catch(() => {}); },
   };
 }
