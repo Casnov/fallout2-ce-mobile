@@ -15,9 +15,11 @@ What a run does, through the engine's `webperf` autotest (`src/dev_autotest.cc`)
 
 Measured per phase: engine time of each save/load, IndexedDB transactions
 (count, summed and longest duration), calls of the user store's methods, SHA-256 work, long main-thread tasks,
-audio callbacks that came late and the longest gap, and in the audio output
-itself silent blocks and exact repeats of earlier sound (a stream replaying old
-data). A CPU profile covers the saves and loads. On Android the system log is
+gaps between audio callbacks and whether a long task caused them, what the
+browser actually played (a tap on the audio thread counts blocks it replayed
+and dropouts into silence: the audible glitches), Chrome's own playback
+statistics where it has them, and in the game's audio output silent blocks
+and exact repeats of earlier sound. A CPU profile covers the saves and loads. On Android the system log is
 kept too (`logcat-audio.txt` has its audio lines).
 
 ## Phone (Android, Chrome)
@@ -43,6 +45,7 @@ and `logcat.txt`.
 The address must be the one the game was imported at: browser storage
 belongs to an address. The app there must be a build with the `webperf`
 autotest. Options: `--device <serial>` with several phones, `--no-profile`,
+`--movies` (play the opening movies first: the `start` phase),
 `--timeout-minutes <n>`, `--out <dir>`.
 
 ## Desktop Chrome

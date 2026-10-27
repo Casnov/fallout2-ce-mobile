@@ -29,6 +29,7 @@ function parseArguments(args) {
     else if (key === '--out') result.out = value();
     else if (key === '--port') result.port = Number(value());
     else if (key === '--no-profile') result.profile = false;
+    else if (key === '--movies') result.movies = true;
     else if (key === '--timeout-minutes') result.timeoutMinutes = Number(value());
     else { console.error('Unknown argument: ' + args[i]); process.exit(2); }
   }
@@ -125,12 +126,12 @@ function markdown(report, extra) {
   lines.push('## Saves and loads (engine time, ms)', '', '| Round | Save | Save over | Load | Delete |', '|---|---|---|---|---|');
   for (const m of rounds) lines.push(`| ${m[1]} (slot ${m[2]}) | ${m[3]} | ${m[4]} | ${m[5]} | ${m[6]} |`);
   if (continued) lines.push('', `Continue of the newest save, to the map: ${fixed(continued.ms)} ms (includes the menu's fade).`);
-  lines.push('', '## Per phase', '', '| Phase | ms | RW tx | RW ms (max) | RO tx | RO ms (max) | SHA-256 | Long tasks ms (max) | Audio late / callbacks | Max gap ms |',
-    '|---|---|---|---|---|---|---|---|---|---|');
+  lines.push('', '## Per phase', '', '| Phase | ms | RW tx | RW ms (max) | RO tx | RO ms (max) | SHA-256 | Long tasks ms (max) |',
+    '|---|---|---|---|---|---|---|---|');
   for (const item of report.timeline) {
     const p = report.phases[item.name];
     if (!p) continue;
-    lines.push(`| ${item.name} | ${fixed(item.ms)} | ${p.readwrite.count} | ${fixed(p.readwrite.ms)} (${fixed(p.readwrite.maxMs)}) | ${p.readonly.count} | ${fixed(p.readonly.ms)} (${fixed(p.readonly.maxMs)}) | ${p.digest.count} / ${fixed(p.digest.bytes / 1024)} KiB / ${fixed(p.digest.ms)} ms | ${p.longTasks.count}: ${fixed(p.longTasks.ms)} (${fixed(p.longTasks.maxMs)}) | ${p.audio.late} / ${p.audio.callbacks} | ${fixed(p.audio.maxGapMs)} |`);
+    lines.push(`| ${item.name} | ${fixed(item.ms)} | ${p.readwrite.count} | ${fixed(p.readwrite.ms)} (${fixed(p.readwrite.maxMs)}) | ${p.readonly.count} | ${fixed(p.readonly.ms)} (${fixed(p.readonly.maxMs)}) | ${p.digest.count} / ${fixed(p.digest.bytes / 1024)} KiB / ${fixed(p.digest.ms)} ms | ${p.longTasks.count}: ${fixed(p.longTasks.ms)} (${fixed(p.longTasks.maxMs)}) |`);
   }
   lines.push('', 'RW/RO: IndexedDB transactions started in the phase, their summed duration and the longest one. Transaction time overlaps; it is not wall time.');
   const calls = report.timeline.filter(item => Object.keys(report.phases[item.name]?.store ?? {}).length);
@@ -141,6 +142,18 @@ function markdown(report, extra) {
       lines.push(`| ${item.name} | ${counts.map(([name, count]) => `${name} ${count}`).join(', ')} |`);
     }
   }
+  const info = report.env.audio, period = info ? info.bufferSize / info.sampleRate * 1000 : null;
+  lines.push('', '## Audio timing', '', info ? `Callback every ${fixed(period, 1)} ms (${info.bufferSize} frames at ${info.sampleRate} Hz), base latency ${fixed((info.baseLatency ?? 0) * 1000, 1)} ms.` : 'No audio callbacks.', '',
+    '| Phase | Callbacks | Gaps > 1.5 / 2 / 3 periods | > 2 during a long task | Max gap ms | Mix ms (max) | Played: sound s | Stale blocks (s) | Dropouts | Browser playout stats |',
+    '|---|---|---|---|---|---|---|---|---|---|');
+  for (const item of report.timeline) {
+    const p = report.phases[item.name];
+    if (!p || !p.audio.callbacks) continue;
+    const playout = p.playout ? Object.entries(p.playout).map(([key, value]) => `${key} ${fixed(value, value % 1 ? 1 : 0)}`).join(', ') : '–';
+    const out = p.output;
+    lines.push(`| ${item.name} | ${p.audio.callbacks} | ${p.gaps.over1_5} / ${p.gaps.over2} / ${p.gaps.over3} | ${p.gaps.over2InLongTask} | ${fixed(p.audio.maxGapMs)} | ${fixed(p.audio.workMs)} (${fixed(p.audio.maxWorkMs, 1)}) | ${out ? fixed(out.soundingSeconds, 1) : '–'} | ${out ? `${out.staleBlocks} (${fixed(out.staleSeconds, 2)})` : '–'} | ${out ? out.dropouts : '–'} | ${playout} |`);
+  }
+  lines.push('', 'A gap over two periods cannot be covered by the browser\'s double buffering: that output is a glitch. Played: what the browser output, seen on the audio thread: a stale block repeats the output of two periods before, a dropout is one block of exact silence inside sound; both are audible.');
   const audio = report.audio;
   lines.push('', '## Audio output', '');
   if (!audio) lines.push('No audio analysed (the game produced no audio callbacks).');
@@ -187,6 +200,7 @@ async function main() {
   await session.send('Page.enable');
   await session.send('Runtime.enable');
   const source = 'const createAudioAnalysisSource = ' + JSON.stringify(readFileSync(new URL('audio-analysis.js', HERE), 'utf8')) + ';\n'
+    + 'const PLAY_MOVIES = ' + Boolean(options.movies) + ';\n'
     + readFileSync(new URL('probe.js', HERE), 'utf8');
   const {identifier} = await session.send('Page.addScriptToEvaluateOnNewDocument', {source});
   try {

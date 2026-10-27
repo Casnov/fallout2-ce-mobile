@@ -1125,9 +1125,10 @@ static bool gDevAutotestCaptures = true;
 
 // The browser's performance run (os/web/perf): the player's newest save is
 // continued and played with its music, then timed saves and loads use a free
-// slot that is deleted again.
+// slot that is deleted again. The menu wait also covers the opening movies
+// when the run plays them (frames tick during movies).
 static const DevAutotestStep kDevAutotestWebPerfSteps[] = {
-    { DEV_AUTOTEST_ACTION_WAIT_WIDGET, 1800, 0, 0, 30, "w00_menu", "mainmenu.continue" },
+    { DEV_AUTOTEST_ACTION_WAIT_WIDGET, 36000, 0, 0, 30, "w00_menu", "mainmenu.continue" },
     { DEV_AUTOTEST_ACTION_MARK, 0, 0, 0, 0, "w01_mark", "continue" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 1, "w02_continue", "mainmenu.continue" },
     { DEV_AUTOTEST_ACTION_WAIT_MAP_LOADED, 600, 0, 0, 0, "w03_map" },
