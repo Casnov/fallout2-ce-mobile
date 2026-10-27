@@ -3,6 +3,11 @@ export const BLOCK_SIZE = 256 * 1024;
 export const MAX_READ = 2 * 1024 * 1024;
 export const WRITE_BATCH_BYTES = 1024 * 1024;
 export const WRITE_BATCH_BLOCKS = 64;
+// The storage is held by another tab or window of the app (its writer lease,
+// or an older connection blocking an upgrade).
+export function busyError(message) {
+  return Object.assign(new Error(message),{name:'StorageBusyError'});
+}
 export function checkCancelled(signal) {
   if (signal?.aborted) throw new DOMException('Cancelled','AbortError');
 }

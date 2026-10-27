@@ -25,9 +25,11 @@ async function page(mode,check,options = {}) {
     execFileSync('python3',['-c','import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);from import_ui import write_native_assets;write_native_assets(Path(sys.argv[2]))',fileURLToPath(new URL('.',import.meta.url)),directory]);
     await copyFile(new URL('./files.js',import.meta.url),join(directory,'files.mjs'));
     await copyFile(new URL('./files.js',import.meta.url),join(directory,'files.js'));
+    await copyFile(new URL('./install-hint.js',import.meta.url),join(directory,'install-hint.js'));
     await copyFile(new URL('./save-session.js',import.meta.url),join(directory,'save-session.mjs'));
     await copyFile(new URL('./save-download.js',import.meta.url),join(directory,'save-download.mjs'));
     install('navigator',{language:'ru',locks:{},storage:{persist:async()=>true}});
+    install('matchMedia',()=>({matches:false}));
     install('isSecureContext',true);install('indexedDB',{});
     install('document',{documentElement:{dataset:{}},body:new Element(),getElementById:element,addEventListener:(name,fn)=>events.set(name,fn),removeEventListener:(name)=>events.delete(name)});
     install('location',{search:mode?'?mode='+mode:'',href:'./files.html'});

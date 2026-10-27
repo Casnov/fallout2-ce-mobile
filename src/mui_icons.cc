@@ -17,8 +17,10 @@ namespace {
 
     // The icons, SVG on a 24 unit square as the design board draws them: a
     // subset - path (all commands), circle, rect (rx), g with translate /
-    // scale / rotate; class "f" is filled, the rest stroked with round caps
-    // and joins. In `MuiIcon` order.
+    // scale / rotate; class "f" is filled, "h" is a hole cut out of the
+    // fills, the rest stroked with round caps
+    // and joins. In `MuiIcon` order. The brand marks are Simple Icons'
+    // (CC0, simpleicons.org), their holes moved to paths of their own.
     const char* const kIconSvg[] = {
         // Menu
         "<path d=\"M4 6.5h16M4 12h16M4 17.5h16\"/>",
@@ -140,6 +142,12 @@ namespace {
         "<path d=\"M9 3.5V9H3.5M15 3.5V9h5.5M20.5 15H15v5.5M3.5 15H9v5.5\"/>",
         // TacticalView
         "<path d=\"M2.73 12.00L5.38 8.91L10.68 8.91L13.32 12.00L10.68 15.09L5.38 15.09zM10.68 8.91L13.32 5.82L18.62 5.82L21.27 8.91L18.62 12.00L13.32 12.00zM10.68 15.09L13.32 12.00L18.62 12.00L21.27 15.09L18.62 18.18L13.32 18.18z\"/>",
+        // Telegram
+        "<g transform=\"translate(3 3) scale(.75)\"><path class=\"f\" d=\"M12 0a12 12 0 0 1 0 24 12 12 0 0 1 0-24z\"/><path class=\"h\" d=\"M16.906 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z\"/></g>",
+        // YouTube
+        "<g transform=\"translate(3 3) scale(.75)\"><path class=\"f\" d=\"M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z\"/><path class=\"h\" d=\"M9.545 15.568V8.432L15.818 12z\"/></g>",
+        // GitHub
+        "<g transform=\"translate(3 3) scale(.75)\"><path class=\"f\" d=\"M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12\"/></g>",
     };
 
     static_assert(sizeof(kIconSvg) / sizeof(kIconSvg[0]) == static_cast<size_t>(MuiIcon::Count), "an icon without its drawing");
@@ -183,9 +191,16 @@ namespace {
     };
 
     // An icon in grid units.
+    enum class Paint {
+        Stroke,
+        Fill,
+        Hole,
+    };
+
     struct IconShapes {
         std::vector<Polyline> strokes;
         std::vector<std::vector<SDL_FPoint>> fills;
+        std::vector<std::vector<SDL_FPoint>> holes;
     };
 
     bool readNumber(const char** cursor, float* value)
@@ -298,14 +313,16 @@ namespace {
         }
     }
 
-    void addShape(IconShapes* shapes, std::vector<SDL_FPoint>& points, bool closed, bool fill, const Affine& transform)
+    void addShape(IconShapes* shapes, std::vector<SDL_FPoint>& points, bool closed, Paint paint, const Affine& transform)
     {
         if (points.size() >= 2) {
             for (SDL_FPoint& point : points) {
                 point = transform.apply(point.x, point.y);
             }
-            if (fill) {
+            if (paint == Paint::Fill) {
                 shapes->fills.push_back(points);
+            } else if (paint == Paint::Hole) {
+                shapes->holes.push_back(points);
             } else {
                 shapes->strokes.push_back({ points, closed });
             }
@@ -313,7 +330,7 @@ namespace {
         points.clear();
     }
 
-    void parsePath(const char* data, const Affine& transform, bool fill, IconShapes* shapes)
+    void parsePath(const char* data, const Affine& transform, Paint paint, IconShapes* shapes)
     {
         std::vector<SDL_FPoint> points;
         SDL_FPoint current = { 0.0f, 0.0f };
@@ -351,7 +368,7 @@ namespace {
                 float y;
                 ok = readNumber(&p, &x) && readNumber(&p, &y);
                 if (ok) {
-                    addShape(shapes, points, false, fill, transform);
+                    addShape(shapes, points, false, paint, transform);
                     current = { ox + x, oy + y };
                     start = current;
                     points.push_back(current);
@@ -453,7 +470,7 @@ namespace {
                 break;
             }
             case 'Z':
-                addShape(shapes, points, true, fill, transform);
+                addShape(shapes, points, true, paint, transform);
                 current = start;
                 break;
             default:
@@ -466,7 +483,7 @@ namespace {
             }
             previous = upper;
         }
-        addShape(shapes, points, false, fill, transform);
+        addShape(shapes, points, false, paint, transform);
     }
 
     Affine parseTransform(const std::string& text)
@@ -582,13 +599,14 @@ namespace {
                 continue;
             }
 
-            bool fill = attributes["class"] == "f";
+            const std::string& kind = attributes["class"];
+            Paint paint = kind == "f" ? Paint::Fill : kind == "h" ? Paint::Hole : Paint::Stroke;
             auto number = [&](const char* name) {
                 return static_cast<float>(atof(attributes[name].c_str()));
             };
             std::vector<SDL_FPoint> points;
             if (tag == "path") {
-                parsePath(attributes["d"].c_str(), transform, fill, &shapes);
+                parsePath(attributes["d"].c_str(), transform, paint, &shapes);
             } else if (tag == "circle") {
                 float cx = number("cx");
                 float cy = number("cy");
@@ -598,7 +616,7 @@ namespace {
                     float angle = 2.0f * kPi * step / kSegments;
                     points.push_back({ cx + std::cos(angle) * r, cy + std::sin(angle) * r });
                 }
-                addShape(&shapes, points, true, fill, transform);
+                addShape(&shapes, points, true, paint, transform);
             } else if (tag == "rect") {
                 float x = number("x");
                 float y = number("y");
@@ -621,7 +639,7 @@ namespace {
                         }
                     }
                 }
-                addShape(&shapes, points, true, fill, transform);
+                addShape(&shapes, points, true, paint, transform);
             }
         }
         return shapes;
@@ -736,6 +754,11 @@ namespace {
         }
         for (const std::vector<SDL_FPoint>& fill : shapes.fills) {
             addContour(&contours, toPixels(fill));
+        }
+        // Holes go round the other way.
+        for (const std::vector<SDL_FPoint>& hole : shapes.holes) {
+            addContour(&contours, toPixels(hole));
+            std::reverse(contours.back().begin(), contours.back().end());
         }
 
         std::vector<unsigned char> coverage = muiRasterizeContours(contours, entry.extent, entry.extent);

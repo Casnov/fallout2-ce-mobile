@@ -1,6 +1,6 @@
 // Permanent resource format. The database and lock keep their historical names
 // so installations made by earlier test builds stay readable.
-import {BLOCK_SIZE, MAX_READ, digest, WRITE_BATCH_BYTES, WRITE_BATCH_BLOCKS, checkCancelled} from './storage-common.js';
+import {BLOCK_SIZE, MAX_READ, digest, WRITE_BATCH_BYTES, WRITE_BATCH_BLOCKS, checkCancelled, busyError} from './storage-common.js';
 export {BLOCK_SIZE, MAX_READ};
 export const RESOURCE_DB = 'fallout2-device-check-v1';
 export const RESOURCE_LOCK = 'fallout2-device-check';
@@ -54,7 +54,7 @@ async function lease(locks, name) {
   const held = new Promise(resolve => { release = resolve; });
   const acquired = new Promise((resolve, reject) => { ready = {resolve,reject}; });
   const task = locks.request(name, {ifAvailable:true}, lock => {
-    if (!lock) throw new Error('Close the other game or installation window and try again');
+    if (!lock) throw busyError('Close the other game or installation window and try again');
     ready.resolve(); return held;
   });
   task.catch(ready.reject);
@@ -76,7 +76,7 @@ async function openDatabase(name) {
   return new Promise((resolve, reject) => {
     pending.onblocked = () => {
       cancelled = true;
-      reject(new Error('Close older game windows before upgrading local storage'));
+      reject(busyError('Close older game windows before upgrading local storage'));
     };
     pending.onerror = () => reject(pending.error);
     pending.onsuccess = () => {

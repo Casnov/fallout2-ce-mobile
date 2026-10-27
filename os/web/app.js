@@ -5,6 +5,7 @@ import {createFilesView} from './files-view.js';
 import {createSaveSession} from './save-session.js';
 import {createSaveDownloads} from './save-download.js';
 import {startAppCache} from './app-cache.js';
+import {installHint} from './install-hint.js';
 
 const ru = navigator.language.toLowerCase().startsWith('ru');
 const text = ru ? {
@@ -13,14 +14,18 @@ const text = ru ? {
   repair:'Файлы игры',
   rotate:'Поверните устройство горизонтально', unsupported:'Этот браузер не поддерживает WebAssembly.',
   error:'Не удалось запустить игру.',
+  busy:'Игра уже открыта в другой вкладке или окне. Закройте её там и нажмите «Попробовать снова».',
   build:'Проверочная сборка:',
+  notice:'Неофициальный порт. Не связан с Bethesda Softworks, ZeniMax и Interplay.',
   devNote:'Тестовый запуск с Mac. Держите Mac включённым и оставайтесь в одной сети Wi-Fi. Прогресс исчезнет после перезагрузки страницы.',
 } : {
   title:'Fallout 2', loading:'Loading…', checking:'Checking game files…', play:'Play', retry:'Try again',
   updating:'Updating the app…',
   repair:'Game files',
   rotate:'Turn the device to landscape', unsupported:'This browser does not support WebAssembly.', error:'The game could not start.',
+  busy:'The game is already open in another tab or window. Close it there and choose Try again.',
   build:'Test build:',
+  notice:'Unofficial port. Not affiliated with Bethesda Softworks, ZeniMax or Interplay.',
   devNote:'Test session from your Mac. Keep it awake and stay on the same Wi-Fi. Progress disappears on page reload.',
 };
 const $ = id => document.getElementById(id);
@@ -45,6 +50,7 @@ $('message').textContent = text.checking;
 $('play').textContent = text.play;
 $('retry').textContent = text.retry;
 $('rotate').textContent = text.rotate;
+$('notice').textContent = text.notice;
 let source = null;
 let starting = false;
 let running = false;
@@ -71,7 +77,7 @@ function error(message, detail) {
   $('diagnostics').hidden = true;
   document.body.classList.remove('playing');
   document.body.classList.add('error');
-  $('message').textContent = message;
+  $('message').textContent = detail?.name === 'StorageBusyError' ? text.busy : message;
   $('message').hidden = false;
   $('progress').hidden = true;
   $('play').hidden = true;
@@ -126,6 +132,9 @@ async function prepare() {
   $('play').hidden = !source;
   $('dev-note').textContent = text.devNote;
   $('dev-note').hidden = source.kind === 'local';
+  const hint = source.kind === 'local' && installHint(ru);
+  $('install-hint').textContent = hint || '';
+  $('install-hint').hidden = !hint;
   rotatePrompt();
   appCache.check();
 }

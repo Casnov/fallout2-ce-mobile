@@ -2,7 +2,7 @@
 // blocks; a strict metadata transaction publishes an entire native operation.
 // Node IDs survive directory rename: saving a slot never copies its subtree.
 // No full-tree getAll(), no full-library restore, no unbounded generation chain.
-import {BLOCK_SIZE,MAX_READ,digest,checkCancelled} from './storage-common.js';
+import {BLOCK_SIZE,MAX_READ,digest,checkCancelled,busyError} from './storage-common.js';
 import {crc32} from './zip-output.js';
 
 export const USER_DATABASE = '/fallout2-ce-mobile-userdata';
@@ -32,7 +32,7 @@ function open(name,version) {
   return new Promise((resolve,reject) => {
     let cancelled = false;
     const request = indexedDB.open(name,version);
-    request.onblocked = () => { cancelled = true; reject(new Error('Close the other game windows before updating user storage')); };
+    request.onblocked = () => { cancelled = true; reject(busyError('Close the other game windows before updating user storage')); };
     request.onerror = () => reject(request.error);
     request.onupgradeneeded = () => {
       if (cancelled) { request.transaction.abort(); return; }
@@ -100,7 +100,7 @@ export async function openUserStore({name = USER_DATABASE,locks = globalThis.nav
   let release, acquired, lockError;
   const ready = new Promise(resolve => { acquired = resolve; });
   const finished = locks.request(name + ':writer',{ifAvailable:true},async lock => {
-    if (!lock) { lockError = new Error('User storage is open in another window'); acquired(); return; }
+    if (!lock) { lockError = busyError('User storage is open in another window'); acquired(); return; }
     await new Promise(resolve => { release = resolve; acquired(); });
   }).catch(error => { lockError = error; acquired(); });
   await ready;

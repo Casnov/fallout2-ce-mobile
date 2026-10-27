@@ -14,7 +14,7 @@ a { color: var(--dim); }
 .button { display: grid; place-items:center; text-decoration: none; text-align: center; padding: 8px 14px; border-radius: 8px; min-height: 48px; border:1px solid var(--button-border); }
 .button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .button:active, button:active { background:var(--button-pressed); }
-#note { margin-top: 14px; }
+#note { margin-top: 14px; white-space: pre-line; }
 progress { appearance: none; border: 1px solid #4c8f57; border-radius: 8px; overflow: hidden; background: #14281a; }
 progress::-webkit-progress-bar { background: #14281a; }
 progress::-webkit-progress-value { background: #3f9a4c; border-radius: 6px; }

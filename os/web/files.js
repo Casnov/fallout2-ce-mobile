@@ -1,4 +1,5 @@
 import {nativeText as n} from './import-native.js';
+import {installHint} from './install-hint.js';
 
 export function createFilesManager({root = document, mode = null, resources = null, buildId = null, onReturn = () => { location.href = './index.html'; }, download = null} = {}) {
   const ru = navigator.language.toLowerCase().startsWith('ru');
@@ -82,7 +83,9 @@ export function createFilesManager({root = document, mode = null, resources = nu
     show(labels.title,active ? t('Fallout 2 установлена на этом устройстве.','Fallout 2 is installed on this device.')
       : t('Для игры нужны файлы твоей копии Fallout 2. Выбери ZIP полной игры; установленный RPU может находиться внутри.','Choose a ZIP of your own Fallout 2 installation. It may include installed RPU files.'),
       active ? `${active.files.length} ${t('файлов','files')} · ${size(active.measurements.bytes)}` : '',
-      t('Принимаются ZIP и ZIP64. Windows-установщик RPU нужно заранее запустить на компьютере и упаковать полученные файлы.','ZIP and ZIP64 are supported. Run the RPU Windows installer on a computer first, then archive the installed files.'));
+      [t('Принимаются ZIP и ZIP64. Windows-установщик RPU нужно заранее запустить на компьютере и упаковать полученные файлы.','ZIP and ZIP64 are supported. Run the RPU Windows installer on a computer first, then archive the installed files.'),
+        // Before the first installation: on iOS the Home Screen app does not see it.
+        !active && installHint(ru)].filter(Boolean).join('\n\n'));
     buttons([active ? t('Заменить игру / моды','Replace game / mods') : labels.choose,() => choose('game')],active ? [labels.play,play] : null);
     $('saves-actions').hidden = !active;
   }

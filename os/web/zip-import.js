@@ -277,7 +277,7 @@ export function importErrorInfo(error) {
   if (error?.name === 'AbortError') code = 'cancelled';
   else if (error?.name === 'StalePlanError') code = 'stale_plan';
   else if (error?.name === 'QuotaExceededError') code = 'no_space';
-  else if (String(error?.message).includes('Close the other') || String(error?.message).includes('Close older') || String(error?.message).includes('open in another window')) code = 'busy';
+  else if (error?.name === 'StorageBusyError') code = 'busy';
   else if (Object.entries(globalThis.zip).some(([key,value]) => key.startsWith('ERR_') && typeof value === 'string'
       && String(error?.message).startsWith(value))) code = 'invalid_zip';
   return {code,message:String(error?.message || error)};

@@ -562,6 +562,9 @@ static const char* const kDevIconNames[] = {
     "Expand",
     "Collapse",
     "TacticalView",
+    "Telegram",
+    "YouTube",
+    "GitHub",
 };
 static_assert(sizeof(kDevIconNames) / sizeof(kDevIconNames[0]) == static_cast<size_t>(MuiIcon::Count), "an icon without a name");
 
