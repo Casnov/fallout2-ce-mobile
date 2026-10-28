@@ -29,6 +29,7 @@
 #include "memory.h"
 #include "message.h"
 #include "mouse.h"
+#include "mui.h"
 #include "obj_types.h"
 #include "object.h"
 #include "party_member.h"
@@ -2265,6 +2266,17 @@ static void heroAppearanceRedrawDude()
     tileWindowRefreshRect(&rect, gDude->elevation);
 }
 
+// hero_select_win: the races (0) or the hero's race's styles (1) to choose
+// from, in the mobile UI's window (sfall's AppHeroWin.frm window).
+static void op_hero_select_win(Program* program)
+{
+    int raceStyleFlag = programStackPopInteger(program);
+    if (heroAppearanceMode() != 0 && muiIsEnabled()) {
+        muiHeroSelectRun(raceStyleFlag != 0);
+        heroAppearanceRedrawDude();
+    }
+}
+
 // set_hero_style: a style of the hero's race; one that isn't there keeps the
 // current (as sfall).
 static void op_set_hero_style(Program* program)
@@ -2704,6 +2716,7 @@ void sfallOpcodesInit()
     interpreterRegisterOpcode(0x8212, op_get_version_patch);
 
     // 0x8213 - void hero_select_win(int)
+    interpreterRegisterOpcode(0x8213, op_hero_select_win);
     // 0x8214 - void set_hero_race(int style)
     interpreterRegisterOpcode(0x8214, op_set_hero_race);
     // 0x8215 - void set_hero_style(int style)

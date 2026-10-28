@@ -1465,18 +1465,6 @@ namespace {
             int value;
         };
 
-        // A set's name for its row: what its title has in parentheses
-        // ("Race (Black)": "Black"), else the title, else its number.
-        auto rowText = [](const std::string& title, int index) {
-            std::string text = title;
-            size_t open = text.rfind('(');
-            size_t close = text.rfind(')');
-            if (open != std::string::npos && close != std::string::npos && close > open + 1) {
-                text = text.substr(open + 1, close - open - 1);
-            }
-            return text.empty() ? number(index) : gameText(text.c_str());
-        };
-
         std::vector<Line> lists[3];
         lists[0].push_back({ ceText(kTextGender, "Gender"), -1, 0 });
         for (int value = 0; value < 2; value++) {
@@ -1489,7 +1477,7 @@ namespace {
             std::string title;
             std::string description;
             heroAppearanceGetRaceText(gender, value, &title, &description);
-            lists[1].push_back({ rowText(title, value), 1, value });
+            lists[1].push_back({ muiHeroAppearanceRowName(title, value), 1, value });
         }
 
         lists[2].push_back({ ceText(kTextStyle, "Style"), -1, 0 });
@@ -1498,7 +1486,7 @@ namespace {
             std::string title;
             std::string description;
             heroAppearanceGetStyleText(gender, race, value, &title, &description);
-            lists[2].push_back({ rowText(title, value), 2, value });
+            lists[2].push_back({ muiHeroAppearanceRowName(title, value), 2, value });
         }
 
         float columnWidth = (rect.w - gap * 2.0f) / 3.0f;
@@ -1584,26 +1572,8 @@ namespace {
         int height;
         SDL_Texture* picture = card.frmId.fid() != -1 ? muiLineArtTexture(card.frmId, &width, &height) : nullptr;
         if (hero) {
-            // Standing, a turn every 0.3 s (as sfall's preview); one scale for
-            // all directions (fits the tallest).
             float pictureHeight = content.h * 0.42f;
-            const FrmId body = CritterFrmId(FrmId(gDude).frameId<CritterFrameId>(), ANIM_STAND, WeaponAnimation::None, ROTATION_NE);
-            int maxHeight = 0;
-            for (int rotation = 0; rotation < ROTATION_COUNT; rotation++) {
-                if (muiArtTexture(body, 0, &width, &height, rotation) != nullptr) {
-                    maxHeight = std::max(maxHeight, height);
-                }
-            }
-            SDL_Texture* texture = muiArtTexture(body, 0, &width, &height, static_cast<int>(now / 300 % ROTATION_COUNT));
-            if (texture != nullptr && maxHeight > 0) {
-                float scale = pictureHeight / maxHeight;
-                if (scale >= 1.0f) {
-                    scale = std::floor(scale);
-                }
-                float w = width * scale;
-                float h = height * scale;
-                muiDrawTexture(texture, { content.centerX() - w / 2.0f, y + pictureHeight - h, w, h });
-            }
+            muiDrawDudeTurning({ content.x, y, content.w, pictureHeight }, now);
             y += pictureHeight + ui.dp(8.0f);
         } else if (picture != nullptr) {
             float pictureHeight = std::min(content.w * height / width, content.h * 0.42f);

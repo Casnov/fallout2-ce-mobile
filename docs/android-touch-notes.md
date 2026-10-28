@@ -975,6 +975,11 @@ every screen on the new scalable UI, visual style/textures later via theme).
     the hero turning (`muiArtTexture`, one turn per 0.3 s) with the set's
     title and description; art textures follow `artCacheGeneration`, so a
     new choice shows at once. No tab without the sets.
+  - sfall's `hero_select_win(0|1)` (scripts): a card over the dimmed map
+    (`muiHeroSelectRun`, mui_hero_select.cc) with the hero turning, the
+    races or the race's styles as rows, the chosen one's description; a row
+    shows it at once, Done keeps it, Back or a tap outside brings the look
+    back (sfall's Esc). Autotest `heroselect`.
   - Card: skilldex picture (`muiLineArtTexture`: the drawing's dark ink from
     the game's color table becomes the interface color, the paper
     transparent; all 174 pictures work), title, subtitle, description

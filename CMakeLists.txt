@@ -394,6 +394,7 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/mui_movie.cc"
     "src/mui_character_selector.cc"
     "src/mui_elevator.cc"
+    "src/mui_hero_select.cc"
     "src/mui_main_menu.cc"
     "src/mui_update.cc"
     "src/mui_update.h"

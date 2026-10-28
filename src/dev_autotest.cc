@@ -138,6 +138,9 @@ enum DevAutotestAction {
     // a gender change; 4 - the default look chosen (before a load); 5 - the
     // loaded game's choice. With the mod off (no Appearance folder): off.
     DEV_AUTOTEST_ACTION_HERO_APPEARANCE,
+    // sfall's hero_select_win window (`muiHeroSelectRun`), `a`: 0 - races,
+    // 1 - styles; the script goes on inside it.
+    DEV_AUTOTEST_ACTION_HERO_SELECT,
     // Presses key with SDL scancode `a` (desktop screens; the touch-only
     // build takes only a text field's editing keys).
     DEV_AUTOTEST_ACTION_KEY,
@@ -2950,6 +2953,29 @@ static const DevAutotestStep kDevAutotestCreationAppearanceSteps[] = {
     { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 40, "p10_cancelled" },
 };
 
+// sfall's hero_select_win (the RPU copy): the races' window, the black dude,
+// Done - he stays; the Indian, Back - the black dude again; the default look,
+// the styles' window, bald, Done.
+static const DevAutotestStep kDevAutotestHeroSelectSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "w00_start" },
+    { DEV_AUTOTEST_ACTION_HERO_SELECT, 0, 0, 0, 30, "w01_races" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 10, "w01b_wait" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "w02_black", "heroselect.row.1" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "w03_done", "heroselect.done" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 7, 1, 0, 1, "w04_black_kept" },
+    { DEV_AUTOTEST_ACTION_HERO_SELECT, 0, 0, 0, 30, "w05_races_again" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 10, "w05b_wait" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "w06_indian", "heroselect.row.2" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "w07_back", "heroselect.back" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 7, 1, 0, 1, "w08_black_again" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 4, 0, 0, 10, "w09_default" },
+    { DEV_AUTOTEST_ACTION_HERO_SELECT, 1, 0, 0, 30, "w10_styles" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 10, "w10b_wait" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "w11_bald", "heroselect.row.2" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "w12_done", "heroselect.done" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 8, 2, 0, 1, "w13_bald_kept" },
+};
+
 // Party member control tab of the mobile talk screen (test save, Sulik).
 static const DevAutotestStep kDevAutotestPartySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "q00_start" },
@@ -3347,6 +3373,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "talkheal") == 0) {
         gDevAutotestSteps = kDevAutotestTalkHealSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestTalkHealSteps) / sizeof(kDevAutotestTalkHealSteps[0]);
+    } else if (strcmp(name, "heroselect") == 0) {
+        gDevAutotestSteps = kDevAutotestHeroSelectSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestHeroSelectSteps) / sizeof(kDevAutotestHeroSelectSteps[0]);
     } else if (strcmp(name, "creationappearance") == 0) {
         gDevAutotestSteps = kDevAutotestCreationAppearanceSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestCreationAppearanceSteps) / sizeof(kDevAutotestCreationAppearanceSteps[0]);
@@ -4439,6 +4468,15 @@ void devAutotestTick()
             devAutotestLog("  elevator closed: rc %d, map %d elevation %d tile %d\n", rc, map, elevation, tile);
             return;
         }
+        case DEV_AUTOTEST_ACTION_HERO_SELECT: {
+            devAutotestLog("  hero_select_win(%d)\n", static_cast<int>(step->a));
+            gDevAutotestPendingCapture = step->name;
+            gDevAutotestStep++;
+            gDevAutotestStepStarted = false;
+            bool chosen = muiHeroSelectRun(step->a != 0);
+            devAutotestLog("  hero_select_win closed: %s\n", chosen ? "chosen" : "back");
+            return;
+        }
         case DEV_AUTOTEST_ACTION_OPEN_CHARACTER_CREATION:
             devAutotestLog("  opening character creation\n");
             gDevAutotestPendingCapture = step->name;
@@ -4684,6 +4722,16 @@ void devAutotestTick()
                 ok = heroAppearanceChoose(0, 0) && heroAppearanceRace() == 0;
                 devAutotestLog("  the default look before loading: race %d: %s\n", heroAppearanceRace(), ok ? "PASS" : "FAIL");
                 break;
+            case 7:
+            case 8: {
+                // After the window: race `b` (7) or style `b` (8), the art
+                // from the set.
+                int value = step->a == 7 ? heroAppearanceRace() : heroAppearanceStyle();
+                ok = value == static_cast<int>(step->b) && heroArt && artFromSet(dudeFrmId);
+                devAutotestLog("  after the window: race %d, style %d, dude art %d (from the set %d): %s\n", heroAppearanceRace(), heroAppearanceStyle(),
+                    dudeFrmId.frameId(), artFromSet(dudeFrmId) ? 1 : 0, ok ? "PASS" : "FAIL");
+                break;
+            }
             case 6: {
                 // After creation's taps: a woman, the default race, blond.
                 int gender = critterGetStat(gDude, STAT_GENDER);
