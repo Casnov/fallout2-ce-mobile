@@ -413,6 +413,16 @@ void gameMovieFinishMobile()
 // music flags as they were.
 static int gameMoviePlayMobile(int movie, int flags)
 {
+    // As `gameMoviePlay`: a movie that isn't there fails before the fades
+    // and the music's pause (a mod without the game's movies, as Fallout:
+    // Resurrection without the Arroyo dreams the timers ask for every game
+    // event check: two whole fades over the world map each time).
+    char movieFilePath[COMPAT_MAX_PATH];
+    if (!gameMovieFindFilePath(movieFilePath, sizeof(movieFilePath), movieFileNames[movie].c_str())) {
+        debugPrint("\ngmovie_play() - Error: Unable to open %s\n", movieFileNames[movie].c_str());
+        return -1;
+    }
+
     gGameMovieIsPlaying = true;
 
     if ((flags & GAME_MOVIE_FADE_IN) != 0) {
