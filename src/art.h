@@ -556,6 +556,10 @@ Art* artLock(const FrmId& frmId, CacheEntry** handlePtr);
 
 int artUnlock(CacheEntry* cache_entry);
 int artCacheFlush();
+// CE: Changes with every `artCacheFlush` (art files may differ after it:
+// Hero Appearance's sets, sfall's fs_* files); textures made from art follow
+// it.
+unsigned int artCacheGeneration();
 int artCopyFileName(const FrmId& frmId, char* dest);
 int _art_get_code(AnimationType animation, WeaponAnimation weaponType, char* weaponCodePtr, char* animationCodePtr);
 int artGetFramesPerSecond(Art* art);

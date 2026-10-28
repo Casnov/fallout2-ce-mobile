@@ -158,6 +158,9 @@ static int* gArtCritterFidShoudRunData;
 // half (the hero's own art), 0 when the mod is off.
 static int gArtHeroCritterOffset = 0;
 
+// See `artCacheGeneration`.
+static unsigned int gArtCacheGeneration = 0;
+
 static std::unordered_map<std::string, std::shared_ptr<NamedCacheEntry>> gNamedArtCache;
 constexpr int kNamedCacheMaxBytes = 32 * 1024 * 1024; // 32MB soft limit
 constexpr size_t kMaxNamedPngPixels = 16 * 1024 * 1024;
@@ -588,7 +591,13 @@ int artUnlock(CacheEntry* handle)
 // 0x41927C
 int artCacheFlush()
 {
+    gArtCacheGeneration++;
     return cacheFlush(&gArtCache);
+}
+
+unsigned int artCacheGeneration()
+{
+    return gArtCacheGeneration;
 }
 
 // 0x4192B0
