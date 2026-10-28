@@ -16,6 +16,7 @@
 #include "message.h"
 #include "object.h"
 #include "platform_compat.h"
+#include "proto.h"
 #include "settings.h"
 #include "sfall_config.h"
 #include "sfall_global_vars.h"
@@ -341,6 +342,8 @@ void heroAppearanceReset()
     gHeroRace = 0;
     gHeroStyle = 0;
     loadSets(dudeGenderLetter(), 0, 0);
+    // The gender's base look (the character's may have changed).
+    _proto_dude_update_gender();
 }
 
 void heroAppearanceOnNewGame()
