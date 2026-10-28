@@ -222,6 +222,10 @@ enum DevAutotestAction {
     // outlines; b = 1: checks corpses and containers with things in them
     // are outlined.
     DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT,
+    // The game event checks (`_scriptsCheckGameEvents`) `a` times: no
+    // Arroyo dream asked for, GVAR_TOWN_REP_ARROYO and the Arroyo areas as
+    // they were (a mod with negative movie timers).
+    DEV_AUTOTEST_ACTION_CHECK_GAME_EVENTS,
     // A bag (pid `a`) with a thing (pid `c`) in it two hexes east of the
     // dude, and a dead critter (pid `b`) with the same thing two hexes
     // south-west.
@@ -3040,6 +3044,14 @@ static const DevAutotestStep kDevAutotestHighlightAllSteps[] = {
     { DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT, 12, 1, 0, 1, "hl02_outlines" },
 };
 
+// Negative movie timers (Fallout: Resurrection's config\game#patch.cfg,
+// Fallout of Nevada's ddraw.ini): the Arroyo dreams never come. Run on such
+// a mod's copy; with Fallout 2's own timers it passes as well (day 0).
+static const DevAutotestStep kDevAutotestMovieTimersOffSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "mt00_map" },
+    { DEV_AUTOTEST_ACTION_CHECK_GAME_EVENTS, 3, 0, 0, 1, "mt01_events" },
+};
+
 // Party member control tab of the mobile talk screen (test save, Sulik).
 static const DevAutotestStep kDevAutotestPartySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "q00_start" },
@@ -3325,6 +3337,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
+    } else if (strcmp(name, "movietimersoff") == 0) {
+        gDevAutotestSteps = kDevAutotestMovieTimersOffSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMovieTimersOffSteps) / sizeof(kDevAutotestMovieTimersOffSteps[0]);
     } else if (strcmp(name, "highlightall") == 0) {
         gDevAutotestSteps = kDevAutotestHighlightAllSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestHighlightAllSteps) / sizeof(kDevAutotestHighlightAllSteps[0]);
@@ -6780,6 +6795,23 @@ void devAutotestTick()
                 devAutotestLog("  dead critter pid %d at tile %d\n", static_cast<int>(step->b), critter->tile);
             }
             tileWindowRefresh();
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_GAME_EVENTS: {
+            int rep = gameGetGlobalVar(GVAR_TOWN_REP_ARROYO);
+            bool arroyoKnown = wmAreaIsKnown(CITY_ARROYO);
+            bool destroyedKnown = wmAreaIsKnown(CITY_DESTROYED_ARROYO);
+            int asked = 0;
+            for (int index = 0; index < static_cast<int>(step->a); index++) {
+                int movie = -1;
+                _scriptsCheckGameEvents(&movie, -1);
+                asked += movie != -1 ? 1 : 0;
+            }
+            bool ok = asked == 0 && gameGetGlobalVar(GVAR_TOWN_REP_ARROYO) == rep
+                && wmAreaIsKnown(CITY_ARROYO) == arroyoKnown && wmAreaIsKnown(CITY_DESTROYED_ARROYO) == destroyedKnown;
+            devAutotestLog("  day %d: %d of %d checks asked for a movie, GVAR_TOWN_REP_ARROYO %d -> %d, areas %d/%d -> %d/%d: %s\n",
+                static_cast<int>(gameTimeGetTime() / GAME_TIME_TICKS_PER_DAY), asked, static_cast<int>(step->a), rep, gameGetGlobalVar(GVAR_TOWN_REP_ARROYO),
+                arroyoKnown ? 1 : 0, destroyedKnown ? 1 : 0, wmAreaIsKnown(CITY_ARROYO) ? 1 : 0, wmAreaIsKnown(CITY_DESTROYED_ARROYO) ? 1 : 0, ok ? "PASS" : "FAIL");
             break;
         }
         case DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT: {
