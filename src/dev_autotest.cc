@@ -77,6 +77,9 @@
 
 namespace fallout {
 
+// The gunman of the `retargetleave` scenario.
+static int gDevAutotestRetargetGunmanId = -1;
+
 void (*gDevAutotestInvenWieldObserver)(Object* critter, Object* item, int isWield, int isRemove) = nullptr;
 
 enum DevAutotestAction {
@@ -123,6 +126,11 @@ enum DevAutotestAction {
     // `b` stimpaks and `b` caps given one by one: no ID in party members'
     // range, each kind in one stack.
     DEV_AUTOTEST_ACTION_OBJECT_IDS,
+    // A critter that can't possibly hit the dude, beyond its max distance
+    // (sfall's ReTarget, fallout2-ce#839 review): `a` 1 - a hostile gunman
+    // `b` tiles away, the map's other critters removed; 2 - the dude ends his
+    // turns (at most `c` frames) until the combat is over: the gunman left it.
+    DEV_AUTOTEST_ACTION_RETARGET_LEAVE,
     // Presses key with SDL scancode `a` (desktop screens; the touch-only
     // build takes only a text field's editing keys).
     DEV_AUTOTEST_ACTION_KEY,
@@ -2361,6 +2369,20 @@ static const DevAutotestStep kDevAutotestFleeHealSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_PARTY_HEALED, 0, 0, 0, 1, "f11_healed" },
 };
 
+// A critter that can't possibly hit its target runs away from it, and
+// beyond its max distance it disengages (combat_ai.cc, sfall's ReTarget flag
+// set only when it doesn't): the gunman's AI packet in memory asks for a hit
+// chance over 100, keeps it within 1 tile of its target and in its place, the
+// dude is 4 away. The combat ends; with ReTarget set too (0x0A) it never would, as
+// `_combat_sequence` takes out only critters whose maneuver is just
+// DISENGAGING.
+static const DevAutotestStep kDevAutotestRetargetLeaveSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "l00_start" },
+    { DEV_AUTOTEST_ACTION_RETARGET_LEAVE, 1, 4, 0, 10, "l01_gunman" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT_ATTACKED, 0, 0, 0, 60, "l02_attacked" },
+    { DEV_AUTOTEST_ACTION_RETARGET_LEAVE, 2, 0, 1800, 10, "l03_combat_over" },
+};
+
 // A hurt party member asked to heal himself in a talk (party.h obj_heal:
 // use_obj_on_obj of a stimpak on himself) uses the stimpak at once, as with
 // sfall: his answer is by his health after it. It used to wait for the end
@@ -3281,6 +3303,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "talkheal") == 0) {
         gDevAutotestSteps = kDevAutotestTalkHealSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestTalkHealSteps) / sizeof(kDevAutotestTalkHealSteps[0]);
+    } else if (strcmp(name, "retargetleave") == 0) {
+        gDevAutotestSteps = kDevAutotestRetargetLeaveSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestRetargetLeaveSteps) / sizeof(kDevAutotestRetargetLeaveSteps[0]);
     } else if (strcmp(name, "fleeheal") == 0) {
         gDevAutotestSteps = kDevAutotestFleeHealSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestFleeHealSteps) / sizeof(kDevAutotestFleeHealSteps[0]);
@@ -3657,6 +3682,30 @@ void devAutotestTick()
         }
         waited = 0;
         round = -1;
+    }
+
+    if (step->action == DEV_AUTOTEST_ACTION_RETARGET_LEAVE && step->a == 2 && !gDevAutotestStepStarted) {
+        static int waited = 0;
+        // The dude's turns end until the combat is over.
+        if (isInCombat() && waited < static_cast<int>(step->c)) {
+            if (waited % 30 == 0 && _combat_whose_turn() == gDude) {
+                gameCommandPost(GameCommandType::EndTurn);
+            }
+            waited++;
+            return;
+        }
+        Object* gunman = nullptr;
+        for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+            if (object->id == gDevAutotestRetargetGunmanId && FrmId(object).objectType() == OBJ_TYPE_CRITTER) {
+                gunman = object;
+            }
+        }
+        int maneuver = gunman != nullptr ? static_cast<int>(gunman->data.critter.combat.maneuver) : -1;
+        // The combat's end clears the maneuver.
+        bool ok = !isInCombat() && gunman != nullptr && (gunman->data.critter.combat.results & DAM_DEAD) == 0;
+        devAutotestLog("  after %d frames: %s, round %d, gunman maneuver 0x%02x, %d tiles away: %s\n", waited, isInCombat() ? "still in combat" : "combat is over",
+            _combatNumTurns, maneuver, gunman != nullptr ? objectGetDistanceBetween(gunman, gDude) : -1, ok ? "PASS" : "FAIL");
+        waited = 0;
     }
 
     if (step->action == DEV_AUTOTEST_ACTION_WAIT_WIDGET && !gDevAutotestStepStarted) {
@@ -4470,6 +4519,71 @@ void devAutotestTick()
             }
             ok = ok && stimpakRows == 1 && capsRows == 1;
             devAutotestLog("  last ID %d, stimpak stacks %d, caps stacks %d: %s\n", id, stimpakRows, capsRows, ok ? "PASS" : "FAIL");
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_RETARGET_LEAVE: {
+            if (step->a != 1) {
+                break;
+            }
+            int distance = static_cast<int>(step->b);
+            // Only the dude and the gunman: the villagers would join in.
+            std::vector<Object*> others;
+            for (Object* object = objectFindFirstAtElevation(gDude->elevation); object != nullptr; object = objectFindNextAtElevation()) {
+                if (object != gDude && FrmId(object).objectType() == OBJ_TYPE_CRITTER && !objectIsPartyMember(object)) {
+                    others.push_back(object);
+                }
+            }
+            for (Object* object : others) {
+                objectDestroy(object, nullptr);
+            }
+            int rotation = -1;
+            for (int candidate = 0; candidate < ROTATION_COUNT && rotation == -1; candidate++) {
+                bool free = true;
+                for (int hex = 1; hex <= distance; hex++) {
+                    if (_obj_blocking_at(gDude, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(candidate), hex), gDude->elevation) != nullptr) {
+                        free = false;
+                    }
+                }
+                if (free) {
+                    rotation = candidate;
+                }
+            }
+            // A loaded 10mm SMG on Sulik's look (its animations).
+            Object* gunman = nullptr;
+            Object* smg = nullptr;
+            Object* ammo = nullptr;
+            if (rotation == -1
+                || objectCreateWithProtoId(&gunman, ProtoId(0x1000000 | 97)) != 0
+                || objectCreateWithProtoId(&smg, ProtoId(9)) != 0
+                || objectCreateWithProtoId(&ammo, ProtoId(29)) != 0) {
+                devAutotestLog("FAIL: no free line or no gunman\n");
+                exit(EXIT_FAILURE);
+            }
+            gunman->sid = -1;
+            gunman->data.critter.combat.team = 77;
+            while (gunman->data.inventory.length > 0) {
+                Object* item = gunman->data.inventory.items[0].item;
+                itemRemove(gunman, item, gunman->data.inventory.items[0].quantity);
+            }
+            weaponReload(smg, ammo);
+            itemAdd(gunman, smg, 1);
+            _obj_disconnect(smg, nullptr);
+            inventoryEquipFunc(gunman, smg, HAND_RIGHT, false);
+            objectSetLocation(gunman, tileGetTileInDirection(gDude->tile, static_cast<Rotation>(rotation), distance), gDude->elevation, nullptr);
+            // Both live through the shooting.
+            for (Object* critter : { gDude, gunman }) {
+                critterSetBonusStat(critter, STAT_MAXIMUM_HIT_POINTS, 500);
+                critter->data.critter.hp = critterGetStat(critter, STAT_MAXIMUM_HIT_POINTS);
+            }
+            // Its AI packet in memory, for this run: no hit chance is enough,
+            // and it shoots from its place, its target beyond its max distance.
+            AiPacket* ai = aiGetPacket(gunman);
+            ai->min_to_hit = 101;
+            ai->max_dist = 1;
+            ai->distance = DISTANCE_STAY;
+            gDevAutotestRetargetGunmanId = gunman->id;
+            devAutotestLog("  gunman at tile %d, %d tiles from the dude, in hand pid %d, min_to_hit %d, max_dist %d\n", gunman->tile, objectGetDistanceBetween(gunman, gDude),
+                critterGetItem2(gunman) != nullptr ? critterGetItem2(gunman)->pid : -1, ai->min_to_hit, ai->max_dist);
             break;
         }
         case DEV_AUTOTEST_ACTION_KEY: {
