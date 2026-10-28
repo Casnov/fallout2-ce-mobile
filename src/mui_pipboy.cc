@@ -379,16 +379,21 @@ namespace {
 
         int count = static_cast<int>(Section::Count);
         float gap = ui.dp(tall ? 8.0f : 4.0f);
-        float width = (rect.w - gap * (count - 1)) / count;
+        std::vector<std::u32string> labels;
         for (int index = 0; index < count; index++) {
-            MuiRect tabRect = { rect.x + index * (width + gap), rect.y, width, rect.h };
+            labels.push_back(ceText(sections[index].text, sections[index].fallback));
+        }
+        MuiTabRow tabRow = muiLayoutTabRow(rect, labels, gap, ui.dp(10.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
+
+        for (int index = 0; index < count; index++) {
+            const MuiRect& tabRect = tabRow.cells[index];
             bool active = static_cast<int>(section) == index;
             bool pressed;
             bool tapped = ui.touchable(sections[index].id, tabRect, &pressed);
             muiFillRoundRect(tabRect, ui.dp(6.0f), pressed ? theme.buttonPressed : (active ? theme.buttonPrimary : theme.button));
             muiStrokeRoundRect(tabRect, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
-            std::u32string label = ceText(sections[index].text, sections[index].fallback);
-            float size = muiFitTextSize(label, tabRect.w - ui.dp(10.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
+            const std::u32string& label = labels[index];
+            float size = muiFitTextSize(label, tabRect.w - ui.dp(10.0f), tabRow.textSize, ui.dp(10.0f));
             muiDrawTextAligned(label, tabRect, size, active && !pressed ? theme.buttonPrimaryText : theme.buttonText, MuiAlign::Center, MuiAlign::Center);
 
             if (tapped && !active) {

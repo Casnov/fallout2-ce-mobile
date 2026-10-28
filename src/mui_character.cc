@@ -748,16 +748,35 @@ namespace {
             { Tab::Perks, "character.tab.perks", perksLabel },
         };
 
-        float tabWidth = (inner.w - gap * 2.0f) / 3.0f;
+        // The cells by the widest each label gets: creation's counters at
+        // their widest digits.
+        float textSize = ui.dp(tall ? 16.0f : 14.0f);
+        auto widest = [textSize](const std::u32string& text, const std::vector<std::u32string>& counters) {
+            std::u32string result;
+            for (const std::u32string& counter : counters) {
+                std::u32string candidate = text + U" " + counter;
+                if (muiTextWidth(candidate, textSize) > muiTextWidth(result, textSize)) {
+                    result = candidate;
+                }
+            }
+            return result;
+        };
+        std::vector<std::u32string> widestLabels = { tabs[0].label, tabs[1].label, tabs[2].label };
+        if (creating) {
+            widestLabels[1] = widest(editorText(kEditorSkills), { U"1", U"2", U"3" });
+            widestLabels[2] = widest(ceText(kTextTraits, "Traits"), { U"0/2", U"1/2", U"2/2" });
+        }
+        MuiTabRow tabRow = muiLayoutTabRow({ inner.x, inner.y, inner.w, tabHeight }, widestLabels, gap, ui.dp(10.0f), textSize, ui.dp(10.0f));
+
         for (int index = 0; index < 3; index++) {
             const TabInfo& info = tabs[index];
-            MuiRect tabRect = { inner.x + index * (tabWidth + gap), inner.y, tabWidth, tabHeight };
+            const MuiRect& tabRect = tabRow.cells[index];
             bool active = info.tab == tab;
             bool pressed;
             bool tapped = ui.touchable(info.id, tabRect, &pressed);
             muiFillRoundRect(tabRect, ui.dp(6.0f), pressed ? theme.buttonPressed : (active ? theme.buttonPrimary : theme.button));
             muiStrokeRoundRect(tabRect, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
-            float size = muiFitTextSize(info.label, tabRect.w - ui.dp(10.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
+            float size = muiFitTextSize(info.label, tabRect.w - ui.dp(10.0f), tabRow.textSize, ui.dp(10.0f));
             muiDrawTextAligned(info.label, tabRect, size, active && !pressed ? theme.buttonPrimaryText : theme.buttonText, MuiAlign::Center, MuiAlign::Center);
             if (info.tab == Tab::Perks && perkOwed) {
                 float dotInset = ui.dp(tall ? 12.0f : 9.0f);
@@ -1222,16 +1241,21 @@ namespace {
             { Folder::Kills, "character.folder.kills", kEditorKills },
         };
 
-        float tabWidth = (rect.w - gap * 2.0f) / 3.0f;
+        std::vector<std::u32string> labels;
+        for (const auto& info : tabs) {
+            labels.push_back(editorText(info.label));
+        }
+        MuiTabRow tabRow = muiLayoutTabRow({ rect.x, rect.y, rect.w, tabHeight }, labels, gap, ui.dp(8.0f), ui.dp(tall ? 15.0f : 13.0f), ui.dp(10.0f));
+
         for (int index = 0; index < 3; index++) {
-            MuiRect tabRect = { rect.x + index * (tabWidth + gap), rect.y, tabWidth, tabHeight };
+            const MuiRect& tabRect = tabRow.cells[index];
             bool active = tabs[index].folder == folder;
             bool pressed;
             bool tapped = ui.touchable(tabs[index].id, tabRect, &pressed);
             muiFillRoundRect(tabRect, ui.dp(6.0f), pressed ? theme.buttonPressed : (active ? kSelected : theme.button));
             muiStrokeRoundRect(tabRect, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
-            std::u32string label = editorText(tabs[index].label);
-            float size = muiFitTextSize(label, tabRect.w - ui.dp(8.0f), ui.dp(tall ? 15.0f : 13.0f), ui.dp(10.0f));
+            const std::u32string& label = labels[index];
+            float size = muiFitTextSize(label, tabRect.w - ui.dp(8.0f), tabRow.textSize, ui.dp(10.0f));
             muiDrawTextAligned(label, tabRect, size, active ? theme.accent : theme.buttonText, MuiAlign::Center, MuiAlign::Center);
             if (tapped && !active) {
                 _gsound_red_butt_press(-1, 0);

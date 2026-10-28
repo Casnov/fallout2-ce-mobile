@@ -440,16 +440,20 @@ namespace {
 
     void LoadSaveScreen::buildTabs(MuiContext& ui, const MuiRect& rect)
     {
-        float gap = ui.dp(4.0f);
-        MuiRect saveTab = { rect.x, rect.y, (rect.w - gap) / 2.0f, rect.h };
-        MuiRect loadTab = { saveTab.right() + gap, rect.y, saveTab.w, rect.h };
+        const MuiTheme& theme = muiTheme();
+        std::u32string saveLabel = text(kTextSaveTab, "Save");
+        std::u32string loadLabel = text(kTextLoadTab, "Load");
+        // The buttons' own text size and padding.
+        MuiTabRow tabRow = muiLayoutTabRow(rect, { saveLabel, loadLabel }, ui.dp(4.0f), ui.dp(theme.padding), ui.dp(theme.buttonTextSize), ui.dp(10.0f));
+        const MuiRect& saveTab = tabRow.cells[0];
+        const MuiRect& loadTab = tabRow.cells[1];
 
-        if (ui.button("loadsave.save_tab", saveTab, text(kTextSaveTab, "Save"), saving ? MuiButtonStyle::Primary : MuiButtonStyle::Normal)) {
+        if (ui.button("loadsave.save_tab", saveTab, saveLabel, saving ? MuiButtonStyle::Primary : MuiButtonStyle::Normal)) {
             saving = true;
             select(newSlot != -1 ? newSlot : selected);
         }
 
-        if (ui.button("loadsave.load_tab", loadTab, text(kTextLoadTab, "Load"), saving ? MuiButtonStyle::Normal : MuiButtonStyle::Primary)) {
+        if (ui.button("loadsave.load_tab", loadTab, loadLabel, saving ? MuiButtonStyle::Normal : MuiButtonStyle::Primary)) {
             saving = false;
             if (selected == newSlot) {
                 select(rows.empty() ? -1 : rows.front().slot);

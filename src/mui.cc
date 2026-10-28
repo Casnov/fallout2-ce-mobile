@@ -856,39 +856,71 @@ bool MuiContext::toggle(const std::string& id, const MuiRect& rect, bool* value)
     return tapped;
 }
 
+MuiTabRow muiLayoutTabRow(const MuiRect& row, const std::vector<std::u32string>& labels, float gap, float padding, float size, float minSize)
+{
+    MuiTabRow result;
+    result.textSize = size;
+    size_t count = labels.size();
+    if (count == 0) {
+        return result;
+    }
+
+    float room = row.w - gap * (count - 1);
+    std::vector<float> widths(count, room / count);
+    std::vector<float> textWidths(count);
+    float textWidth = 0.0f;
+    bool fit = true;
+    for (size_t index = 0; index < count; index++) {
+        textWidths[index] = muiTextWidth(labels[index], size);
+        textWidth += textWidths[index];
+        if (textWidths[index] + padding > widths[index]) {
+            fit = false;
+        }
+    }
+
+    if (!fit) {
+        float textRoom = room - padding * count;
+        if (textWidth > textRoom && textWidth > 0.0f) {
+            result.textSize = std::max(size * textRoom / textWidth, minSize);
+            textWidth = 0.0f;
+            for (size_t index = 0; index < count; index++) {
+                textWidths[index] = muiTextWidth(labels[index], result.textSize);
+                textWidth += textWidths[index];
+            }
+        }
+
+        // Still too long at the smallest size: the cells in proportion.
+        float extra = (textRoom - textWidth) / count;
+        float scale = extra < 0.0f ? room / (textWidth + padding * count) : 1.0f;
+        for (size_t index = 0; index < count; index++) {
+            widths[index] = extra < 0.0f ? (textWidths[index] + padding) * scale : textWidths[index] + padding + extra;
+        }
+    }
+
+    float x = row.x;
+    for (size_t index = 0; index < count; index++) {
+        float width = index + 1 == count ? row.right() - x : widths[index];
+        result.cells.push_back({ x, row.y, width, row.h });
+        x += width + gap;
+    }
+    return result;
+}
+
 bool MuiContext::segmented(const std::string& id, const MuiRect& rect, const std::vector<std::u32string>& labels, int* selected)
 {
     if (labels.empty()) {
         return false;
     }
 
-    // One text size for all, as large as fits; each cell as wide as its
-    // label with the room left shared equally.
-    float padding = dp(12.0f);
-    float size = dp(kTheme.buttonTextSize) * 0.9f;
-    float textWidth = 0.0f;
-    for (const std::u32string& label : labels) {
-        textWidth += muiTextWidth(label, size);
-    }
-    float room = rect.w - padding * labels.size();
-    if (textWidth > room && textWidth > 0.0f) {
-        size = std::max(size * room / textWidth, dp(10.0f));
-        textWidth = 0.0f;
-        for (const std::u32string& label : labels) {
-            textWidth += muiTextWidth(label, size);
-        }
-    }
-    float extra = std::max(room - textWidth, 0.0f) / labels.size();
+    MuiTabRow row = muiLayoutTabRow(rect, labels, 0.0f, dp(12.0f), dp(kTheme.buttonTextSize) * 0.9f, dp(10.0f));
+    float size = row.textSize;
 
     bool changed = false;
     float radius = dp(kTheme.radius);
     muiFillRoundRect(rect, radius, kTheme.button);
 
-    float x = rect.x;
     for (size_t index = 0; index < labels.size(); index++) {
-        float width = index + 1 == labels.size() ? rect.right() - x : muiTextWidth(labels[index], size) + padding + extra;
-        MuiRect cell = { x, rect.y, width, rect.h };
-        x += width;
+        const MuiRect& cell = row.cells[index];
 
         bool pressed;
         if (touchable(id + "." + std::to_string(index), cell, &pressed) && *selected != static_cast<int>(index)) {

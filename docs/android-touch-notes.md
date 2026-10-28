@@ -1141,8 +1141,10 @@ every screen on the new scalable UI, visual style/textures later via theme).
     `world_view.filter`) and CE's (`[qol]`, `[ui]`) settings with badges
     "порт" / "CE"; value labels from OPTIONS.MSG, names from ce.msg
     245-289;
-  - kit widgets: `toggle`, `segmented` (cells as wide as their labels, one
-    text size), `slider` (finger drags it smoothly, reports `dragging`);
+  - kit widgets: `toggle`, `segmented` (laid out as every row of tabs,
+    `muiLayoutTabRow`: equal cells when all labels fit, else cells as wide
+    as their labels, one text size), `slider` (finger drags it smoothly,
+    reports `dragging`);
   - a change marks its row and section with a dot, Apply is highlighted
     while something changed; volumes and brightness are heard / seen at
     once (`preferencesPreview`, sample sounds when the finger lets go,

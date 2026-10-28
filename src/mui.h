@@ -253,6 +253,19 @@ public:
 };
 
 // Output pixels to game screen (logical) pixels.
+// A row of tabs over [row]: equal cells when every label fits one at
+// [size], else cells as wide as their labels with the room left shared and
+// one text size for all, smaller (down to [minSize]) when they still don't
+// fit. [labels] are the longest texts each tab can have (a counter at its
+// widest), so the cells don't move as it changes; [padding] is the room
+// around a label in its cell.
+struct MuiTabRow {
+    std::vector<MuiRect> cells;
+    float textSize;
+};
+
+MuiTabRow muiLayoutTabRow(const MuiRect& row, const std::vector<std::u32string>& labels, float gap, float padding, float size, float minSize);
+
 void muiToScreen(float x, float y, int* screenX, int* screenY);
 
 // Text [id] of `game\ce.msg` (mobile UI texts localized with game data),
