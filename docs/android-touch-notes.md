@@ -664,6 +664,13 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
 - Texts come from `game\ce.msg` (files/ce.dat, English and Russian): button
   names 100-113, quick load question 116, attack mode names 124-145 (the
   Russian ones as on RPU's item button art); English fallbacks in code.
+  The attack modes' names cover every label art the engine picks
+  (`interfaceGetItemActionFrmId`: the weapon's animations and the unarmed
+  hit modes, a fixed set any mod's weapons choose from). A fallback only:
+  a mode chip whose label kActionNames doesn't know shows the game's own
+  label art (`touch_hud.cc`, "Fallback: the game's label art", 2026-10-29),
+  so a label a future engine adds isn't nameless; remove it with
+  `Chip::fallbackArt` when not wanted.
 - Autotest: `--dev-autotest-scenario=hud`.
 - Next in block 1: hide HUD / adapt full screens (inventory overlaps HUD
   corners), dialogs, barter, Pip-Boy, character, options, save/load, UI size
