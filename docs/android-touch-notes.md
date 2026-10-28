@@ -1268,6 +1268,13 @@ every screen on the new scalable UI, visual style/textures later via theme).
     subtile, smoothly scaled (unknown black, known dimmed); the party a dot,
     dots to the destination's cross; the encounter icon blinking red
     (special amber);
+  - town names as the game's world map has them: the towns' list always
+    by map.msg (as its tabs); the labels under the rings unless a mod hides
+    them (sfall's `remove_wm_town_names`: Fallout Et Tu's classic world map,
+    as Fallout 1 had none), then only the party's town keeps its label -
+    the title sfall shows over the party (`set_town_title`), else its name;
+    the place's title also on "Enter <town>" and in the menu's header.
+    Autotest `worldmapnames` (2026-10-29: Et Tu had no names at all);
   - a tap on the terrain walks there, on a town goes to its center, on the
     party (not walking) enters; "Enter <town>" / "Enter the wasteland" at the
     bottom center when standing; the menu button and the date / time chip

@@ -434,8 +434,13 @@ struct WorldmapMobileCity {
     float x;
     float y;
     float radius;
-    // Game text, empty - names hidden.
+    // Game text: the name of the towns' list (map.msg, as the classic
+    // world map's tabs), the label under its circle (empty: the town names
+    // hidden, remove_wm_town_names), the title sfall shows for the place
+    // the party is at (set_town_title, empty without one).
     std::string name;
+    std::string label;
+    std::string title;
     bool visited;
 };
 

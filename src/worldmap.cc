@@ -7941,16 +7941,21 @@ void wmMobileGetState(WorldmapMobileState* state)
         item.radius = circleWidth / 2.0f;
         item.visited = city->visitedState == VisitedState::Visited;
 
+        char name[40];
+        if (wmAreaIsKnown(city->areaId)) {
+            wmGetAreaName(city, name);
+        } else {
+            MessageListItem messageListItem;
+            strncpy(name, getmsg(&wmMsgFile, &messageListItem, 1004), sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+        }
+        item.name = name;
         if (!wmTownNamesHidden) {
-            char name[40];
-            if (wmAreaIsKnown(city->areaId)) {
-                wmGetAreaName(city, name);
-            } else {
-                MessageListItem messageListItem;
-                strncpy(name, getmsg(&wmMsgFile, &messageListItem, 1004), sizeof(name) - 1);
-                name[sizeof(name) - 1] = '\0';
-            }
-            item.name = name;
+            item.label = name;
+        }
+        const char* title = wmGetTownTitle(static_cast<City>(index));
+        if (title != nullptr) {
+            item.title = title;
         }
 
         if (wmGenData.isWalking

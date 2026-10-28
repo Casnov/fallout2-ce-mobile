@@ -213,6 +213,11 @@ enum DevAutotestAction {
     // state; drag from view center by (a, b); tap at party position + (a, b).
     DEV_AUTOTEST_ACTION_OPEN_WORLDMAP,
     DEV_AUTOTEST_ACTION_LOG_WORLDMAP,
+    // The mobile world map's town names: a = 0 checks them shown; 1 hides
+    // them and titles the party's town as a mod does (remove_wm_town_names,
+    // set_town_title); 2 checks the list keeps the names and the place its
+    // title; 3 shows them again.
+    DEV_AUTOTEST_ACTION_WORLDMAP_NAMES,
     DEV_AUTOTEST_ACTION_WORLDMAP_DRAG,
     DEV_AUTOTEST_ACTION_WORLDMAP_TAP,
     // Logs attack mode.
@@ -3001,6 +3006,21 @@ static const DevAutotestStep kDevAutotestScriptSaveSteps[] = {
     { DEV_AUTOTEST_ACTION_SCRIPT_SAVE, 0, 0, 0, 1, "ss01_saved" },
 };
 
+// Town names on the mobile world map when a mod hides them, as Fallout Et
+// Tu's classic world map: the towns' list keeps the names, the place the
+// party is at its title.
+static const DevAutotestStep kDevAutotestWorldmapNamesSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "wn00_map" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_AREA, CITY_KLAMATH, 0, 0, 1, "wn01_at_klamath" },
+    { DEV_AUTOTEST_ACTION_OPEN_WORLDMAP, 0, 0, 0, 1, "wn02_open" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "wn03_worldmap" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_NAMES, 0, 0, 0, 1, "wn04_names_shown" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_NAMES, 1, 0, 0, 20, "wn05_hidden" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "wn06_towns", "worldmap.towns" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_NAMES, 2, 0, 0, 1, "wn07_names_kept" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_NAMES, 3, 0, 0, 1, "wn08_shown_again" },
+};
+
 // Party member control tab of the mobile talk screen (test save, Sulik).
 static const DevAutotestStep kDevAutotestPartySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "q00_start" },
@@ -3286,6 +3306,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
+    } else if (strcmp(name, "worldmapnames") == 0) {
+        gDevAutotestSteps = kDevAutotestWorldmapNamesSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestWorldmapNamesSteps) / sizeof(kDevAutotestWorldmapNamesSteps[0]);
     } else if (strcmp(name, "scriptsave") == 0) {
         gDevAutotestSteps = kDevAutotestScriptSaveSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestScriptSaveSteps) / sizeof(kDevAutotestScriptSaveSteps[0]);
@@ -6717,6 +6740,33 @@ void devAutotestTick()
             Rect viewRect;
             wmGetInterfaceState(&offsetX, &offsetY, &partyX, &partyY, &isWalking, &viewRect);
             devAutotestLog("  world map offset (%d, %d), party (%d, %d), walking %d\n", offsetX, offsetY, partyX, partyY, isWalking ? 1 : 0);
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_WORLDMAP_NAMES: {
+            const char* title = "Autotest title";
+            WorldmapMobileState state;
+            wmMobileGetState(&state);
+            if (step->a == 1 || step->a == 3) {
+                wmRemoveTownNames(step->a == 1);
+                wmSetTownTitle(static_cast<City>(state.currentArea), step->a == 1 ? title : "");
+                devAutotestLog("  town names %s, area %d %s\n", step->a == 1 ? "hidden" : "shown", state.currentArea, step->a == 1 ? "titled" : "untitled");
+                break;
+            }
+
+            int listed = 0;
+            int labelled = 0;
+            bool placeTitled = false;
+            for (const WorldmapMobileCity& city : state.cities) {
+                listed += city.name.empty() ? 0 : 1;
+                labelled += city.label.empty() ? 0 : 1;
+                if (city.area == state.currentArea) {
+                    placeTitled = city.title == title;
+                }
+            }
+            int count = static_cast<int>(state.cities.size());
+            bool ok = count > 0 && listed == count && (step->a == 0 ? labelled == count && !placeTitled : labelled == 0 && placeTitled);
+            devAutotestLog("  towns %d, named in the list %d, labelled %d, the party's town titled %d: %s\n",
+                count, listed, labelled, placeTitled ? 1 : 0, ok ? "PASS" : "FAIL");
             break;
         }
         case DEV_AUTOTEST_ACTION_WORLDMAP_DRAG:
