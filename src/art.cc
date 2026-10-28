@@ -13,6 +13,7 @@
 #include "content_config.h"
 #include "datafile.h"
 #include "debug.h"
+#include "hero_appearance.h"
 #include "draw.h"
 #include "game.h"
 #include "memory.h"
@@ -46,6 +47,7 @@ static int artCacheReadData(const FrmId& frmId, int* sizePtr, unsigned char* dat
 static void artCacheFreeImpl(void* ptr);
 static int artReadFrameData(unsigned char* data, size_t dataCapacity, File* stream, int count, int sourceSize, int* paddingPtr);
 static int artReadHeader(Art* art, File* stream);
+static int artReadOpened(File* stream, const char* path, unsigned char* data, size_t size);
 static int artGetDataSize(const Art* art);
 static int paddingForSize(int size);
 static char artGetCritterWeaponCode(WeaponAnimation weaponType);
@@ -152,6 +154,10 @@ static CritterFrameId* _anon_alias;
 // 0x56CAF0 artCritterFidShouldRunData
 static int* gArtCritterFidShoudRunData;
 
+// SFALL: Hero Appearance: the first frame id of the critter list's second
+// half (the hero's own art), 0 when the mod is off.
+static int gArtHeroCritterOffset = 0;
+
 static std::unordered_map<std::string, std::shared_ptr<NamedCacheEntry>> gNamedArtCache;
 constexpr int kNamedCacheMaxBytes = 32 * 1024 * 1024; // 32MB soft limit
 constexpr size_t kMaxNamedPngPixels = 16 * 1024 * 1024;
@@ -194,6 +200,29 @@ int artInit()
             debugPrint("art_read_lst failed in art_init\n");
             cacheFree(&gArtCache);
             return -1;
+        }
+    }
+
+    // SFALL: Hero Appearance: the critter names again with "_", the hero's
+    // own art (`artHeroFrmId`); art ids have room for 4096.
+    gArtHeroCritterOffset = 0;
+    if (heroAppearanceMode() != 0) {
+        int count = gArtListDescriptions[OBJ_TYPE_CRITTER].fileNamesLength;
+        char* names = count * 2 <= FrmId::kMaxFrameId + 1
+            ? (char*)internal_realloc(gArtListDescriptions[OBJ_TYPE_CRITTER].fileNames, ART_NAME_SIZE * count * 2)
+            : nullptr;
+        if (names != nullptr) {
+            for (int index = 0; index < count; index++) {
+                char* heroName = names + (count + index) * ART_NAME_SIZE;
+                heroName[0] = '_';
+                strncpy(heroName + 1, names + index * ART_NAME_SIZE, ART_NAME_SIZE - 2);
+                heroName[ART_NAME_SIZE - 1] = '\0';
+            }
+            gArtListDescriptions[OBJ_TYPE_CRITTER].fileNames = names;
+            gArtListDescriptions[OBJ_TYPE_CRITTER].fileNamesLength = count * 2;
+            gArtHeroCritterOffset = count;
+        } else {
+            debugPrint("Hero Appearance: no room for the hero's art (%d critters)\n", count);
         }
     }
 
@@ -280,6 +309,12 @@ int artInit()
     }
 
     fileClose(stream);
+
+    // SFALL: Hero Appearance: the hero's art as the critter's.
+    for (int critterIndex = gArtHeroCritterOffset; gArtHeroCritterOffset != 0 && critterIndex < gArtListDescriptions[OBJ_TYPE_CRITTER].fileNamesLength; critterIndex++) {
+        _anon_alias[critterIndex] = _anon_alias[critterIndex - gArtHeroCritterOffset];
+        gArtCritterFidShoudRunData[critterIndex] = gArtCritterFidShoudRunData[critterIndex - gArtHeroCritterOffset];
+    }
 
     char* tileFileNames = gArtListDescriptions[OBJ_TYPE_TILE].fileNames;
     for (int tileIndex = 0; tileIndex < gArtListDescriptions[OBJ_TYPE_TILE].fileNamesLength; tileIndex++) {
@@ -371,6 +406,7 @@ void artExit()
     }
 
     internal_free(gHeadDescriptions);
+    gArtHeroCritterOffset = 0;
 }
 
 // 0x418F1C
@@ -941,6 +977,30 @@ int artCritterFrmIdShouldRun(const FrmId& frmId)
     return 0;
 }
 
+bool artIsHeroFrmId(const FrmId& frmId)
+{
+    return gArtHeroCritterOffset != 0
+        && frmId.hasFid()
+        && frmId.objectType() == OBJ_TYPE_CRITTER
+        && frmId.frameId() >= gArtHeroCritterOffset;
+}
+
+FrmId artHeroFrmId(const FrmId& frmId)
+{
+    if (gArtHeroCritterOffset == 0 || !frmId.hasFid() || frmId.objectType() != OBJ_TYPE_CRITTER || frmId.frameId() >= gArtHeroCritterOffset) {
+        return frmId;
+    }
+    return FrmId(frmId.fid() + gArtHeroCritterOffset);
+}
+
+FrmId artNormalFrmId(const FrmId& frmId)
+{
+    if (!artIsHeroFrmId(frmId)) {
+        return frmId;
+    }
+    return FrmId(frmId.fid() - gArtHeroCritterOffset);
+}
+
 static bool artGetLocalizedPath(const char* basePath, const char** outPath)
 {
     static char localizedPath[COMPAT_MAX_PATH];
@@ -961,6 +1021,23 @@ static bool artGetLocalizedPath(const char* basePath, const char** outPath)
 static int artCacheGetFileSize(const FrmId& frmId, int* sizePtr)
 {
     int result = -1;
+
+    // SFALL: Hero Appearance: the hero's own art from the chosen set, else
+    // the critter's.
+    if (artIsHeroFrmId(frmId)) {
+        File* stream = heroAppearanceOpenFile(frmId.filePath());
+        if (stream == nullptr) {
+            return artCacheGetFileSize(artNormalFrmId(frmId), sizePtr);
+        }
+
+        Art art;
+        if (artReadHeader(&art, stream) == 0) {
+            *sizePtr = artGetDataSize(&art);
+            result = *sizePtr > 0 ? 0 : -1;
+        }
+        fileClose(stream);
+        return result;
+    }
 
     const char* artFilePath = frmId.filePath();
     if (artFilePath != nullptr) {
@@ -1001,6 +1078,21 @@ static int artCacheGetFileSize(const FrmId& frmId, int* sizePtr)
 static int artCacheReadData(const FrmId& frmId, int* sizePtr, unsigned char* data)
 {
     int result = -1;
+
+    // SFALL: Hero Appearance: as `artCacheGetFileSize`.
+    if (artIsHeroFrmId(frmId)) {
+        const char* path = frmId.filePath();
+        File* stream = heroAppearanceOpenFile(path);
+        if (stream == nullptr) {
+            return artCacheReadData(artNormalFrmId(frmId), sizePtr, data);
+        }
+
+        if (artReadOpened(stream, path, data, *sizePtr) == 0) {
+            *sizePtr = artGetDataSize((Art*)data);
+            result = 0;
+        }
+        return result;
+    }
 
     const char* artFileName = frmId.filePath();
     if (artFileName != nullptr) {
@@ -1432,6 +1524,12 @@ int artRead(const char* path, unsigned char* data, size_t size)
         return -2;
     }
 
+    return artReadOpened(stream, path, data, size);
+}
+
+// CE: `artRead` of an open [stream] (closed after), [path] for the errors.
+static int artReadOpened(File* stream, const char* path, unsigned char* data, size_t size)
+{
     Art* art = (Art*)data;
     if (artReadHeader(art, stream) != 0) {
         debugPrint("ART ERROR: rejected %s: invalid header\n", path);
@@ -1761,6 +1859,16 @@ bool FrmId::exist(int fid, char* path)
             int fileSize;
             if (dbGetFileSize(filePath, &fileSize) != -1) {
                 result = true;
+            } else if (artIsHeroFrmId(FrmId(fid))) {
+                // SFALL: Hero Appearance: in the chosen set, else the
+                // critter's.
+                File* stream = heroAppearanceOpenFile(filePath);
+                if (stream != nullptr) {
+                    fileClose(stream);
+                    result = true;
+                } else {
+                    result = exist(artNormalFrmId(FrmId(fid)).fid(), path);
+                }
             }
         }
     }

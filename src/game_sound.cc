@@ -1476,7 +1476,8 @@ char* sfxBuildCharName(Object* a1, AnimationType anim, CharacterSoundEffect soun
     char weaponCode;
     char animationCode;
 
-    const FrmId frmId = FrmId(a1);
+    // SFALL: Hero Appearance: the critter's sounds (no "_").
+    const FrmId frmId = artNormalFrmId(FrmId(a1));
     if (artCopyFileName(frmId, artName) == -1) {
         return nullptr;
     }

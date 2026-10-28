@@ -25,6 +25,7 @@
 #include "game_sound.h"
 #include "geometry.h"
 #include "graph_lib.h"
+#include "hero_appearance.h"
 #include "input.h"
 #include "interface.h"
 #include "item.h"
@@ -3811,6 +3812,11 @@ static void characterEditorEditGender()
 
         renderPresent();
         sharedFpsLimiter.throttle();
+    }
+
+    // SFALL: Hero Appearance: the other gender's sets, the default look.
+    if (critterGetStat(gDude, STAT_GENDER) != savedGender) {
+        heroAppearanceReset();
     }
 
     characterEditorDrawGender();
@@ -8108,8 +8114,13 @@ bool characterEditorAdjustAge(int delta)
 
 void characterEditorSetGender(int gender)
 {
+    bool changed = critterGetStat(gDude, STAT_GENDER) != gender;
     critterSetBaseStat(gDude, STAT_GENDER, gender);
     critterUpdateDerivedStats(gDude);
+    // SFALL: Hero Appearance: the other gender's sets, the default look.
+    if (changed) {
+        heroAppearanceReset();
+    }
 }
 
 static bool characterEditorNameLess(const char* a, const char* b)

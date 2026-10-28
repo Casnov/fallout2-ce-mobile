@@ -14,6 +14,7 @@
 #include "dialog.h"
 #include "game.h"
 #include "game_movie.h"
+#include "hero_appearance.h"
 #include "interface.h"
 #include "map.h"
 #include "memory.h"
@@ -2239,6 +2240,8 @@ int _ResetPlayer()
     perksReset();
     traitsReset();
     critterUpdateDerivedStats(gDude);
+    // SFALL: Hero Appearance: a new character has the default look.
+    heroAppearanceReset();
     return 0;
 }
 

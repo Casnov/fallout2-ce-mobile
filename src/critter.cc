@@ -15,6 +15,7 @@
 #include "endgame.h"
 #include "game.h"
 #include "geometry.h"
+#include "hero_appearance.h"
 #include "interface.h"
 #include "item.h"
 #include "map.h"
@@ -1069,6 +1070,9 @@ int gcdLoad(const char* path)
     proto->critter.data.experience = 0;
     proto->critter.data.killType = KILL_TYPE_MAN;
 
+    // SFALL: Hero Appearance's race and style.
+    heroAppearanceReadGcd(stream);
+
     fileClose(stream);
     return 0;
 }
@@ -1135,6 +1139,9 @@ int gcdSave(const char* path)
         fileClose(stream);
         return -1;
     }
+
+    // SFALL: Hero Appearance's race and style.
+    heroAppearanceWriteGcd(stream);
 
     fileClose(stream);
     return 0;

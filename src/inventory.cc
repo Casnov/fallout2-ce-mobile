@@ -1682,7 +1682,9 @@ FrmId inventoryComputeCritterFrmId(Object* critter, const ProtoId& baseProtoId, 
         }
     }
 
-    return CritterFrmId(inventoryFrameId, anim, animationCode, rotation);
+    // SFALL: Hero Appearance: the dude wears the hero's own art.
+    const FrmId frmId = CritterFrmId(inventoryFrameId, anim, animationCode, rotation);
+    return critter == gDude ? artHeroFrmId(frmId) : frmId;
 }
 
 // inventory_msg_init
@@ -3474,7 +3476,8 @@ static void _adjust_fid()
         interfaceGetCurrentHand(),
         ANIM_STAND,
         ROTATION_NE);
-    gInventoryWindowDudeFrmId = scriptHooks_AdjustFid(frmId, frmId);
+    // SFALL: HOOK_ADJUSTFID's first argument without Hero Appearance's art.
+    gInventoryWindowDudeFrmId = scriptHooks_AdjustFid(artNormalFrmId(frmId), frmId);
 
     // CE: The mobile UI shows the critter inside open containers too.
     if (gInventoryViewActive) {
@@ -3489,7 +3492,7 @@ static void _adjust_fid()
                 interfaceGetCurrentHand(),
                 ANIM_STAND,
                 ROTATION_NE);
-            gInventoryCritterFrmId = scriptHooks_AdjustFid(critterFrmId, critterFrmId);
+            gInventoryCritterFrmId = scriptHooks_AdjustFid(artNormalFrmId(critterFrmId), critterFrmId);
         }
     }
 }

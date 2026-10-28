@@ -124,7 +124,7 @@ See [`https://sfall-team.github.io/sfall/`](https://sfall-team.github.io/sfall/)
 | Other / Game management | set_movie_path<br>stop/resume_game<br>mark_movie_played<br>game_loaded<br>get_game_mode<br>get_uptime<br>signal_close_game | ✅ except stop/resume_game | - |
 | Gameplay tweaks | set_pickpocket_max<br>set_hit_chance_max<br>set_xp_mod<br>set_critter_hit_chance_mod<br>set_base_hit_chance_mod<br>set_hp_per_level_mod<br>set_reaction_thresholds<br>gdialog_get_barter_mod<br>get/set_unspent_ap_bonus<br>get/set_unspent_ap_perk_bonus<br>set_base_pickpocket_mod<br>set_critter_pickpocket_mod<br>get/set_inven_ap_cost<br>set_drugs_data<br>get_kill_counter<br>mod_kill_counter<br>set_pipboy_available | implemented: set_reaction_thresholds, gdialog_get_barter_mod, get/set_unspent_ap{_perk}_bonus, get/set_inven_ap_cost | - |
 | NPCs | inc_npc_level<br>get_npc_level<br>npc_engine_level_up | implemented: only npc_engine_level_up | - |
-| Hero Appearance | set_dm/df_model<br>hero_select_win<br>set_hero_race<br>set_hero_style | not implemented | - |
+| Hero Appearance | set_dm/df_model<br>hero_select_win<br>set_hero_race<br>set_hero_style | implemented: set_hero_race, set_hero_style | The mod itself (`EnableHeroAppearanceMod`, `[misc] hero_appearance` in game.cfg, else ddraw.ini's): the race/style sets in `Appearance`, the hero's own art ids, `HAp_Race`/`HApStyle` in sfallgv.sav and the .gcd extension as sfall has them. `obj_art_fid` gives the dude's critter art id unless the mode is 2. No race/style buttons on the original character screen yet. |
 | Events | add_g_timer_event<br>remove_timer_event<br>create_spatial<br>spatial_radius | ✅ | `add_g_timer_event`/`remove_timer_event` also work for regular scripts by using CE's normal script timer queue; sfall documents these as global-script functions. |
 | Other | get_year<br>active_hand<br>toggle_active_hand<br>get/set_viewport_x/y<br>get_light_level<br>message_str_game<br>sneak_success<br>unwield_slot<br>add_extra_msg_file<br>get_metarule_table<br>metarule_exist<br> | ✅ except get/set_viewport_x/y, get_metarule_table  | `input_funcs_available`, `nb_create_char` are deprecated in sfall and intentionally absent in CE. `add_extra_msg_file` does not support the explicit `fileNumber` form in CE. |
 
@@ -164,7 +164,7 @@ CE defines several metarules that are not supported in Sfall.  Include [ce.h](fi
 | WithinPerception | `HOOK_WITHINPERCEPTION` | ✅ | - |
 | InventoryMove | `HOOK_INVENTORYMOVE` | ✅ | - |
 | InvenWield | `HOOK_INVENWIELD` | ✅ | - |
-| AdjustFID | `HOOK_ADJUSTFID` | ✅ | Second hook arg currently matches the first because CE has no internal FID modifiers like Hero Appearance. |
+| AdjustFID | `HOOK_ADJUSTFID` | ✅ | The second hook arg differs from the first for the dude with Hero Appearance on (his own art id). |
 | CombatTurn | `HOOK_COMBATTURN` | ✅ | - |
 | StdProcedure | `HOOK_STDPROCEDURE` | ✅ | - |
 | StdProcedureEnd | `HOOK_STDPROCEDURE_END` | ✅ | - |

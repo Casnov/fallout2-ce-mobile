@@ -22,6 +22,7 @@
 #include "game_movie.h"
 #include "game_sound.h"
 #include "geometry.h"
+#include "hero_appearance.h"
 #include "interface.h"
 #include "inventory.h"
 #include "item.h"
@@ -4748,6 +4749,10 @@ static void opGetObjectFid(Program* program)
     int fid = 0;
     if (object != nullptr) {
         fid = object->fid;
+        // SFALL: Hero Appearance: the dude's critter art id (mode 2: as it is).
+        if (object == gDude && heroAppearanceMode() == 1) {
+            fid = artNormalFrmId(FrmId(fid)).fid();
+        }
     } else {
         scriptPredefinedError(program, "obj_art_fid", SCRIPT_ERROR_OBJECT_IS_NULL);
     }

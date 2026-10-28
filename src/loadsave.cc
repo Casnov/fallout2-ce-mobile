@@ -37,6 +37,7 @@
 #include "game_movie.h"
 #include "game_sound.h"
 #include "geometry.h"
+#include "hero_appearance.h"
 #include "input.h"
 #include "interface.h"
 #include "item.h"
@@ -2364,6 +2365,8 @@ static int lsgLoadGameInSlot(int slot)
     // look (`[debug] action_log`).
     actionLogState("loaded, as saved");
     _proto_dude_update_gender();
+    // SFALL: Hero Appearance's race and style (sfallgv.sav), the hero's art.
+    heroAppearanceOnGameLoaded();
 
     // Game Loaded.
     gLoadSaveMessageListItem.num = 141;

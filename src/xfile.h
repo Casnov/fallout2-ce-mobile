@@ -50,6 +50,9 @@ typedef struct XList {
 
 int xfileClose(XFile* stream);
 XFile* xfileOpen(const char* filename, const char* mode);
+// CE: [filePath] from one .dat file ([dbase]) or else the folder [directory]
+// only, not the open bases (sfall's Hero Appearance sets).
+XFile* xfileOpenIn(DBase* dbase, const char* directory, const char* filePath, const char* mode);
 int xfilePrintFormatted(XFile* xfile, const char* format, ...);
 int xfilePrintFormattedArgs(XFile* stream, const char* format, va_list args);
 int xfileReadChar(XFile* stream);

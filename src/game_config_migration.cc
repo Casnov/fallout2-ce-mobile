@@ -239,6 +239,8 @@ namespace {
         { kSfallMisc, "KarmaPoints", CONTENT_CONFIG_KARMA_SECTION, "points" },
         // [items]
         { kSfallMisc, "CanSellUsedGeiger", CONTENT_CONFIG_ITEMS_SECTION, "can_sell_used_geiger", "1" },
+        // [misc]
+        { kSfallMisc, "EnableHeroAppearanceMod", CONTENT_CONFIG_MISC_SECTION, "hero_appearance", "0" },
         // [dialog]
         { kSfallMisc, "DialogueFix", CONTENT_CONFIG_DIALOG_SECTION, "no_exit_hotkey", "1" },
         { kSfallMisc, "DialogGenderWords", CONTENT_CONFIG_DIALOG_SECTION, "gender_words", "0" },

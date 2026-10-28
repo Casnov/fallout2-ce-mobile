@@ -572,6 +572,17 @@ ArtFrame* artGetFrame(const Art* art, int frame, Rotation rotation);
 ConstBuffer2D artGetFrameBuffer(const Art* art, int frame, Rotation rotation);
 CritterFrameId _art_alias_num(CritterFrameId index);
 int artCritterFrmIdShouldRun(const FrmId& frmId);
+
+// SFALL: Hero Appearance (`hero_appearance.h`): with the mod on, the critter
+// list has a second half, the same names with "_" - the hero's own art,
+// read from the chosen set (else the critter's art). The dude's art id is
+// there while he wears it (`objectSetFrmId`); scripts and saves see the
+// critter's.
+bool artIsHeroFrmId(const FrmId& frmId);
+// The hero's own art of a critter's art id (the same id when off or not a critter's).
+FrmId artHeroFrmId(const FrmId& frmId);
+// The critter's art id of the hero's own.
+FrmId artNormalFrmId(const FrmId& frmId);
 int artListIndex(ObjectType objectType, const char* name);
 Art* artLoad(const char* path);
 int artRead(const char* path, unsigned char* data, size_t size);

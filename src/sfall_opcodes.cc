@@ -18,6 +18,7 @@
 #include "game.h"
 #include "game_dialog.h"
 #include "game_movie.h"
+#include "hero_appearance.h"
 #include "input.h"
 #include "interface.h"
 #include "interpreter.h"
@@ -1249,7 +1250,7 @@ static void op_get_light_level(Program* program)
     programStackPushInteger(program, lightGetAmbientIntensity());
 }
 
-// note: might need to be updated when Hero Appearance is implemented
+// Hero Appearance's art comes with the dude's (`objectSetFrmId`).
 static void op_refresh_pc_art(Program* program)
 {
     if (gDude == nullptr) {
@@ -2247,16 +2248,41 @@ static void op_fs_delete(Program* program)
     sfallFileSystemDelete(id);
 }
 
+// SFALL: Hero Appearance: the dude's art again, the look shown (as sfall's
+// DrawPC).
+static void heroAppearanceRedrawDude()
+{
+    if (gDude == nullptr) {
+        return;
+    }
+
+    Rect rect;
+    objectGetRect(gDude, &rect);
+    objectSetFrmId(gDude, FrmId(gDude), nullptr);
+    Rect newRect;
+    objectGetRect(gDude, &newRect);
+    rectUnion(&rect, &newRect, &rect);
+    tileWindowRefreshRect(&rect, gDude->elevation);
+}
+
+// set_hero_style: a style of the hero's race; one that isn't there keeps the
+// current (as sfall).
 static void op_set_hero_style(Program* program)
 {
     int style = programStackPopInteger(program);
-    programPrintError("set_hero_style: not implemented!");
+    if (heroAppearanceMode() != 0 && style != heroAppearanceStyle() && heroAppearanceChoose(heroAppearanceRace(), style)) {
+        heroAppearanceRedrawDude();
+    }
 }
 
+// set_hero_race: a race with its style 0; one that isn't there keeps the
+// current (as sfall).
 static void op_set_hero_race(Program* program)
 {
     int race = programStackPopInteger(program);
-    programPrintError("set_hero_race: not implemented!");
+    if (heroAppearanceMode() != 0 && race != heroAppearanceRace() && heroAppearanceChoose(race, 0)) {
+        heroAppearanceRedrawDude();
+    }
 }
 
 // Note: opcodes should pop arguments off the stack in reverse order

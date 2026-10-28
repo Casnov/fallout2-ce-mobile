@@ -33,6 +33,7 @@
 #include "game_mouse.h"
 #include "game_movie.h"
 #include "game_sound.h"
+#include "hero_appearance.h"
 #include "input.h"
 #include "interface.h"
 #include "inventory.h"
@@ -282,6 +283,9 @@ int gameInitWithOptions(const char* windowTitle, bool isMapper, int font, int fl
     }
 
     debugPrint(">moviefx_init\t");
+
+    // SFALL: Hero Appearance's setting, before the art (`artInit`).
+    heroAppearanceInit();
 
     if (isoInit() != 0) {
         debugPrint("Failed on iso_init\n");
@@ -536,6 +540,7 @@ void gameExit()
     protoExit();
     gameMouseExit();
     isoExit();
+    heroAppearanceExit();
     movieEffectsExit();
     movieExit();
     gameSoundExit();

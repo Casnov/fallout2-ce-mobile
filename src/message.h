@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "db.h"
 #include "proto_types.h"
 
 namespace fallout {
@@ -71,6 +72,8 @@ bool messageListFree(MessageList* msg);
 bool messageListLoad(MessageList* msg, const char* path);
 // CE: From [language]'s folder in `text`, not the game's.
 bool messageListLoadInLanguage(MessageList* msg, const char* path, const char* language);
+// CE: The messages of an open [stream] (closed after), [name] for the errors.
+bool messageListLoadFromFile(MessageList* msg, File* stream, const char* name);
 bool messageListGetItem(MessageList* msg, MessageListItem* entry);
 bool _message_make_path(char* dest, size_t size, const char* path);
 char* getmsg(MessageList* msg, MessageListItem* entry, int num);

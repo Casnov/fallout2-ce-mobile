@@ -222,14 +222,6 @@ bool messageListLoadInLanguage(MessageList* messageList, const char* path, const
 {
     char localized_path[COMPAT_MAX_PATH];
     File* file_ptr;
-    char num[MESSAGE_LIST_ITEM_FIELD_MAX_SIZE];
-    char audio[MESSAGE_LIST_ITEM_FIELD_MAX_SIZE];
-    char text[MESSAGE_LIST_ITEM_FIELD_MAX_SIZE];
-    int rc;
-    bool success;
-    MessageListItem entry;
-
-    success = false;
 
     if (messageList == nullptr) {
         return false;
@@ -252,6 +244,28 @@ bool messageListLoadInLanguage(MessageList* messageList, const char* path, const
     }
 
     if (file_ptr == nullptr) {
+        return false;
+    }
+
+    return messageListLoadFromFile(messageList, file_ptr, localized_path);
+}
+
+// CE: The messages of [stream] (closed after), [name] in the errors.
+bool messageListLoadFromFile(MessageList* messageList, File* stream, const char* name)
+{
+    File* file_ptr = stream;
+    const char* localized_path = name;
+    char num[MESSAGE_LIST_ITEM_FIELD_MAX_SIZE];
+    char audio[MESSAGE_LIST_ITEM_FIELD_MAX_SIZE];
+    char text[MESSAGE_LIST_ITEM_FIELD_MAX_SIZE];
+    int rc;
+    bool success = false;
+    MessageListItem entry;
+
+    if (messageList == nullptr || file_ptr == nullptr) {
+        if (file_ptr != nullptr) {
+            fileClose(file_ptr);
+        }
         return false;
     }
 

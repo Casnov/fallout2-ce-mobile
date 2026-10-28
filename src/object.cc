@@ -1732,7 +1732,7 @@ int _obj_reset_roof()
 // Sets object fid.
 //
 // 0x48AA3C obj_change_fid
-int objectSetFrmId(Object* obj, const FrmId& frmId, Rect* dirtyRect)
+int objectSetFrmId(Object* obj, const FrmId& requestedFrmId, Rect* dirtyRect)
 {
     Rect new_rect;
 
@@ -1740,9 +1740,12 @@ int objectSetFrmId(Object* obj, const FrmId& frmId, Rect* dirtyRect)
         return -1;
     }
 
-    if (frmId.valid()) {
-        assert(frmId.hasFid() && "objectSetFrmId(Object* obj, const FrmId& frmId, Rect* dirtyRect) called with path based FrmId which is not supported!");
+    if (requestedFrmId.valid()) {
+        assert(requestedFrmId.hasFid() && "objectSetFrmId(Object* obj, const FrmId& frmId, Rect* dirtyRect) called with path based FrmId which is not supported!");
     }
+
+    // SFALL: Hero Appearance: the dude wears the hero's own art.
+    const FrmId frmId = obj == gDude ? artHeroFrmId(requestedFrmId) : requestedFrmId;
 
     // CE: Who changes the dude's look (`[debug] action_log`).
     if (obj == gDude && FrmId(obj).frameId<CritterFrameId>() != frmId.frameId<CritterFrameId>()) {
@@ -4067,8 +4070,14 @@ int _obj_save_dude(File* stream)
     gDude->flags &= ~OBJECT_NO_SAVE;
     gDude->sid = -1;
 
+    // SFALL: Hero Appearance: saved with the critter's art id (the hero's
+    // own is set again after loading).
+    int fid = gDude->fid;
+    gDude->fid = artNormalFrmId(FrmId(gDude)).fid();
+
     int rc = _obj_save_obj(stream, gDude);
 
+    gDude->fid = fid;
     gDude->sid = field_78;
     gDude->flags |= OBJECT_NO_SAVE;
 
