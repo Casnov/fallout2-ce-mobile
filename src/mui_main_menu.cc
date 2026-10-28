@@ -248,7 +248,9 @@ namespace {
     void MainMenuScreen::buildFooter(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-        char version[VERSION_MAX];
+        // Longer than the game's VERSION_MAX: a mod's own version string
+        // ("FALLOUT: NEVADA (EXPANSION VERSION)") whole.
+        char version[128];
         versionGetVersion(version, sizeof(version));
 
         std::u32string text;
