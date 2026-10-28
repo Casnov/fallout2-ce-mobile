@@ -46,7 +46,7 @@ Which sfall fixes CE has and which it doesn't:
 | Fix for not counting in the weight/size of equipped items on NPC when stealing or bartering (`Modules/BugFixes.cpp`; CE counted them only in the loot screen's weight label) | 2533b1ac | [fallout2-ce#864](https://github.com/fallout2-ce/fallout2-ce/pull/864) | `partyweight`, `partyweightsteal` | open |
 | Fix for damage_p_proc being called for misses if the target is not a critter (`Modules/BugFixes.cpp`) | f5952641 | [fallout2-ce#865](https://github.com/fallout2-ce/fallout2-ce/pull/865) | `missobject` | merged |
 | Fix for drop_obj function (`Modules/BugFixes.cpp`; the worn armor's stats after HOOK_INVENWIELD, as in sfall) | c4aaffc9, e1bec921 | [fallout2-ce#866](https://github.com/fallout2-ce/fallout2-ce/pull/866) | `droparmor` | open |
-| Skip party members' IDs for new objects, fix ID increment; don't put an item with a unique ID into a stack (`Modules/Objects.cpp`, `new_obj_id_hook`, `item_identical_hack`): items stacked again after about 9000 new objects in a session | 41736608 | [fallout2-ce#890](https://github.com/fallout2-ce/fallout2-ce/pull/890) | `objectids` | open |
+| Skip party members' IDs for new objects, fix ID increment; don't put an item with a unique ID into a stack (`Modules/Objects.cpp`, `new_obj_id_hook`, `item_identical_hack`): items stacked again after about 9000 new objects in a session | 41736608 | [fallout2-ce#891](https://github.com/fallout2-ce/fallout2-ce/pull/891) | `objectids` | open |
 
 ## Other fixes offered to CE
 
