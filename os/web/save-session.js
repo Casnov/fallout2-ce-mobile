@@ -1,3 +1,4 @@
+import {webText as t} from './strings.js';
 import {createFilesManager} from './files.js';
 
 // The resource lease never leaves the engine. Only the user writer is handed
@@ -8,23 +9,22 @@ export function createSaveSession({host,root,canvas,user,source,audio,textInput,
   return async function exchange(mode) {
     if (active || !['saves_import','saves_export'].includes(mode)) throw new Error('Invalid save exchange');
     active = true;
-    const ru = navigator.language.toLowerCase().startsWith('ru');
     const $ = id => root.getElementById(id);
     textInput.end(); host.hidden = false; canvas.inert = true;
     document.body.classList.add('exchanging');
-    $('title').textContent = ru ? 'Сохранения' : 'Saves';
-    $('message').textContent = ru ? 'Открываю хранилище…' : 'Opening storage…';
+    $('title').textContent = t('saves');
+    $('message').textContent = t('opening_storage');
     for (const id of ['details','note','progress-text']) $(id).textContent = '';
     for (const id of ['back','download','primary','secondary','saves-actions','progress','progress-text']) $(id).hidden = true;
     let manager, finishing = false;
     return new Promise(resolve => {
       function failure(error,again) {
-        $('title').textContent = ru ? 'Сохранения' : 'Saves';
-        $('message').textContent = ru ? 'Операция не завершена. Текущая игра остаётся на паузе.' : 'Operation incomplete. Your current game is still paused.';
+        $('title').textContent = t('saves');
+        $('message').textContent = t('exchange_incomplete');
         $('details').textContent = String(error.message || error);
         for (const id of ['progress','progress-text','back','download','secondary','saves-actions']) $(id).hidden = true;
         const button = $('primary'); button.hidden = false; button.disabled = false;
-        button.textContent = ru ? 'Вернуться в игру' : 'Return to game'; button.onclick = again;
+        button.textContent = t('return_to_game'); button.onclick = again;
         button.focus();
       }
       async function finish() {

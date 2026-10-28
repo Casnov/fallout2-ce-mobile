@@ -2,23 +2,23 @@
 const markup = `
   <main id="launcher">
     <section id="panel" aria-labelledby="title">
-      <h1 id="title">Файлы игры</h1>
+      <h1 id="title">Game files</h1>
       <div id="content">
-        <p id="message" role="status" aria-live="polite">Открываю хранилище…</p>
+        <p id="message" role="status" aria-live="polite">Opening storage…</p>
         <p id="details"></p>
         <div id="saves-actions" hidden>
-          <button id="saves-import" type="button">Добавить сохранения</button>
-          <button id="saves-export" type="button">Экспорт сохранений</button>
+          <button id="saves-import" type="button">Import saves</button>
+          <button id="saves-export" type="button">Export saves</button>
         </div>
         <p id="note" class="dim"></p>
       </div>
-      <progress id="progress" hidden aria-label="Обработка файлов"></progress>
+      <progress id="progress" hidden aria-label="Processing files"></progress>
       <p id="progress-text" hidden></p>
-      <div id="actions"><button id="secondary" type="button" hidden></button><button id="primary" type="button" hidden></button><a id="download" class="button" hidden>Сохранить ZIP</a></div>
+      <div id="actions"><button id="secondary" type="button" hidden></button><button id="primary" type="button" hidden></button><a id="download" class="button" hidden>Save ZIP</a></div>
       <p id="footer"><span id="build"></span></p>
     </section>
   </main>
-  <button id="back" type="button" aria-label="Вернуться в игру" hidden><img src="./icons/import-back.svg" width="28" height="28" alt=""></button>
+  <button id="back" type="button" aria-label="Return to game" hidden><img src="./icons/import-back.svg" width="28" height="28" alt=""></button>
   <input id="archive" type="file" accept=".zip,application/zip" hidden>
 `;
 export function createFilesView(container,{shadow = false} = {}) {

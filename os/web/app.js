@@ -6,28 +6,8 @@ import {createSaveSession} from './save-session.js';
 import {createSaveDownloads} from './save-download.js';
 import {startAppCache} from './app-cache.js';
 import {installHint} from './install-hint.js';
+import {language, webText as t} from './strings.js';
 
-const ru = navigator.language.toLowerCase().startsWith('ru');
-const text = ru ? {
-  title:'Fallout 2', loading:'Загружаю…', checking:'Проверяю файлы игры…', play:'Начать игру', retry:'Попробовать снова',
-  updating:'Обновляю приложение…',
-  repair:'Файлы игры',
-  rotate:'Поверните устройство горизонтально', unsupported:'Этот браузер не поддерживает WebAssembly.',
-  error:'Не удалось запустить игру.',
-  busy:'Игра уже открыта в другой вкладке или окне. Закройте её там и нажмите «Попробовать снова».',
-  build:'Проверочная сборка:',
-  notice:'Неофициальный порт. Не связан с Bethesda Softworks, ZeniMax и Interplay.',
-  devNote:'Тестовый запуск с Mac. Держите Mac включённым и оставайтесь в одной сети Wi-Fi. Прогресс исчезнет после перезагрузки страницы.',
-} : {
-  title:'Fallout 2', loading:'Loading…', checking:'Checking game files…', play:'Play', retry:'Try again',
-  updating:'Updating the app…',
-  repair:'Game files',
-  rotate:'Turn the device to landscape', unsupported:'This browser does not support WebAssembly.', error:'The game could not start.',
-  busy:'The game is already open in another tab or window. Close it there and choose Try again.',
-  build:'Test build:',
-  notice:'Unofficial port. Not affiliated with Bethesda Softworks, ZeniMax or Interplay.',
-  devNote:'Test session from your Mac. Keep it awake and stay on the same Wi-Fi. Progress disappears on page reload.',
-};
 const $ = id => document.getElementById(id);
 const viewport = createGameViewport($('canvas'));
 const gameWindow = createGameWindow($('canvas'),{isBlocked:() => !$('rotate').hidden || !$('save-exchange').hidden});
@@ -35,22 +15,21 @@ const textInput = createTextInput($('text-input'), $('canvas'), viewport);
 const audio = createGameAudio();
 const exchangeView = createFilesView($('save-exchange'),{shadow:true});
 const downloadSaves = createSaveDownloads();
-$('save-exchange').setAttribute('aria-label',ru ? 'Сохранения' : 'Saves');
+$('save-exchange').setAttribute('aria-label',t('saves'));
 // SDL's document listeners must not receive touches/keys used in the overlay.
 for (const type of ['pointerdown','pointerup','pointermove','touchstart','touchmove','touchend','touchcancel','keydown','keyup','wheel']) {
   $('save-exchange').addEventListener(type,event => event.stopPropagation());
 }
 let audioTiming = null;
 let diagnosticsTimer = null;
-$('text-input').setAttribute('aria-label', ru ? 'Текст игры' : 'Game text');
-document.documentElement.lang = ru ? 'ru' : 'en';
-$('title').textContent = text.title;
-$('repair').textContent = text.repair;
-$('message').textContent = text.checking;
-$('play').textContent = text.play;
-$('retry').textContent = text.retry;
-$('rotate').textContent = text.rotate;
-$('notice').textContent = text.notice;
+$('text-input').setAttribute('aria-label', t('game_text'));
+document.documentElement.lang = language;
+$('repair').textContent = t('game_files');
+$('message').textContent = t('checking');
+$('play').textContent = t('play');
+$('retry').textContent = t('try_again');
+$('rotate').textContent = t('rotate');
+$('notice').textContent = t('unofficial');
 let source = null;
 let starting = false;
 let running = false;
@@ -64,7 +43,7 @@ function rotatePrompt() {
   $('rotate').hidden = !(running && portrait);
   if (source && !starting && !running && !document.body.classList.contains('error')) {
     $('play').disabled = portrait || updating;
-    $('message').textContent = updating ? text.updating : portrait ? text.rotate : '';
+    $('message').textContent = updating ? t('updating') : portrait ? t('rotate') : '';
     $('message').hidden = !updating && !portrait;
   }
 }
@@ -77,7 +56,7 @@ function error(message, detail) {
   $('diagnostics').hidden = true;
   document.body.classList.remove('playing');
   document.body.classList.add('error');
-  $('message').textContent = detail?.name === 'StorageBusyError' ? text.busy : message;
+  $('message').textContent = detail?.name === 'StorageBusyError' ? t('already_open') : message;
   $('message').hidden = false;
   $('progress').hidden = true;
   $('play').hidden = true;
@@ -102,7 +81,7 @@ async function exited(status) {
   $('diagnostics').hidden = true;
   document.body.classList.remove('playing');
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  if (status !== 0) { error(text.error, 'Engine exit status: ' + status); return; }
+  if (status !== 0) { error(t('start_failed'), 'Engine exit status: ' + status); return; }
   document.body.classList.remove('error');
   $('progress').hidden = true;
   $('retry').hidden = true;
@@ -120,7 +99,7 @@ async function exited(status) {
 
 async function prepare() {
   await exchangeView.ready;
-  if (typeof WebAssembly !== 'object') throw new Error(text.unsupported);
+  if (typeof WebAssembly !== 'object') throw new Error(t('unsupported'));
   const response = await fetch(new URL('./build-info.json', import.meta.url), {cache:'no-store'});
   if (!response.ok) throw new Error('Cannot load build-info.json.');
   const build = await response.json();
@@ -130,10 +109,10 @@ async function prepare() {
   source = await developmentFiles() || await localFiles();
   if (!source) { location.replace('./files.html'); return; }
   $('play').hidden = !source;
-  $('dev-note').textContent = text.devNote;
+  $('dev-note').textContent = t('dev_note');
   $('dev-note').hidden = source.kind === 'local';
-  const hint = source.kind === 'local' && installHint(ru);
-  $('install-hint').textContent = hint || '';
+  const hint = source.kind === 'local' && installHint();
+  $('install-hint').textContent = hint ? t(hint) : '';
   $('install-hint').hidden = !hint;
   rotatePrompt();
   appCache.check();
@@ -145,7 +124,7 @@ async function play() {
   starting = true;
   $('storage-warning').hidden = true;
   $('play').disabled = true;
-  $('message').textContent = text.loading;
+  $('message').textContent = t('loading');
   $('message').hidden = false;
   $('progress').hidden = false;
   let engine;
@@ -163,24 +142,19 @@ async function play() {
       webOpenFiles:mode => { filesMode = mode; },
       locateFile:name => new URL('./' + name, import.meta.url).href,
       print:message => console.log(message), printErr:message => console.warn(message),
-      onAbort:reason => { engine?.webUserFiles?.close(); error(text.error, reason); },
+      onAbort:reason => { engine?.webUserFiles?.close(); error(t('start_failed'), reason); },
       onExit:status => queueMicrotask(() => {
         // The manager acquires both writer leases. Await their release instead
         // of racing a new page against the engine's asynchronous shutdown.
         Promise.resolve(engine?.webUserFiles?.close()).then(() => exited(status))
-          .catch(exception => error(text.error, exception));
+          .catch(exception => error(t('start_failed'), exception));
       }),
       onUserWriteSuccess:() => { $('storage-warning').hidden = true; },
       onUserWriteFailure:failure => {
         $('storage-warning').hidden = false;
         $('storage-warning').textContent = failure.fatal
-          ? (ru ? 'Запись отключена после ошибки хранилища. Полностью закрой и открой игру.'
-            : 'Writing is disabled after a storage error. Close and reopen the game.')
-          : failure.kind === 'QuotaExceededError'
-            ? (ru ? 'Не удалось сохранить: недостаточно места. Освободи место и повтори.'
-              : 'Could not save: storage is full. Free some space and try again.')
-            : (ru ? 'Не удалось записать сохранение или настройки. Повтори попытку.'
-              : 'Could not write the save or settings. Please try again.');
+          ? t('write_disabled')
+          : failure.kind === 'QuotaExceededError' ? t('write_no_space') : t('write_failed');
       },
     });
     await mountGame(module, source);
@@ -216,7 +190,7 @@ async function play() {
         const state = audio.status();
         const frame = module.webFrameTiming;
         $('diagnostics').hidden = false;
-        $('diagnostics').textContent = `${text.build} ${document.body.dataset.webBuild}\n`
+        $('diagnostics').textContent = `${t('test_build')} ${document.body.dataset.webBuild}\n`
           + `Audio: ${state.state}, ${state.sampleRate || '?'} Hz, ${timing.bufferSize || '?'} frames, `
           + (state.queue ? `queue ${state.queue.frames}, underruns ${state.queue.underruns}\n` : 'ScriptProcessor\n')
           + `5s gap: ${timing.recent.maxGapMs.toFixed(1)} ms; work: ${timing.recent.maxWorkMs.toFixed(1)} ms; late: ${timing.recent.late}\n`
@@ -234,7 +208,7 @@ async function play() {
     module.callMain([]);
   } catch (exception) {
     engine?.webUserFiles?.close();
-    error(text.error, exception);
+    error(t('start_failed'), exception);
   } finally {
     starting = false;
   }
@@ -260,4 +234,4 @@ window.addEventListener('pageshow', event => {
   audioTiming?.resetGap();
   audio.resume();
 });
-prepare().catch(exception => error(text.error, exception));
+prepare().catch(exception => error(t('start_failed'), exception));
