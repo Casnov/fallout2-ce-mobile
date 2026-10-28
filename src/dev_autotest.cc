@@ -141,6 +141,14 @@ enum DevAutotestAction {
     // sfall's hero_select_win window (`muiHeroSelectRun`), `a`: 0 - races,
     // 1 - styles; the script goes on inside it.
     DEV_AUTOTEST_ACTION_HERO_SELECT,
+    // a = 0: logs the stairs and ladders of the dude's elevation and uses
+    // the one at tile b (else the nearest) as the player would; a = 1: logs
+    // where the dude is.
+    DEV_AUTOTEST_ACTION_USE_STAIRS,
+    // Not saved scripts (as party members') at the end of the critter
+    // scripts, over an extent's edge; the map's scripts written and read
+    // back.
+    DEV_AUTOTEST_ACTION_SCRIPT_SAVE,
     // Presses key with SDL scancode `a` (desktop screens; the touch-only
     // build takes only a text field's editing keys).
     DEV_AUTOTEST_ACTION_KEY,
@@ -2976,6 +2984,23 @@ static const DevAutotestStep kDevAutotestHeroSelectSteps[] = {
     { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 8, 2, 0, 1, "w13_bald_kept" },
 };
 
+// A save's stairs or ladder: where they lead and where the dude ends up
+// (issue #16, Sonora's destroyer). Run with TITLE=1 --dev-load-game=<slot>.
+static const DevAutotestStep kDevAutotestStairsSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "st01_loaded" },
+    { DEV_AUTOTEST_ACTION_USE_STAIRS, 0, 0, 0, 400, "st02_used" },
+    { DEV_AUTOTEST_ACTION_USE_STAIRS, 1, 0, 0, 1, "st03_where" },
+};
+
+// A map's scripts with party members' over an extent's edge: CE wrote the
+// extents with lengths that didn't add up to the count, and since its
+// check of the lengths a saved map with them didn't load (issue #16: the
+// map loaded as new, the stairs' destination lost).
+static const DevAutotestStep kDevAutotestScriptSaveSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "ss00_start" },
+    { DEV_AUTOTEST_ACTION_SCRIPT_SAVE, 0, 0, 0, 1, "ss01_saved" },
+};
+
 // Party member control tab of the mobile talk screen (test save, Sulik).
 static const DevAutotestStep kDevAutotestPartySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "q00_start" },
@@ -3261,6 +3286,12 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
+    } else if (strcmp(name, "scriptsave") == 0) {
+        gDevAutotestSteps = kDevAutotestScriptSaveSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestScriptSaveSteps) / sizeof(kDevAutotestScriptSaveSteps[0]);
+    } else if (strcmp(name, "stairs") == 0) {
+        gDevAutotestSteps = kDevAutotestStairsSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestStairsSteps) / sizeof(kDevAutotestStairsSteps[0]);
     } else if (strcmp(name, "state") == 0) {
         gDevAutotestSteps = kDevAutotestStateSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestStateSteps) / sizeof(kDevAutotestStateSteps[0]);
@@ -4476,6 +4507,89 @@ void devAutotestTick()
             bool chosen = muiHeroSelectRun(step->a != 0);
             devAutotestLog("  hero_select_win closed: %s\n", chosen ? "chosen" : "back");
             return;
+        }
+        case DEV_AUTOTEST_ACTION_USE_STAIRS: {
+            Map map = mapGetCurrentMap();
+            devAutotestLog("  map %d (%s) elevation %d, dude tile %d\n", map, gMapHeader.name, gDude->elevation, gDude->tile);
+            if (step->a != 0) {
+                break;
+            }
+            Object* nearest = nullptr;
+            int nearestDistance = INT_MAX;
+            for (Object* obj = objectFindFirstAtElevation(gDude->elevation); obj != nullptr; obj = objectFindNextAtElevation()) {
+                if (FrmId(obj).objectType() != OBJ_TYPE_SCENERY) {
+                    continue;
+                }
+                Proto* proto;
+                if (protoGetProto(ProtoId(obj), &proto) == -1) {
+                    continue;
+                }
+                int type = proto->scenery.type;
+                if (type != SCENERY_TYPE_STAIRS && type != SCENERY_TYPE_LADDER_UP && type != SCENERY_TYPE_LADDER_DOWN) {
+                    continue;
+                }
+                int builtTile = obj->data.scenery.stairs.destinationBuiltTile;
+                int distance = objectGetDistanceBetween(gDude, obj);
+                devAutotestLog("  scenery %08x type %d at tile %d, distance %d, sid %08x: to map %d tile %d elevation %d\n",
+                    ProtoId(obj).pid(), type, obj->tile, distance, obj->sid, obj->data.scenery.stairs.destinationMap,
+                    builtTile == -1 ? -1 : builtTileGetTile(builtTile), builtTile == -1 ? -1 : builtTileGetElevation(builtTile));
+                if (step->b != 0 ? obj->tile == static_cast<int>(step->b) : distance < nearestDistance) {
+                    nearest = obj;
+                    nearestDistance = distance;
+                }
+            }
+            if (nearest != nullptr) {
+                devAutotestLog("  using %08x at tile %d\n", ProtoId(nearest).pid(), nearest->tile);
+                _action_use_an_object(gDude, nearest);
+            } else {
+                devAutotestLog("  no stairs or ladders\n");
+            }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_SCRIPT_SAVE: {
+            int counts[SCRIPT_TYPE_COUNT];
+            for (ScriptType type = SCRIPT_TYPE_FIRST; type < SCRIPT_TYPE_COUNT; type++) {
+                counts[type] = scriptsCount(type, true);
+            }
+
+            // So many that the last extent has one, the one before ends
+            // with them (scripts.cc's SCRIPT_LIST_EXTENT_SIZE).
+            constexpr int SCRIPT_LIST_EXTENT_SIZE = 16;
+            int length = scriptsCount(SCRIPT_TYPE_CRITTER, false);
+            int added = (SCRIPT_LIST_EXTENT_SIZE + 1 - length % SCRIPT_LIST_EXTENT_SIZE) % SCRIPT_LIST_EXTENT_SIZE;
+            if (added < 2) {
+                added += SCRIPT_LIST_EXTENT_SIZE;
+            }
+            for (int index = 0; index < added; index++) {
+                int sid;
+                Script* script;
+                if (scriptAdd(&sid, SCRIPT_TYPE_CRITTER) == 0 && scriptGetScript(sid, &script) == 0) {
+                    script->flags |= SCRIPT_FLAG_NO_SAVE;
+                }
+            }
+
+            const char* path = "scripts.tmp";
+            int saved = -1;
+            int loaded = -1;
+            File* stream = fileOpen(path, "wb");
+            if (stream != nullptr) {
+                saved = scriptSaveAll(stream);
+                fileClose(stream);
+            }
+            stream = fileOpen(path, "rb");
+            if (stream != nullptr) {
+                loaded = scriptLoadAll(stream);
+                fileClose(stream);
+            }
+            compat_remove(path);
+
+            bool ok = saved == 0 && loaded == 0;
+            for (ScriptType type = SCRIPT_TYPE_FIRST; type < SCRIPT_TYPE_COUNT; type++) {
+                ok = ok && scriptsCount(type, false) == counts[type];
+            }
+            devAutotestLog("  critter scripts %d (%d saved) and %d not saved: written %d, read %d, critter scripts after %d: %s\n",
+                length, counts[SCRIPT_TYPE_CRITTER], added, saved, loaded, scriptsCount(SCRIPT_TYPE_CRITTER, false), ok ? "PASS" : "FAIL");
+            break;
         }
         case DEV_AUTOTEST_ACTION_OPEN_CHARACTER_CREATION:
             devAutotestLog("  opening character creation\n");

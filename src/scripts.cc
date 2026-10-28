@@ -2475,6 +2475,19 @@ static void scriptListsFreeAll()
     scriptSelfOverrides.clear();
 }
 
+int scriptsCount(ScriptType scriptType, bool savedOnly)
+{
+    int count = 0;
+    for (ScriptListExtent* extent = gScriptLists[scriptType].head; extent != nullptr; extent = extent->next) {
+        for (int index = 0; index < extent->length; index++) {
+            if (!savedOnly || (extent->scripts[index].flags & SCRIPT_FLAG_NO_SAVE) == SCRIPT_FLAG_NONE) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
 // 0x4A5C50
 int scriptLoadAll(File* stream)
 {

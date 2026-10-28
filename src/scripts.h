@@ -338,6 +338,10 @@ int scriptSaveAll(File* stream);
 int scriptLoadAll(File* stream);
 int scriptGetScript(int sid, Script** script);
 int scriptAdd(int* sidPtr, ScriptType scriptType);
+
+// The scripts of [scriptType]; [savedOnly]: those a map save keeps (dev
+// autotests).
+int scriptsCount(ScriptType scriptType, bool savedOnly);
 Object* scriptCreateSpatial(int scriptIndex, int tile, MapElevation elevation, int radius);
 int scriptGetSpatialRadius(Object* obj);
 int scriptsGetFileName(int scriptIndex, char* name, size_t size);

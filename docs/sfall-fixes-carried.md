@@ -57,3 +57,4 @@ from upstream `main`, a pull request, a cherry-pick here, an autotest.
 | Fix | Port commit | Pull request | Autotest | State |
 |---|---|---|---|---|
 | Corpse aging after 6/14 days, party member placement's first direction, a new critter proto's team: three changes of fallout2-ce#675 that differ from the original (the automap dots, a bug of the original, stay as CE has them) | 379f3359, 11682f53 | [fallout2-ce#849](https://github.com/fallout2-ce/fallout2-ce/pull/849) | `orig675` | open |
+| Saved maps' script lists: the extents written with lengths that add up to the count (party members' scripts over an extent's edge broke it), older saves' longer extents read up to the count. Since fallout2-ce#786 checks the lengths, such a map loaded as new and a transition's destination was lost (issue #16: Sonora's destroyer stairs led to the pier) | d7c0067f | not yet | `scriptsave` (`stairs` for a save's stairs) | open |
