@@ -144,6 +144,23 @@ public class GameFilesTest {
     }
 
     @Test
+    public void computerPathsInTheConfigFixed() throws IOException {
+        game = temporary.newFolder("game");
+        write("fallout2.cfg", "[sound]\r\nmusic_path1=C:\\Games\\Fallout 2\\data\\sound\\music\\\r\nmusic_path2=..\\data\\sound\\music\\\r\nmusic_volume=22000\r\n\r\n"
+            + "[system]\r\nmaster_dat=D:\\master.dat\r\ncritter_dat=..\\critter.dat\r\nmaster_patches=data\r\n");
+        GameImport.fixConfig(new File(game, "fallout2.cfg"));
+        assertEquals("[sound]\r\nmusic_path1=sound/music/\r\nmusic_path2=data/sound/music/\r\nmusic_volume=22000\r\n\r\n"
+            + "[system]\r\nmaster_dat=master.dat\r\ncritter_dat=critter.dat\r\nmaster_patches=data\r\n",
+            read("fallout2.cfg"));
+
+        // The game's own relative paths stay as they are.
+        String own = "[sound]\nmusic_path1=sound\\music\\\nmusic_path2=data/sound/music/\n";
+        write("fallout2.cfg", own);
+        GameImport.fixConfig(new File(game, "fallout2.cfg"));
+        assertEquals(own, read("fallout2.cfg"));
+    }
+
+    @Test
     public void findsTheGameAtAnyDepth() throws IOException {
         MemorySource source = new MemorySource()
             .put("Игры/Fallout 2/master.dat", "M")

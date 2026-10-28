@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -500,8 +501,11 @@ final class GameImport {
         return file;
     }
 
-    // A computer's config may name the game's files with full Windows paths
-    // ("C:\Games\Fallout 2\master.dat"): the copied ones are next to it.
+    // A computer's config may name the game's files and music with full
+    // Windows paths ("C:\Games\Fallout 2\master.dat") or outside the game's
+    // folder ("..\master.dat"): the copied ones are in it. The music is
+    // looked for in both folders the games keep it in (as the web version's
+    // fixGameConfig).
     static void fixConfig(File config) throws IOException {
         if (!config.isFile()) {
             return;
@@ -512,6 +516,8 @@ final class GameImport {
         defaults.put("critter_dat", "critter.dat");
         defaults.put("master_patches", "data");
         defaults.put("critter_patches", "data");
+        defaults.put("music_path1", "sound/music/");
+        defaults.put("music_path2", "data/sound/music/");
 
         String text = new String(readFile(config), StandardCharsets.ISO_8859_1);
         String newline = text.contains("\r\n") ? "\r\n" : "\n";
@@ -523,8 +529,8 @@ final class GameImport {
                 continue;
             }
             String key = lines[index].substring(0, equals).trim().toLowerCase(Locale.ROOT);
-            String value = lines[index].substring(equals + 1).trim();
-            if (defaults.containsKey(key) && (value.contains(":") || value.startsWith("\\") || value.startsWith("/"))) {
+            String value = lines[index].substring(equals + 1).trim().replace('\\', '/');
+            if (defaults.containsKey(key) && (value.contains(":") || value.startsWith("/") || Arrays.asList(value.split("/")).contains(".."))) {
                 lines[index] = key + "=" + defaults.get(key);
                 changed = true;
             }

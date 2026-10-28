@@ -54,6 +54,15 @@ public class MainActivity extends SDLActivity {
                 e.printStackTrace();
             }
         }
+        // A game imported before its config's music folders were fixed on
+        // import (a computer's paths: no music).
+        if (externalFilesDir != null) {
+            try {
+                GameImport.fixConfig(new File(externalFilesDir, GameFiles.CONFIG));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
         installBundledFiles(externalFilesDir);
 
         UpdateManager.initialize(this);
