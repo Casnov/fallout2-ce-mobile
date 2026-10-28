@@ -6,6 +6,7 @@
     <string name="import_checking">Ищу игру…</string>
     <string name="import_not_found">Здесь нет Fallout 2: не найдены master.dat и critter.dat. Укажите папку или архив, в которых установлена Fallout 2.</string>
     <string name="import_several">Здесь несколько копий игры: %s. Выберите папку или архив с одной из них.</string>
+    <string name="import_choose_game">Здесь Fallout 2 и мод в его папке %s, который использует его файлы. Какую игру установить?</string>
     <string name="import_found">Fallout 2 найдена.</string>
     <string name="import_root">Папка игры: %s</string>
     <string name="import_language">Язык: %s</string>

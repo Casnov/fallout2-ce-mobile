@@ -9,6 +9,8 @@
     <string name="import_checking">Looking for the game…</string>
     <string name="import_not_found">No Fallout 2 here: master.dat and critter.dat weren\'t found. Choose the folder or the archive Fallout 2 is installed in.</string>
     <string name="import_several">There are several copies of the game here: %s. Choose a folder or an archive with one of them.</string>
+    <string name="import_choose_game">Here are Fallout 2 and the mod in its folder %s, which uses its files. Which one to install?</string>
+    <string name="import_fallout2" translatable="false">Fallout 2</string>
     <string name="import_found">Fallout 2 found.</string>
     <string name="import_root">The game\'s folder: %s</string>
     <string name="import_language">Language: %s</string>

@@ -337,4 +337,72 @@ public class GameFilesTest {
         GameFiles.finish(game);
         assertEquals("NEW", read("mods/new_mod.dat"));
     }
+
+    // Fallout 2 with Fallout Et Tu in its subfolder, as on a computer: the
+    // mod's config names Fallout 2's files with "..\".
+    private static MemorySource fallout2WithEtTu() {
+        return new MemorySource()
+            .put("Fallout 2/master.dat", "MASTER")
+            .put("Fallout 2/critter.dat", "CRITTER")
+            .put("Fallout 2/fallout2.cfg", "[system]\nlanguage=russian\nmaster_dat=master.dat\n")
+            .put("Fallout 2/data/SAVEGAME/SLOT01/SAVE.DAT", "FALLOUT 2 SAVE")
+            .put("Fallout 2/Fallout1in2/Fallout2.cfg", "[system]\r\nlanguage=english\r\nmaster_dat=..\\master.dat\r\ncritter_dat=..\\critter.dat\r\n")
+            .put("Fallout 2/Fallout1in2/ddraw.ini", "[Misc]\nStartingMap=V13ent.map\n")
+            .put("Fallout 2/Fallout1in2/data/maps/v13ent.map", "MAP")
+            .put("Fallout 2/Fallout1in2/Fallout2.exe", "EXE");
+    }
+
+    @Test
+    public void modInASubfolderIsAChoice() throws IOException {
+        try {
+            GameImport.find(fallout2WithEtTu(), false);
+            fail("no choice");
+        } catch (GameImport.ChooseGameException e) {
+            assertEquals(Arrays.asList("Fallout 2/", "Fallout 2/Fallout1in2/"), e.roots);
+        }
+    }
+
+    @Test
+    public void modInASubfolderTakesFallout2sFiles() throws IOException {
+        game = temporary.newFolder("game");
+        MemorySource source = fallout2WithEtTu();
+        GameImport.Found found = GameImport.find(source, false, "Fallout 2/Fallout1in2/");
+        assertEquals("english", found.language);
+        GameFiles.Plan plan = GameImport.plan(found, game, true);
+        GameImport.install(source, found, plan, true, game, NO_PROGRESS);
+
+        assertEquals("MASTER", read("master.dat"));
+        assertEquals("CRITTER", read("critter.dat"));
+        assertEquals("MAP", read("data/maps/v13ent.map"));
+        assertTrue(exists("ddraw.ini"));
+        assertFalse(exists("Fallout2.exe"));
+        // Fallout 2's own saves stay out.
+        assertFalse(exists("data/SAVEGAME/SLOT01/SAVE.DAT"));
+        String config = read("Fallout2.cfg");
+        assertTrue(config, config.contains("master_dat=master.dat"));
+        assertTrue(config, config.contains("critter_dat=critter.dat"));
+    }
+
+    @Test
+    public void fallout2LeavesTheModInItsSubfolder() throws IOException {
+        game = temporary.newFolder("game");
+        MemorySource source = fallout2WithEtTu();
+        GameImport.Found found = GameImport.find(source, false, "Fallout 2/");
+        GameFiles.Plan plan = GameImport.plan(found, game, true);
+        GameImport.install(source, found, plan, true, game, NO_PROGRESS);
+
+        assertEquals("MASTER", read("master.dat"));
+        assertEquals("FALLOUT 2 SAVE", read("data/SAVEGAME/SLOT01/SAVE.DAT"));
+        assertFalse(exists("Fallout1in2"));
+    }
+
+    @Test
+    public void configNamingMissingFilesIsNoMod() throws IOException {
+        MemorySource source = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("backup/fallout2.cfg", "[system]\nmaster_dat=..\\master.dat\ncritter_dat=..\\nothing.dat\n");
+        GameImport.Found found = GameImport.find(source, false);
+        assertEquals("", found.root);
+    }
 }

@@ -17,6 +17,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -236,6 +237,16 @@ final class GameImport {
         // Without Fallout 2's own files (master.dat, critter.dat): its mods
         // and configs only, for "Replace game" (the original files stay).
         boolean modsOnly;
+        // Files from outside the folder its config names (a mod installed
+        // in a subfolder, as Fallout Et Tu: "..\master.dat"), and their
+        // paths in the game.
+        final Map<Entry, String> outside = new HashMap<>();
+
+        // [entry]'s path in the game's folder.
+        String pathOf(Entry entry) {
+            String path = outside.get(entry);
+            return path != null ? path : entry.path.substring(root.length());
+        }
     }
 
     // More than one game at the same depth: which one is meant isn't known.
@@ -248,15 +259,34 @@ final class GameImport {
         }
     }
 
+    // Fallout 2 with a mod in its subfolder that uses its files (as Fallout
+    // Et Tu): which of them is meant isn't known. [roots]: Fallout 2's
+    // folder first, then the mods'.
+    static final class ChooseGameException extends IOException {
+        final List<String> roots;
+
+        ChooseGameException(List<String> roots) {
+            super("choose a game: " + roots);
+            this.roots = roots;
+        }
+    }
+
+    static Found find(Source source, boolean modsOnly) throws IOException {
+        return find(source, modsOnly, null);
+    }
+
     // Null without the game. Its files encrypted or compressed in a way that
     // can't be read: NativeArchive.Failure. [modsOnly]: a game without
-    // Fallout 2's own files is found too (for "Replace game").
-    static Found find(Source source, boolean modsOnly) throws IOException {
+    // Fallout 2's own files is found too (for "Replace game"). [chosen]: the
+    // root of ChooseGameException the player chose, else null.
+    static Found find(Source source, boolean modsOnly, String chosen) throws IOException {
         List<Entry> entries = source.list();
 
         Set<String> paths = new HashSet<>();
+        Map<String, Entry> byPath = new HashMap<>();
         for (Entry entry : entries) {
             paths.add(entry.path.toLowerCase(Locale.ROOT));
+            byPath.put(entry.path.toLowerCase(Locale.ROOT), entry);
         }
 
         // The game's folder: the shallowest with master.dat and critter.dat.
@@ -292,11 +322,28 @@ final class GameImport {
             throw new SeveralGamesException(roots);
         }
 
+        // Mods in subfolders of the game that use its files.
+        Map<String, Map<Entry, String>> linked = withoutOriginals ? new HashMap<>() : findLinked(source, entries, byPath, roots.get(0));
+
         Found found = new Found();
         found.root = roots.get(0);
+        if (chosen != null && linked.containsKey(chosen)) {
+            found.root = chosen;
+            found.outside.putAll(linked.get(chosen));
+        } else if (chosen == null && !linked.isEmpty()) {
+            List<String> choice = new ArrayList<>();
+            choice.add(found.root);
+            choice.addAll(linked.keySet());
+            Collections.sort(choice.subList(1, choice.size()));
+            throw new ChooseGameException(choice);
+        }
         found.modsOnly = withoutOriginals;
+        for (Entry entry : found.outside.keySet()) {
+            found.files.add(entry);
+            found.size += entry.size;
+        }
         for (Entry entry : entries) {
-            if (!entry.path.startsWith(found.root)) {
+            if (!entry.path.startsWith(found.root) || isInLinked(entry.path, found.root, linked.keySet())) {
                 continue;
             }
             String path = entry.path.substring(found.root.length());
@@ -322,6 +369,68 @@ final class GameImport {
 
         found.language = readLanguage(source, found);
         return found;
+    }
+
+    // Folders under [root] with a config that names master.dat and
+    // critter.dat outside them, both in the source: the files to take
+    // from outside, by folder.
+    private static Map<String, Map<Entry, String>> findLinked(Source source, List<Entry> entries, Map<String, Entry> byPath, String root) throws IOException {
+        Map<String, Map<Entry, String>> linked = new HashMap<>();
+        for (Entry entry : entries) {
+            String name = baseName(entry.path);
+            String folder = entry.path.substring(0, entry.path.length() - name.length());
+            if (!name.equalsIgnoreCase(GameFiles.CONFIG) || folder.equals(root) || !folder.startsWith(root)) {
+                continue;
+            }
+
+            Map<String, String> config = readConfig(source, entry);
+            Map<Entry, String> outside = new HashMap<>();
+            for (String[] file : new String[][] { { "master_dat", "master.dat" }, { "critter_dat", "critter.dat" } }) {
+                String value = config.get(file[0]);
+                String path = value != null ? resolve(folder, value) : null;
+                Entry target = path != null ? byPath.get(path.toLowerCase(Locale.ROOT)) : null;
+                if (target != null && !target.path.startsWith(folder)) {
+                    outside.put(target, file[1]);
+                }
+            }
+            if (outside.size() == 2) {
+                linked.put(folder, outside);
+            }
+        }
+        return linked;
+    }
+
+    // [path] is in a mod's folder of [linked] under [root] (Fallout 2's own
+    // files don't take a mod that uses them).
+    private static boolean isInLinked(String path, String root, Set<String> linked) {
+        for (String folder : linked) {
+            if (!folder.equals(root) && root.length() < folder.length() && path.startsWith(folder)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // [value], a config's relative path, from [folder] of the source; null
+    // for a full path or one out of the source.
+    private static String resolve(String folder, String value) {
+        String path = value.trim().replace('\\', '/');
+        if (path.isEmpty() || path.contains(":") || path.startsWith("/")) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>(Arrays.asList(folder.split("/")));
+        parts.removeIf(String::isEmpty);
+        for (String part : path.split("/")) {
+            if (part.equals("..")) {
+                if (parts.isEmpty()) {
+                    return null;
+                }
+                parts.remove(parts.size() - 1);
+            } else if (!part.isEmpty() && !part.equals(".")) {
+                parts.add(part);
+            }
+        }
+        return String.join("/", parts);
     }
 
     // The least deep of [folders], each once.
@@ -378,18 +487,19 @@ final class GameImport {
 
     // `[system] language` of the copied fallout2.cfg ("english" without it).
     private static String readLanguage(Source source, Found found) throws IOException {
-        List<Entry> config = new ArrayList<>();
         for (Entry entry : found.files) {
-            if (entry.path.substring(found.root.length()).equalsIgnoreCase("fallout2.cfg")) {
-                config.add(entry);
+            if (found.pathOf(entry).equalsIgnoreCase(GameFiles.CONFIG)) {
+                String language = readConfig(source, entry).get("language");
+                return language != null ? language : "english";
             }
         }
-        if (config.isEmpty()) {
-            return "english";
-        }
+        return "english";
+    }
 
+    // [entry]'s keys (lower case) and values, a config's.
+    private static Map<String, String> readConfig(Source source, Entry entry) throws IOException {
         ByteArrayOutputStream text = new ByteArrayOutputStream();
-        source.read(config, new EntrySink() {
+        source.read(Collections.singletonList(entry), new EntrySink() {
             @Override
             public void begin(Entry entry) {
             }
@@ -407,14 +517,14 @@ final class GameImport {
             }
         });
 
-        String language = "english";
+        Map<String, String> values = new HashMap<>();
         for (String line : new String(text.toByteArray(), StandardCharsets.ISO_8859_1).split("\r?\n")) {
-            String trimmed = line.trim();
-            if (trimmed.toLowerCase(Locale.ROOT).startsWith("language=")) {
-                language = trimmed.substring("language=".length()).trim();
+            int equals = line.indexOf('=');
+            if (equals != -1) {
+                values.put(line.substring(0, equals).trim().toLowerCase(Locale.ROOT), line.substring(equals + 1).trim());
             }
         }
-        return language;
+        return values;
     }
 
     interface Progress {
@@ -436,7 +546,7 @@ final class GameImport {
         List<String> paths = new ArrayList<>();
         List<Long> sizes = new ArrayList<>();
         for (Entry entry : wanted(found, withSaves)) {
-            paths.add(entry.path.substring(found.root.length()));
+            paths.add(found.pathOf(entry));
             sizes.add(entry.size);
         }
         return GameFiles.plan(paths, sizes, target, GameFiles.installedGameFiles(target), found.modsOnly);
@@ -445,7 +555,7 @@ final class GameImport {
     private static List<Entry> wanted(Found found, boolean withSaves) {
         List<Entry> wanted = new ArrayList<>();
         for (Entry entry : found.files) {
-            String path = entry.path.substring(found.root.length()).toLowerCase(Locale.ROOT);
+            String path = found.pathOf(entry).toLowerCase(Locale.ROOT);
             if (withSaves || !path.startsWith("data/savegame/")) {
                 wanted.add(entry);
             }
@@ -467,7 +577,7 @@ final class GameImport {
         List<Entry> wanted = wanted(found, withSaves);
         Map<Entry, String> pathOf = new HashMap<>();
         for (Entry entry : wanted) {
-            pathOf.put(entry, entry.path.substring(found.root.length()));
+            pathOf.put(entry, found.pathOf(entry));
         }
 
         GameFiles.StagingSink sink = new GameFiles.StagingSink(target, installed, pathOf, plan.bytesToRead, (done, total, path) -> {
