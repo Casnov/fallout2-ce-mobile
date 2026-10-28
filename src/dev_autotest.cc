@@ -218,6 +218,14 @@ enum DevAutotestAction {
     // set_town_title); 2 checks the list keeps the names and the place its
     // title; 3 shows them again.
     DEV_AUTOTEST_ACTION_WORLDMAP_NAMES,
+    // Corpses, containers and items within `a` hexes of the dude and their
+    // outlines; b = 1: checks corpses and containers with things in them
+    // are outlined.
+    DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT,
+    // A bag (pid `a`) with a thing (pid `c`) in it two hexes east of the
+    // dude, and a dead critter (pid `b`) with the same thing two hexes
+    // south-west.
+    DEV_AUTOTEST_ACTION_PLACE_STASH,
     DEV_AUTOTEST_ACTION_WORLDMAP_DRAG,
     DEV_AUTOTEST_ACTION_WORLDMAP_TAP,
     // Logs attack mode.
@@ -3021,6 +3029,17 @@ static const DevAutotestStep kDevAutotestWorldmapNamesSteps[] = {
     { DEV_AUTOTEST_ACTION_WORLDMAP_NAMES, 3, 0, 0, 1, "wn08_shown_again" },
 };
 
+// The HUD's highlight on the start map: corpses and containers next to the
+// dude outlined whatever the mod's highlighting settings (Fallout Et Tu
+// turns them off), as the port's settings say.
+static const DevAutotestStep kDevAutotestHighlightAllSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "hl00_start" },
+    // A bag with a stimpak, a dead Sulik with one.
+    { DEV_AUTOTEST_ACTION_PLACE_STASH, 46, 97, 40, 10, "hl00b_stash" },
+    { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(Highlight), 0, 0, 30, "hl01_highlight" },
+    { DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT, 12, 1, 0, 1, "hl02_outlines" },
+};
+
 // Party member control tab of the mobile talk screen (test save, Sulik).
 static const DevAutotestStep kDevAutotestPartySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "q00_start" },
@@ -3306,6 +3325,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
+    } else if (strcmp(name, "highlightall") == 0) {
+        gDevAutotestSteps = kDevAutotestHighlightAllSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestHighlightAllSteps) / sizeof(kDevAutotestHighlightAllSteps[0]);
     } else if (strcmp(name, "worldmapnames") == 0) {
         gDevAutotestSteps = kDevAutotestWorldmapNamesSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestWorldmapNamesSteps) / sizeof(kDevAutotestWorldmapNamesSteps[0]);
@@ -6740,6 +6762,51 @@ void devAutotestTick()
             Rect viewRect;
             wmGetInterfaceState(&offsetX, &offsetY, &partyX, &partyY, &isWalking, &viewRect);
             devAutotestLog("  world map offset (%d, %d), party (%d, %d), walking %d\n", offsetX, offsetY, partyX, partyY, isWalking ? 1 : 0);
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_PLACE_STASH: {
+            Object* bag;
+            Object* thing;
+            if (objectCreateWithProtoId(&bag, ProtoId(static_cast<int>(step->a))) == 0 && objectCreateWithProtoId(&thing, ProtoId(static_cast<int>(step->c))) == 0) {
+                objectSetLocation(bag, tileGetTileInDirection(gDude->tile, ROTATION_E, 2), gDude->elevation, nullptr);
+                itemAdd(bag, thing, 1);
+                devAutotestLog("  bag pid %d at tile %d\n", static_cast<int>(step->a), bag->tile);
+            }
+            Object* critter;
+            if (objectCreateWithProtoId(&critter, ProtoId(0x1000000 | static_cast<int>(step->b))) == 0 && objectCreateWithProtoId(&thing, ProtoId(static_cast<int>(step->c))) == 0) {
+                objectSetLocation(critter, tileGetTileInDirection(gDude->tile, ROTATION_SW, 2), gDude->elevation, nullptr);
+                critterKill(critter, ANIM_INVALID, true);
+                itemAdd(critter, thing, 1);
+                devAutotestLog("  dead critter pid %d at tile %d\n", static_cast<int>(step->b), critter->tile);
+            }
+            tileWindowRefresh();
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT: {
+            int wanted = 0;
+            int outlined = 0;
+            for (Object* obj = objectFindFirstAtElevation(gDude->elevation); obj != nullptr; obj = objectFindNextAtElevation()) {
+                if (obj == gDude || objectGetDistanceBetween(gDude, obj) > static_cast<int>(step->a)) {
+                    continue;
+                }
+                ObjectType type = FrmId(obj).objectType();
+                bool corpse = type == OBJ_TYPE_CRITTER && critterIsDead(obj);
+                bool container = type == OBJ_TYPE_ITEM && itemGetType(obj) == ITEM_TYPE_CONTAINER;
+                if (!corpse && !container && type != OBJ_TYPE_ITEM) {
+                    continue;
+                }
+                bool full = (corpse || container) && obj->data.inventory.length > 0;
+                devAutotestLog("  %s %08x at tile %d: items %d, no highlight %d, outline %d\n", corpse ? "corpse" : container ? "container" : "item",
+                    ProtoId(obj).pid(), obj->tile, (corpse || container) ? obj->data.inventory.length : 0, (obj->flags & OBJECT_NO_HIGHLIGHT) != 0 ? 1 : 0, obj->outline);
+                if (full) {
+                    wanted++;
+                    outlined += obj->outline != OUTLINE_TYPE_NONE ? 1 : 0;
+                }
+            }
+            if (step->b == 1) {
+                bool ok = wanted > 0 && outlined == wanted;
+                devAutotestLog("  corpses and containers with things %d, outlined %d: %s\n", wanted, outlined, ok ? "PASS" : "FAIL");
+            }
             break;
         }
         case DEV_AUTOTEST_ACTION_WORLDMAP_NAMES: {

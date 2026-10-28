@@ -324,6 +324,13 @@ struct EnhancementSettings {
     // creation) a third as long. Fades meaning time passes (skills, books,
     // encounters) and the splash's stay.
     bool fast_menu_fades = true;
+    // The HUD's highlight button (touch_hud.cc) outlines containers and
+    // corpses too, whatever the highlighting mod's
+    // Containers / Corpses of mods\sfall-mods.ini say: on the PC that mod
+    // works while a key is held, the button is the phone's way to find
+    // things. Colors and the rest still are the mod's.
+    bool highlight_containers = true;
+    bool highlight_corpses = true;
 };
 
 // CE: Zoomable map view, see world_view.h.

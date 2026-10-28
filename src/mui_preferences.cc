@@ -116,6 +116,10 @@ namespace {
     constexpr int kTextLayoutTablet = 389;
     constexpr int kTextBarterUnitPrice = 393;
     constexpr int kTextBarterUnitPriceNote = 394;
+    constexpr int kTextHighlightContainers = 449;
+    constexpr int kTextHighlightContainersNote = 450;
+    constexpr int kTextHighlightCorpses = 451;
+    constexpr int kTextHighlightCorpsesNote = 452;
     constexpr int kTextGroupText = 395;
     constexpr int kTextGroupSaves = 396;
     constexpr int kTextGroupSpeed = 397;
@@ -202,6 +206,8 @@ namespace {
         bool tacticalView;
         bool saveCompatibility;
         bool barterUnitPrice;
+        bool highlightContainers;
+        bool highlightCorpses;
         int interfaceSize;
         int windows;
         int layout;
@@ -230,6 +236,8 @@ namespace {
         values.tacticalView = settings.enhancements.tactical_view;
         values.saveCompatibility = settings.enhancements.save_compatibility;
         values.barterUnitPrice = settings.enhancements.barter_unit_price;
+        values.highlightContainers = settings.enhancements.highlight_containers;
+        values.highlightCorpses = settings.enhancements.highlight_corpses;
         values.interfaceSize = settings.touch.hud_scale;
         values.windows = settings.touch.windows;
         values.layout = settings.touch.layout;
@@ -259,6 +267,8 @@ namespace {
         values.tacticalView = EnhancementSettings().tactical_view;
         values.saveCompatibility = EnhancementSettings().save_compatibility;
         values.barterUnitPrice = EnhancementSettings().barter_unit_price;
+        values.highlightContainers = EnhancementSettings().highlight_containers;
+        values.highlightCorpses = EnhancementSettings().highlight_corpses;
         values.interfaceSize = TouchSettings().hud_scale;
         values.windows = TouchSettings().windows;
         values.layout = TouchSettings().layout;
@@ -349,6 +359,8 @@ namespace {
             settings.enhancements.tactical_view = values.tacticalView;
             settings.enhancements.save_compatibility = values.saveCompatibility;
             settings.enhancements.barter_unit_price = values.barterUnitPrice;
+            settings.enhancements.highlight_containers = values.highlightContainers;
+            settings.enhancements.highlight_corpses = values.highlightCorpses;
             settings.touch.hud_scale = values.interfaceSize;
             settings.touch.windows = values.windows;
             settings.touch.layout = values.layout;
@@ -665,6 +677,18 @@ namespace {
             rows.push_back(row);
         }
         preferenceToggle(Section::Display, kTextItemHighlight, "Item highlight", &PreferenceValues::itemHighlight);
+        {
+            Row row { Section::Display, RowKind::Toggle, kTextHighlightContainers, "Highlight button: containers", Origin::Port, kTextHighlightContainersNote, "Chests, boxes and remains you can search" };
+            row.get = [](const Values& values) { return values.highlightContainers ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.highlightContainers = value != 0.0f; };
+            rows.push_back(row);
+        }
+        {
+            Row row { Section::Display, RowKind::Toggle, kTextHighlightCorpses, "Highlight button: corpses", Origin::Port, kTextHighlightCorpsesNote, "The dead you can search" };
+            row.get = [](const Values& values) { return values.highlightCorpses ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.highlightCorpses = value != 0.0f; };
+            rows.push_back(row);
+        }
         {
             Row row { Section::Display, RowKind::Choice, kTextMapFilter, "Map smoothing", Origin::Port };
             row.options = { kTextFilterNearest, kTextFilterLinear, kTextFilterSharp };

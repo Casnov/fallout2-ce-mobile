@@ -583,7 +583,11 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
 - HUD "Highlight" button (`touch_hud.cc`) follows all options of sfall's
   highlighting mod (`[Highlighting]` in mods\sfall-mods.ini,
   gl_highlighting.ssl - that script works only while its key is held, the
-  phone has none): items, Containers, Corpses (not "no steal"), Critters
+  phone has none): items, containers and corpses (not "no steal") by the
+  port's `[enhancements] highlight_containers` / `highlight_corpses` (on by
+  default, Display rows; the mod's Containers / Corpses aren't read: Fallout
+  Et Tu turns them off, and on the phone the button is how things are found,
+  2026-10-29, the user's wish; autotest `highlightall`), Critters
   (combat colors, not in combat), CheckLOS, colors, MotionScanner (1 - a
   motion sensor carried, 2 - a charge per switching on; messages
   `game\ce.msg` 170-171). Own keys in the same section: IncludeNoHighlight=1
@@ -593,8 +597,8 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
   Line of sight uses sight blocking (walls, opaque objects), not the mod's
   line of fire, where critters standing between hid things. Refreshed every
   250 ms; outlines of others (combat, interaction) are left alone. Phone:
-  Containers=1, Corpses=1, IncludeNoHighlight=1, ExcludePids empty (the user
-  wants everything: the button is an opt-in simplification).
+  IncludeNoHighlight=1, ExcludePids empty (the user wants everything: the
+  button is an opt-in simplification).
 - Interaction outline: an object dude is sent to (tap, skill / item on it,
   any radial action except look / rotate) or selected for use in combat is
   outlined green with the game's outline (`OUTLINE_TYPE_FRIENDLY`, set

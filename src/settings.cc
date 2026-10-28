@@ -401,6 +401,8 @@ void initSettingsRegistry(bool isMapper)
     SETTING(save_compatibility);
     SETTING(barter_unit_price);
     SETTING(fast_menu_fades);
+    SETTING(highlight_containers);
+    SETTING(highlight_corpses);
 #undef SECT
 
 #define SECT touch

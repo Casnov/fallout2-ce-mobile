@@ -1194,8 +1194,10 @@ namespace {
     HighlightConfig readHighlightConfig()
     {
         HighlightConfig config;
-        config.containers = highlightOption("Containers", 0) != 0;
-        config.corpses = highlightOption("Corpses", 0) != 0;
+        // The port's settings, not the mod's Containers / Corpses (see
+        // `EnhancementSettings`).
+        config.containers = settings.enhancements.highlight_containers;
+        config.corpses = settings.enhancements.highlight_corpses;
         config.critters = highlightOption("Critters", 0) != 0;
         config.checkLineOfSight = highlightOption("CheckLOS", 0) != 0;
         config.includeNoHighlight = highlightOption("IncludeNoHighlight", 0) != 0;

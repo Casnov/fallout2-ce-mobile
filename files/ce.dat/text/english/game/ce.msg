@@ -311,6 +311,10 @@
 {446}{}{Race}
 {447}{}{Style}
 {448}{}{Gender}
+{449}{}{Highlight button: containers}
+{450}{}{Chests, boxes and remains you can search}
+{451}{}{Highlight button: corpses}
+{452}{}{The dead you can search}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).
