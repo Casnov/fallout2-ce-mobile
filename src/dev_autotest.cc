@@ -31,6 +31,7 @@
 #include "game_mouse.h"
 #include "game_movie.h"
 #include "game_sound.h"
+#include "hero_appearance.h"
 #include "input.h"
 #include "interface.h"
 #include "inventory.h"
@@ -131,6 +132,12 @@ enum DevAutotestAction {
     // `b` tiles away, the map's other critters removed; 2 - the dude ends his
     // turns (at most `c` frames) until the combat is over: the gunman left it.
     DEV_AUTOTEST_ACTION_RETARGET_LEAVE,
+    // sfall's Hero Appearance (hero_appearance.cc), `a`: 1 - the setting,
+    // the races and styles, the black dude chosen, his art from its set; 2 -
+    // leather armor's art from the set; 3 - the saved art id, a .gcd file,
+    // a gender change; 4 - the default look chosen (before a load); 5 - the
+    // loaded game's choice. With the mod off (no Appearance folder): off.
+    DEV_AUTOTEST_ACTION_HERO_APPEARANCE,
     // Presses key with SDL scancode `a` (desktop screens; the touch-only
     // build takes only a text field's editing keys).
     DEV_AUTOTEST_ACTION_KEY,
@@ -2383,6 +2390,24 @@ static const DevAutotestStep kDevAutotestRetargetLeaveSteps[] = {
     { DEV_AUTOTEST_ACTION_RETARGET_LEAVE, 2, 0, 1800, 10, "l03_combat_over" },
 };
 
+// sfall's Hero Appearance (hero_appearance.cc): on the RPU copy (its
+// Appearance folder, EnableHeroAppearanceMod=1 in ddraw.ini) the black dude
+// (race 1) is chosen and wears his own art from hmR01S00.dat, leather armor
+// too; saves keep the critter's art id and the choice in sfallgv.sav, a
+// .gcd file at its end; a gender change takes the default look. The unmodded
+// copy has no Appearance folder: the mod is off and nothing changes.
+static const DevAutotestStep kDevAutotestHeroAppearanceSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "a00_start" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 1, 0, 0, 20, "a01_black" },
+    { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 1, HAND_RIGHT, 0, 20, "a02_leather" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 2, 0, 0, 20, "a03_leather_art" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 3, 0, 0, 10, "a04_saved_gcd_gender" },
+    { DEV_AUTOTEST_ACTION_QUICK_SAVE, 0, 0, 0, 30, "a05_saved" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 4, 0, 0, 10, "a06_default" },
+    { DEV_AUTOTEST_ACTION_QUICK_LOAD, 0, 0, 0, 60, "a07_loaded" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 5, 0, 0, 20, "a08_black_again" },
+};
+
 // A hurt party member asked to heal himself in a talk (party.h obj_heal:
 // use_obj_on_obj of a stimpak on himself) uses the stimpak at once, as with
 // sfall: his answer is by his health after it. It used to wait for the end
@@ -3303,6 +3328,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "talkheal") == 0) {
         gDevAutotestSteps = kDevAutotestTalkHealSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestTalkHealSteps) / sizeof(kDevAutotestTalkHealSteps[0]);
+    } else if (strcmp(name, "heroappearance") == 0) {
+        gDevAutotestSteps = kDevAutotestHeroAppearanceSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestHeroAppearanceSteps) / sizeof(kDevAutotestHeroAppearanceSteps[0]);
     } else if (strcmp(name, "retargetleave") == 0) {
         gDevAutotestSteps = kDevAutotestRetargetLeaveSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestRetargetLeaveSteps) / sizeof(kDevAutotestRetargetLeaveSteps[0]);
@@ -4519,6 +4547,128 @@ void devAutotestTick()
             }
             ok = ok && stimpakRows == 1 && capsRows == 1;
             devAutotestLog("  last ID %d, stimpak stacks %d, caps stacks %d: %s\n", id, stimpakRows, capsRows, ok ? "PASS" : "FAIL");
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_HERO_APPEARANCE: {
+            const FrmId dudeFrmId(gDude);
+            bool heroArt = artIsHeroFrmId(dudeFrmId);
+            if (heroAppearanceMode() == 0) {
+                bool ok = !heroAppearanceHasChoice() && !heroArt;
+                devAutotestLog("  hero appearance off, dude art %d: %s\n", dudeFrmId.frameId(), ok ? "PASS" : "FAIL");
+                break;
+            }
+
+            // The dude's art from the chosen set (else it is the critter's).
+            auto artFromSet = [](const FrmId& frmId) {
+                File* stream = heroAppearanceOpenFile(frmId.filePath());
+                if (stream != nullptr) {
+                    fileClose(stream);
+                }
+                return stream != nullptr;
+            };
+            // The hero's pixels aren't the critter's.
+            auto ownPixels = [](const FrmId& frmId) {
+                CacheEntry* heroHandle;
+                CacheEntry* normalHandle;
+                Art* hero = artLock(frmId, &heroHandle);
+                Art* normal = artLock(artNormalFrmId(frmId), &normalHandle);
+                bool differ = false;
+                if (hero != nullptr && normal != nullptr) {
+                    int heroWidth;
+                    int heroHeight;
+                    int normalWidth;
+                    int normalHeight;
+                    unsigned char* heroData = artGetFrameData(hero, 0, ROTATION_NE, &heroWidth, &heroHeight, nullptr, nullptr);
+                    unsigned char* normalData = artGetFrameData(normal, 0, ROTATION_NE, &normalWidth, &normalHeight, nullptr, nullptr);
+                    differ = heroWidth != normalWidth || heroHeight != normalHeight || memcmp(heroData, normalData, heroWidth * heroHeight) != 0;
+                }
+                if (hero != nullptr) {
+                    artUnlock(heroHandle);
+                }
+                if (normal != nullptr) {
+                    artUnlock(normalHandle);
+                }
+                return differ;
+            };
+
+            bool ok = false;
+            switch (static_cast<int>(step->a)) {
+            case 1: {
+                int maleRaces = heroAppearanceRaceCount(GENDER_MALE);
+                int femaleStyles = heroAppearanceStyleCount(GENDER_FEMALE, 0);
+                std::string name;
+                std::string description;
+                heroAppearanceGetRaceText(GENDER_MALE, 1, &name, &description);
+                bool chosen = heroAppearanceChoose(1, 0);
+                const FrmId frmId(gDude);
+                bool fromSet = artFromSet(frmId);
+                bool pixels = ownPixels(frmId);
+                ok = heroAppearanceHasChoice() && maleRaces == 3 && femaleStyles == 4 && !name.empty() && chosen
+                    && heroAppearanceRace() == 1 && artIsHeroFrmId(frmId) && fromSet && pixels;
+                devAutotestLog("  mode %d, male races %d, female styles %d, race 1 name \"%s\"; chosen %d, dude art %d (hero %d, from the set %d, own pixels %d): %s\n",
+                    heroAppearanceMode(), maleRaces, femaleStyles, name.c_str(), chosen ? 1 : 0, frmId.frameId(), artIsHeroFrmId(frmId) ? 1 : 0, fromSet ? 1 : 0, pixels ? 1 : 0, ok ? "PASS" : "FAIL");
+                break;
+            }
+            case 2: {
+                bool fromSet = artFromSet(dudeFrmId);
+                bool pixels = ownPixels(dudeFrmId);
+                char name[ART_NAME_SIZE + 4] = "";
+                artCopyFileName(dudeFrmId, name);
+                ok = heroArt && fromSet && pixels;
+                devAutotestLog("  leather armor: dude art %s (hero %d, from the set %d, own pixels %d): %s\n", name, heroArt ? 1 : 0, fromSet ? 1 : 0, pixels ? 1 : 0, ok ? "PASS" : "FAIL");
+                break;
+            }
+            case 3: {
+                // The dude as a save writes him: the critter's art id (the
+                // 9th int).
+                const char* objectPath = "heroapp.tmp";
+                int savedFid = -1;
+                File* stream = fileOpen(objectPath, "wb");
+                if (stream != nullptr) {
+                    _obj_save_dude(stream);
+                    fileClose(stream);
+                }
+                stream = fileOpen(objectPath, "rb");
+                if (stream != nullptr) {
+                    int value;
+                    for (int index = 0; index < 9 && fileReadInt32(stream, &value) != -1; index++) {
+                        savedFid = value;
+                    }
+                    fileClose(stream);
+                }
+                compat_remove(objectPath);
+                bool savedNormal = savedFid == artNormalFrmId(FrmId(gDude)).fid() && artIsHeroFrmId(FrmId(gDude));
+
+                // A .gcd file keeps the race.
+                const char* gcdPath = "heroapp.gcd";
+                bool gcdSaved = gcdSave(gcdPath) == 0;
+                heroAppearanceChoose(0, 0);
+                bool gcdLoaded = gcdLoad(gcdPath) == 0;
+                int gcdRace = heroAppearanceRace();
+                compat_remove(gcdPath);
+
+                // The other gender: the default look; back, the black dude again.
+                characterEditorSetGender(GENDER_FEMALE);
+                int femaleRace = heroAppearanceRace();
+                characterEditorSetGender(GENDER_MALE);
+                bool again = heroAppearanceChoose(1, 0);
+
+                ok = savedNormal && gcdSaved && gcdLoaded && gcdRace == 1 && femaleRace == 0 && again;
+                devAutotestLog("  saved art id %d (dude's %d), .gcd race %d, after a gender change race %d: %s\n",
+                    savedFid, FrmId(gDude).fid(), gcdRace, femaleRace, ok ? "PASS" : "FAIL");
+                break;
+            }
+            case 4:
+                ok = heroAppearanceChoose(0, 0) && heroAppearanceRace() == 0;
+                devAutotestLog("  the default look before loading: race %d: %s\n", heroAppearanceRace(), ok ? "PASS" : "FAIL");
+                break;
+            case 5: {
+                bool fromSet = artFromSet(dudeFrmId);
+                ok = heroAppearanceRace() == 1 && heroArt && fromSet && ownPixels(dudeFrmId);
+                devAutotestLog("  loaded: race %d, dude art %d (hero %d, from the set %d): %s\n", heroAppearanceRace(), dudeFrmId.frameId(), heroArt ? 1 : 0, fromSet ? 1 : 0, ok ? "PASS" : "FAIL");
+                break;
+            }
+            }
             break;
         }
         case DEV_AUTOTEST_ACTION_RETARGET_LEAVE: {
