@@ -118,6 +118,11 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_TOUCH_TAP_NEAR_CRITTER,
     // Gives dude item with pid `a`.
     DEV_AUTOTEST_ACTION_GIVE_ITEM,
+    // New objects' IDs past 18000 (sfall's new_obj_id_hook and
+    // item_identical_hack): the ID counter run up to just below 18000, then
+    // `b` stimpaks and `b` caps given one by one: no ID in party members'
+    // range, each kind in one stack.
+    DEV_AUTOTEST_ACTION_OBJECT_IDS,
     // Presses key with SDL scancode `a` (desktop screens; the touch-only
     // build takes only a text field's editing keys).
     DEV_AUTOTEST_ACTION_KEY,
@@ -2606,6 +2611,14 @@ static const DevAutotestStep kDevAutotestWieldStackSteps[] = {
     { DEV_AUTOTEST_ACTION_WIELD_STACK, 7, 2, 0, 30, "u02_wielded" },
 };
 
+// Object IDs past 18000 (sfall's fixes in Modules/Objects.cpp): after a long
+// session new_obj_id's counter reaches party members' IDs; items created then
+// must still stack and never take such an ID.
+static const DevAutotestStep kDevAutotestObjectIdsSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "o00_start" },
+    { DEV_AUTOTEST_ACTION_OBJECT_IDS, 0, 6, 0, 1, "o01_ids" },
+};
+
 // Burst friendly fire (sfall's fix in combat.cc): an attacker with a 10mm SMG
 // sees its team mate in the line of fire and doesn't burst.
 static const DevAutotestStep kDevAutotestBurstFriendlySteps[] = {
@@ -3223,6 +3236,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "burstfriendly") == 0) {
         gDevAutotestSteps = kDevAutotestBurstFriendlySteps;
         gDevAutotestStepCount = sizeof(kDevAutotestBurstFriendlySteps) / sizeof(kDevAutotestBurstFriendlySteps[0]);
+    } else if (strcmp(name, "objectids") == 0) {
+        gDevAutotestSteps = kDevAutotestObjectIdsSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestObjectIdsSteps) / sizeof(kDevAutotestObjectIdsSteps[0]);
     } else if (strcmp(name, "wieldstack") == 0) {
         gDevAutotestSteps = kDevAutotestWieldStackSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestWieldStackSteps) / sizeof(kDevAutotestWieldStackSteps[0]);
@@ -4414,6 +4430,46 @@ void devAutotestTick()
                 }
                 devAutotestLog("  gave item pid %d x%d\n", static_cast<int>(step->a), quantity);
             }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_OBJECT_IDS: {
+            int id = scriptsNewObjectId();
+            while (id < 17990) {
+                id = scriptsNewObjectId();
+            }
+
+            bool ok = true;
+            for (int index = 0; index < static_cast<int>(step->b) * 2; index++) {
+                ProtoId pid = ProtoId(index % 2 == 0 ? 40 : 41);
+                Object* item;
+                if (objectCreateWithProtoId(&item, pid) != 0) {
+                    devAutotestLog("FAIL: no item pid %d\n", pid.pid());
+                    ok = false;
+                    break;
+                }
+                id = item->id;
+                if (id >= 18000 && id < 18000 + 0x01000000) {
+                    devAutotestLog("  item pid %d took party members' ID %d\n", pid.pid(), id);
+                    ok = false;
+                }
+                if (itemAdd(gDude, item, 1) == 0) {
+                    _obj_disconnect(item, nullptr);
+                }
+            }
+
+            int stimpakRows = 0;
+            int capsRows = 0;
+            Inventory* inventory = &(gDude->data.inventory);
+            for (int index = 0; index < inventory->length; index++) {
+                int pid = inventory->items[index].item->pid;
+                if (pid == 40) {
+                    stimpakRows++;
+                } else if (pid == 41) {
+                    capsRows++;
+                }
+            }
+            ok = ok && stimpakRows == 1 && capsRows == 1;
+            devAutotestLog("  last ID %d, stimpak stacks %d, caps stacks %d: %s\n", id, stimpakRows, capsRows, ok ? "PASS" : "FAIL");
             break;
         }
         case DEV_AUTOTEST_ACTION_KEY: {
