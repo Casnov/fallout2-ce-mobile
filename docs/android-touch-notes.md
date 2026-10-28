@@ -968,6 +968,13 @@ every screen on the new scalable UI, visual style/textures later via theme).
     `muiHandleTextInput`, game charset via `muiEncodeGameText`, 11 chars),
     age -/+, gender, character points, SPECIAL -/+, tag skills, traits tab.
     The game's option window (save/load/print a character file) isn't there.
+  - Creation with sfall's Hero Appearance sets (`hero_appearance.h`, races
+    or styles to choose from): an appearance tab, gender (out of the header),
+    race and the race's styles in columns, rows as the traits'; names from
+    the sets' AppRace/AppStyle.msg (the part in parentheses). The card shows
+    the hero turning (`muiArtTexture`, one turn per 0.3 s) with the set's
+    title and description; art textures follow `artCacheGeneration`, so a
+    new choice shows at once. No tab without the sets.
   - Card: skilldex picture (`muiLineArtTexture`: the drawing's dark ink from
     the game's color table becomes the interface color, the paper
     transparent; all 174 pictures work), title, subtitle, description
@@ -978,10 +985,12 @@ every screen on the new scalable UI, visual style/textures later via theme).
   - Overlays inside one screen (perk panel, name field) switch the rest of
     the screen off (`ui.isInteractive`): the first widget under the finger
     gets the touch, so rows with buttons limit their own touch area.
-  - Texts `game\ce.msg` 190-198, the rest from `game\editor.msg`.
+  - Texts `game\ce.msg` 190-198 and 445-448 (appearance), the rest from
+    `game\editor.msg`.
   - Autotests: `character` (test save, +7000 xp, perk, skills, tabs, reset,
     inventory tab), `creation` (SPECIAL, tag, trait, typed name, age,
-    gender, done checks, cancel).
+    gender, done checks, cancel), `creationappearance` (the appearance tab
+    on the RPU copy: races, a style, a woman with her own styles).
 - Notifications (`mui_notify.cc`, `muiNotify`), one queue for everything the
   player should see right away (audit 2026-09-27):
   - Sources where the game shows them, its logic unchanged: the message log

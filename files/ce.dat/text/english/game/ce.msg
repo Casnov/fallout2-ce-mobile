@@ -304,6 +304,14 @@
 {393}{}{Unit prices when trading}
 {394}{}{Top right of an item: the price of one in this deal}
 
+# Character creation's appearance tab (sfall's Hero Appearance mod); race
+# and style as sfall's translations ([AppearanceMod] RaceText, StyleText),
+# gender.
+{445}{}{Appearance}
+{446}{}{Race}
+{447}{}{Style}
+{448}{}{Gender}
+
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).
 {1000}{}{%s cannot pick up the item.}

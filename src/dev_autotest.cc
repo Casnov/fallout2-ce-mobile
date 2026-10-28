@@ -2931,6 +2931,25 @@ static const DevAutotestStep kDevAutotestCreationSteps[] = {
     { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 40, "n14_cancelled" },
 };
 
+// Creation's appearance tab (sfall's Hero Appearance, the RPU copy): the
+// tab, the black dude, the Indian, the bald one, then a woman (the default
+// look again) with blond hair; the card shows the hero turning. The choice
+// is checked at the end; Back cancels the creation.
+static const DevAutotestStep kDevAutotestCreationAppearanceSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "p00_start" },
+    { DEV_AUTOTEST_ACTION_OPEN_CHARACTER_CREATION, 0, 0, 0, 40, "p01_open" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 10, "p01b_wait" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "p02_tab", "character.tab.appearance" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "p03_black", "character.appearance.race.1" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "p04_indian", "character.appearance.race.2" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "p05_default_race", "character.appearance.race.0" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "p06_bald", "character.appearance.style.2" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "p07_woman", "character.appearance.gender.1" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "p08_blond", "character.appearance.style.1" },
+    { DEV_AUTOTEST_ACTION_HERO_APPEARANCE, 6, 0, 0, 1, "p09_chosen" },
+    { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 40, "p10_cancelled" },
+};
+
 // Party member control tab of the mobile talk screen (test save, Sulik).
 static const DevAutotestStep kDevAutotestPartySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "q00_start" },
@@ -3328,6 +3347,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "talkheal") == 0) {
         gDevAutotestSteps = kDevAutotestTalkHealSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestTalkHealSteps) / sizeof(kDevAutotestTalkHealSteps[0]);
+    } else if (strcmp(name, "creationappearance") == 0) {
+        gDevAutotestSteps = kDevAutotestCreationAppearanceSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestCreationAppearanceSteps) / sizeof(kDevAutotestCreationAppearanceSteps[0]);
     } else if (strcmp(name, "heroappearance") == 0) {
         gDevAutotestSteps = kDevAutotestHeroAppearanceSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestHeroAppearanceSteps) / sizeof(kDevAutotestHeroAppearanceSteps[0]);
@@ -4662,6 +4684,14 @@ void devAutotestTick()
                 ok = heroAppearanceChoose(0, 0) && heroAppearanceRace() == 0;
                 devAutotestLog("  the default look before loading: race %d: %s\n", heroAppearanceRace(), ok ? "PASS" : "FAIL");
                 break;
+            case 6: {
+                // After creation's taps: a woman, the default race, blond.
+                int gender = critterGetStat(gDude, STAT_GENDER);
+                ok = gender == GENDER_FEMALE && heroAppearanceRace() == 0 && heroAppearanceStyle() == 1 && heroArt && artFromSet(dudeFrmId);
+                devAutotestLog("  chosen: gender %d, race %d, style %d, dude art %d (from the set %d): %s\n", gender, heroAppearanceRace(), heroAppearanceStyle(),
+                    dudeFrmId.frameId(), artFromSet(dudeFrmId) ? 1 : 0, ok ? "PASS" : "FAIL");
+                break;
+            }
             case 5: {
                 bool fromSet = artFromSet(dudeFrmId);
                 ok = heroAppearanceRace() == 1 && heroArt && fromSet && ownPixels(dudeFrmId);

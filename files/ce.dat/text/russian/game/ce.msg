@@ -354,6 +354,14 @@
 {443}{}{Поблагодарить автора порта}
 {444}{}{Приложение, обновления и все функции бесплатны. Если хотите, можете отдельно поблагодарить автора порта. Благодарность не даёт доступа к сборкам или функциям, приоритета в исправлениях и не создаёт обязательств по разработке.}
 
+# Character creation's appearance tab (sfall's Hero Appearance mod); race
+# and style as sfall's translations ([AppearanceMod] RaceText, StyleText),
+# gender.
+{445}{}{Внешность}
+{446}{}{Раса}
+{447}{}{Стиль}
+{448}{}{Пол}
+
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).
 {1000}{}{%s не может подобрать предмет.}
