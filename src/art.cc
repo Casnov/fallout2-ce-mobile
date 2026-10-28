@@ -1866,11 +1866,9 @@ bool FrmId::exist(int fid, char* path)
         const char* filePath = buildPath(fid, path);
         if (filePath != nullptr) {
             int fileSize;
-            if (dbGetFileSize(filePath, &fileSize) != -1) {
-                result = true;
-            } else if (artIsHeroFrmId(FrmId(fid))) {
+            if (artIsHeroFrmId(FrmId(fid))) {
                 // SFALL: Hero Appearance: in the chosen set, else the
-                // critter's.
+                // critter's (the hero's names aren't in the game's files).
                 File* stream = heroAppearanceOpenFile(filePath);
                 if (stream != nullptr) {
                     fileClose(stream);
@@ -1878,6 +1876,8 @@ bool FrmId::exist(int fid, char* path)
                 } else {
                     result = exist(artNormalFrmId(FrmId(fid)).fid(), path);
                 }
+            } else if (dbGetFileSize(filePath, &fileSize) != -1) {
+                result = true;
             }
         }
     }

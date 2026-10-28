@@ -53,6 +53,10 @@ namespace {
     // style, the style's text (else the race's).
     std::map<std::tuple<char, int, int, bool>, HeroTexts> gHeroTexts;
 
+    // Whether a set is there, looked up once (the screens count the races
+    // and styles every frame). Keys: gender letter, race, style.
+    std::map<std::tuple<char, int, int>, bool> gHeroSetsFound;
+
     char genderLetter(int gender)
     {
         return gender == GENDER_FEMALE ? 'F' : 'M';
@@ -72,8 +76,14 @@ namespace {
 
     bool setExists(char gender, int race, int style)
     {
-        std::string path = setPath(gender, race, style);
-        return compat_access(path.c_str(), 0) == 0 || compat_access((path + ".dat").c_str(), 0) == 0;
+        auto key = std::make_tuple(gender, race, style);
+        auto it = gHeroSetsFound.find(key);
+        if (it == gHeroSetsFound.end()) {
+            std::string path = setPath(gender, race, style);
+            bool found = compat_access(path.c_str(), 0) == 0 || compat_access((path + ".dat").c_str(), 0) == 0;
+            it = gHeroSetsFound.emplace(key, found).first;
+        }
+        return it->second;
     }
 
     void setClose(HeroSet* set)
@@ -237,6 +247,7 @@ void heroAppearanceInit()
     gHeroAppearanceMode = std::clamp(mode, 0, 2);
     gHeroRace = 0;
     gHeroStyle = 0;
+    gHeroSetsFound.clear();
 }
 
 void heroAppearanceExit()
@@ -244,6 +255,7 @@ void heroAppearanceExit()
     setClose(&gHeroStyleSet);
     setClose(&gHeroRaceSet);
     gHeroTexts.clear();
+    gHeroSetsFound.clear();
     gHeroAppearanceMode = 0;
 }
 
