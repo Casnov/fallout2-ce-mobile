@@ -12,7 +12,12 @@ The installed package must be the public release package; debug packages
 are disabled unless `[debug] update_repo=owner/test-repo` explicitly selects
 a separate repository of APKs signed with that debug package's key. Never
 publish test APKs in the public release repository. Release assets must
-keep the `fallout2-ce-mobile-<version>-arm64.apk` naming convention.
+keep the `fallout2-ce-mobile-<version>-<abi>.apk` naming convention: each
+release carries `-arm64.apk` and `-armv7.apk` (for 32-bit phones), built
+one after the other with `assembleRelease -PabiFilters=arm64-v8a` and
+`-PabiFilters=armeabi-v7a` (both write `app-release.apk`, so copy each
+before the next). The update check takes the first of `Build.SUPPORTED_ABIS`
+that has an asset, so a 64-bit phone keeps getting the arm64 one.
 
 The main menu centers its visible actions and adds a quiet update row only
 when a release is available. The
