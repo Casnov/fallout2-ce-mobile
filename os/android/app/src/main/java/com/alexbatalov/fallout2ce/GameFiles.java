@@ -105,6 +105,12 @@ final class GameFiles {
     private static final Set<String> APP_LOGS = new HashSet<>(Arrays.asList(
         "actions.log", "actions.log.old", "touch.log", "touch.log.old", "debug.log", "perf.log", "hud.log"));
 
+    // [path] (from the game's folder) is one of the app's logs: a computer's
+    // copy (CE's debug.log, our port's on a Mac) isn't brought over them.
+    static boolean isAppLog(String path) {
+        return APP_LOGS.contains(path.toLowerCase(Locale.ROOT));
+    }
+
     // The game's files (replaced and removed by "Replace game"): all but the
     // saves, the app's own (ce.dat, its logs, the import's own files) and
     // screenshots. [path]: from the game's folder, "/" between folders.
@@ -114,7 +120,7 @@ final class GameFiles {
             return false;
         }
         if (lower.indexOf('/') == -1) {
-            return !(APP_LOGS.contains(lower)
+            return !(isAppLog(lower)
                 || (lower.startsWith("scr") && (lower.endsWith(".bmp") || lower.endsWith(".png"))));
         }
         return true;
@@ -459,7 +465,9 @@ final class GameFiles {
         File journalFile = new File(target, JOURNAL);
         File staging = new File(target, STAGING);
         if (journalFile.isFile()) {
-            String[] lines = readText(journalFile).split("\n");
+            // Written in UTF-8 (`commit`): the paths may be any (Fallout:
+            // Nevada's "!docs/Библия Невады.pdf").
+            String[] lines = new String(readBytes(journalFile), StandardCharsets.UTF_8).split("\n");
             for (String line : lines) {
                 String[] parts = line.split("\t");
                 if (parts.length == 2 && parts[0].equals("D")) {
@@ -475,8 +483,11 @@ final class GameFiles {
                     File from = new File(staging, parts[1]);
                     File to = GameImport.targetFile(target, parts[2]);
                     if (!from.isFile()) {
-                        // Moved already.
-                        continue;
+                        if (to.isFile()) {
+                            // Moved already.
+                            continue;
+                        }
+                        throw new IOException("can't find " + parts[1]);
                     }
                     File folder = to.getParentFile();
                     if (folder != null && !folder.isDirectory() && !folder.mkdirs()) {
@@ -653,6 +664,10 @@ final class GameFiles {
     }
 
     static String readText(File file) throws IOException {
+        return new String(readBytes(file), StandardCharsets.ISO_8859_1);
+    }
+
+    private static byte[] readBytes(File file) throws IOException {
         try (InputStream in = new FileInputStream(file)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buffer = new byte[16384];
@@ -660,7 +675,7 @@ final class GameFiles {
             while ((read = in.read(buffer)) > 0) {
                 out.write(buffer, 0, read);
             }
-            return new String(out.toByteArray(), StandardCharsets.ISO_8859_1);
+            return out.toByteArray();
         }
     }
 

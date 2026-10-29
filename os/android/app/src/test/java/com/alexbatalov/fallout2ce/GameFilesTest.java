@@ -587,4 +587,31 @@ public class GameFilesTest {
         assertFalse(exists("fores_change.log"));
         assertTrue(read("fallout2.cfg"), read("fallout2.cfg").contains("game_difficulty=2"));
     }
+
+    @Test
+    public void namesInAnyLanguageAreCopied() throws IOException {
+        // Fallout: Nevada's docs; the journal's paths are UTF-8.
+        installGame();
+        MemorySource source = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("!docs/Библия Невады.pdf", "PDF");
+        install(source, false, false);
+        assertEquals("PDF", read("!docs/Библия Невады.pdf"));
+    }
+
+    @Test
+    public void aComputersLogsOfTheAppStayThere() throws IOException {
+        installGame();
+        MemorySource source = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("actions.log", "A COMPUTER'S JOURNAL")
+            .put("debug.log", "CE'S LOG")
+            .put("fores_change.log", "THE GAME'S OWN");
+        install(source, false, false);
+        assertEquals("LOG", read("actions.log"));
+        assertFalse(exists("debug.log"));
+        assertEquals("THE GAME'S OWN", read("fores_change.log"));
+    }
 }

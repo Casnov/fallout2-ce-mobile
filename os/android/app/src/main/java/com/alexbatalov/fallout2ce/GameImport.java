@@ -552,12 +552,13 @@ final class GameImport {
 
     // Files of the computer's game nobody needs on the phone: Windows
     // programs and libraries, shortcuts, folder icons, macOS leftovers and
-    // programs (CE's .app); and the engine's ce.dat (the app brings its own,
-    // see MainActivity).
+    // programs (CE's .app); the engine's ce.dat (the app brings its own,
+    // see MainActivity) and the app's logs (GameFiles.isAppLog).
     private static boolean isSkipped(String path) {
         String lower = path.toLowerCase(Locale.ROOT);
         String name = baseName(lower);
         return lower.equals("ce.dat")
+            || GameFiles.isAppLog(lower)
             || lower.startsWith("ce.dat/")
             || lower.startsWith("__macosx/")
             || ("/" + lower).contains(".app/")
