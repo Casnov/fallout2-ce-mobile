@@ -514,6 +514,9 @@ enum DevAutotestAction {
     // its entrance), as an exit grid does (`mapSetTransition`); logs the
     // party's size.
     DEV_AUTOTEST_ACTION_MAP_TRANSITION,
+    // Fails unless the map loaded is map file `widget` (a map that failed to
+    // load leaves an empty one without a name).
+    DEV_AUTOTEST_ACTION_CHECK_MAP,
     // Touch recorder (touch_log.h): [a] 0 - on, touch.log emptied; 1 - logs
     // what touch.log got, fails without a dump for each of `widget` and
     // `target` (reasons) and, [c] 1, without a "game closed" one; 2 - what
@@ -2966,6 +2969,17 @@ static const DevAutotestStep kDevAutotestStateSteps[] = {
 // such a return crashed (2026-10-01): the touch HUD drawn while the map's
 // file was read read protos, which broke the read's progress count (see
 // `gFileReadProgressReporting` in db.cc). Run with --dev-map=klatrap.map.
+// "Enter" at Golgotha on the world map: its city.txt entrance has elevation
+// 0 and no tile, and the map is entered at its own start.
+static const DevAutotestStep kDevAutotestGolgothaSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "g01_start" },
+    { DEV_AUTOTEST_ACTION_OPEN_WORLDMAP, 0, 0, 0, 1, "g02_open" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "g03_worldmap" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_AREA, CITY_GOLGOTHA, 0, 0, 30, "g04_at_golgotha" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 120, "g05_entered", "worldmap.enter" },
+    { DEV_AUTOTEST_ACTION_CHECK_MAP, 0, 0, 0, 1, "g06_golgotha", "newrgo.map" },
+};
+
 static const DevAutotestStep kDevAutotestMapReturnSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "r00_trappers" },
     { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 2, ROTATION_SE, 10, "r01_sulik", "Kcsulik.int" },
@@ -3526,6 +3540,9 @@ void devAutotestSetScenario(const char* name)
         gDevAutotestSteps = kDevAutotestStateSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestStateSteps) / sizeof(kDevAutotestStateSteps[0]);
         gDevAutotestTraceItems = true;
+    } else if (strcmp(name, "golgotha") == 0) {
+        gDevAutotestSteps = kDevAutotestGolgothaSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestGolgothaSteps) / sizeof(kDevAutotestGolgothaSteps[0]);
     } else if (strcmp(name, "mapreturn") == 0) {
         gDevAutotestSteps = kDevAutotestMapReturnSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMapReturnSteps) / sizeof(kDevAutotestMapReturnSteps[0]);
@@ -4586,6 +4603,16 @@ void devAutotestTick()
             } else {
                 mapSetTransition(&transition);
             }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_MAP: {
+            char name[COMPAT_MAX_PATH];
+            strncpy(name, step->widget, sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+            Map map = wmMapMatchNameToIdx(name);
+            bool ok = map != MAP_INVALID && gMapHeader.name[0] != '\0' && gMapHeader.index == map;
+            devAutotestLog("  map \"%s\" (%d), expected %s (%d), dude tile %d: %s\n", gMapHeader.name,
+                static_cast<int>(gMapHeader.index), step->widget, static_cast<int>(map), gDude->tile, ok ? "ok" : "FAIL");
             break;
         }
         case DEV_AUTOTEST_ACTION_TOUCH_LOG: {
