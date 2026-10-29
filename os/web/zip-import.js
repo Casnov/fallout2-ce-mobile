@@ -164,6 +164,20 @@ async function linkedGames(files,root,read) {
   }
   return linked;
 }
+// [path] with its folders as [folders] (lower case -> as they are) has them;
+// the ones it lacks are added as [path] has them. CE finds a file in any
+// case, but of folders named the same in another case it sees one
+// (compat_resolve_path): "DATA/" next to "data/" would hide files.
+function inFolderCase(path,folders) {
+  const parts = path.split('/'), name = parts.pop();
+  let folder = '';
+  for (const part of parts) {
+    const key = (folder + part).toLowerCase();
+    if (!folders.has(key)) folders.set(key,folder + part);
+    folder = folders.get(key) + '/';
+  }
+  return folder + name;
+}
 // [options.chosen]: a mod of `linkedGames` ([options.linked]) the player
 // chose, else Fallout 2's folder itself (its mods' folders left out).
 // [options.previousConfig]: the installed game's config, kept with its
@@ -172,7 +186,11 @@ function archivePlan(entries,previous = null,{linked = new Map(),chosen = null,p
   const files = zipFiles(entries);
   const found = gameRoot(files,previous), mod = chosen !== null ? linked.get(chosen.toLowerCase()) : null;
   const root = mod || found.root, modsOnly = found.modsOnly, selected = [], selectedKeys = new Set();
-  const add = (file,path) => {
+  // Folders in one case: the kept originals' (mods only), else the first.
+  const folders = new Map();
+  if (modsOnly) for (const file of previous.files) if (originalFile(file.path)) inFolderCase(file.path,folders);
+  const add = (file,name) => {
+    const path = inFolderCase(name,folders);
     if (encoder.encode(path).length > ZIP_LIMITS.pathBytes || path.split('/').length > ZIP_LIMITS.depth) {
       invalid('limit','Game path exceeds the engine limit: ' + path);
     }

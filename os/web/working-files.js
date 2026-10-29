@@ -17,6 +17,16 @@ export function gameConfigPath(FS,root) {
   return name.includes('/') ? name : names.find(item => item.toLowerCase() === name.toLowerCase()) || name;
 }
 
+// [path] under [root] with each folder [FS] has in its case there.
+function inExistingCase(FS,root,path) {
+  let current = root;
+  for (const part of path.split('/')) {
+    const names = FS.analyzePath(current).exists && FS.isDir(FS.stat(current).mode) ? FS.readdir(current) : [];
+    current += '/' + (names.find(name => name.toLowerCase() === part.toLowerCase()) ?? part);
+  }
+  return current;
+}
+
 export function fileLifetime(path) {
   const key = resourcePath(path.replace(/^\/game\//,''));
   if (/(^|\/)savegame(\/|$)/.test(key)) return 'save';
@@ -76,6 +86,20 @@ async function writeSettings(FS, root, files, user) {
   }
 }
 
+// The game's config (`configName` of its ddraw.ini) among [templates] and
+// the saved one whose player's settings it keeps (named by the saved
+// ddraw.ini: another game's, as Resurrection's fores.cfg before Fallout 2's
+// fallout2.cfg). Maps of paths to bytes; the paths found or undefined.
+export function configsToMerge(templates,saved) {
+  const nameIn = files => {
+    const ddraw = [...files.keys()].find(path => path.toLowerCase() === 'ddraw.ini');
+    return configName(ddraw ? decodeConfig(files.get(ddraw)) : '').toLowerCase();
+  };
+  const name = nameIn(templates), oldName = nameIn(saved);
+  return {config:[...templates.keys()].find(path => path.toLowerCase() === name),
+    old:[...saved.keys()].find(path => path.toLowerCase() === oldName)};
+}
+
 export async function mountUserFiles(module) {
   if (!module.UserIO) throw new Error('The engine and user filesystem versions do not match; reload the application');
   return mountLazyUserFiles(module);
@@ -104,12 +128,7 @@ export async function connectUserFiles(module, user, source = {}) {
       const key = path.toLowerCase(), target = templateKeys.get(key);
       if (target && (previousHashes[key] === hashes[key] || (!hasProvenance && !source.importMode))) combined.set(target,data);
     }
-    // The game's config (`configName` of its ddraw.ini) keeps the player's
-    // settings of the one saved.
-    const ddraw = [...templates.keys()].find(path => path.toLowerCase() === 'ddraw.ini');
-    const name = configName(ddraw ? decodeConfig(templates.get(ddraw)) : '').toLowerCase();
-    const config = [...templates.keys()].find(path => path.toLowerCase() === name);
-    const old = [...saved.keys()].find(path => path.toLowerCase() === name);
+    const {config,old} = configsToMerge(templates,saved);
     if (config && old) combined.set(config,encodeConfig(mergePlayerSettings(decodeConfig(templates.get(config)),decodeConfig(saved.get(old)))));
     await writeSettings(FS,'/game',combined);
   };
@@ -119,7 +138,8 @@ export async function connectUserFiles(module, user, source = {}) {
   // SAVEGAME and its staging/backup/catalog directories share one mounted FS:
   // native rename operations keep their normal atomic-directory semantics.
   for (const root of new Set(['',...patchDirectories(config)])) {
-    const path = '/game/' + (root ? root + '/' : '') + 'savegame';
+    // In the game's folders' case: CE sees one of "DATA/" and "data/".
+    const path = inExistingCase(FS,'/game',(root ? root + '/' : '') + 'savegame');
     FS.mkdirTree(path.slice(0,path.lastIndexOf('/')));
     if (FS.analyzePath(path).exists) throw new Error('Game resources collide with user saves');
     FS.symlink(user.root + '/savegame',path);

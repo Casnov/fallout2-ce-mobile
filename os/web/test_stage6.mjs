@@ -63,6 +63,14 @@ test('a master.dat folder replaces a master.dat file and the other way',async ()
   assert.equal(back.files.some(file => file.path.startsWith('master.dat/')),false);
 });
 
+test('folders named the same in another case become one',async () => {
+  // CE sees one of "DATA/" and "data/".
+  const opts = fixture();
+  const run = await importGameZip(await zip([...base,['DATA/MAPS/a.map',enc.encode('a')],['data/proto/items/1.pro',enc.encode('p')],['Data/maps/b.map',enc.encode('b')]]),opts);
+  const paths = run.files.map(file => file.path).filter(path => /^data\//i.test(path)).sort();
+  assert.deepEqual(paths,['DATA/MAPS/a.map','DATA/MAPS/b.map','DATA/proto/items/1.pro']);
+});
+
 test('mods require a base and incomplete DAT pairs are never treated as a mod overlay',async () => {
   const opts = fixture();
   await assert.rejects(prepareGameZip(await zip([['mods/rpu.dat',enc.encode('rpu')]]),opts),error => importErrorInfo(error).code === 'base_required');
