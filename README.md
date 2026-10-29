@@ -32,7 +32,7 @@ The full list of changes is the git history over upstream.
 2. Copy your Fallout 2 folder from a computer to the phone: as is, or as one archive (cable, cloud drive, messenger). Mods installed there (for example [RPU](https://github.com/BGforgeNet/Fallout2_Restoration_Project)) and saves come along.
 3. Start the app and choose that folder or archive.
 
-Tested on a Redmi 15C (Android 16); players also run it on tablets (Alldocube). Android 7.0 or newer, arm64.
+Tested on a Redmi 15C (Android 16); players also run it on tablets (Alldocube). Android 7.0 or newer: the `-arm64.apk`, or `-armv7.apk` for older 32-bit phones.
 
 Plain Fallout 2 from GOG, Steam or Epic works too, with or without mods. The game's language is taken from its own files, older translations included; if your copy doesn't work, please open an [issue](https://github.com/imbaner/fallout2-ce-mobile/issues).
 
