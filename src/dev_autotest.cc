@@ -4706,7 +4706,7 @@ void devAutotestTick()
             gDevAutotestPendingCapture = step->name;
             gDevAutotestStep++;
             gDevAutotestStepStarted = false;
-            gameMoviePlay(static_cast<int>(step->a), GAME_MOVIE_FADE_IN | GAME_MOVIE_FADE_OUT | GAME_MOVIE_PAUSE_MUSIC);
+            gameMoviePlay(static_cast<GameMovie>(static_cast<int>(step->a)), GameMovieFlags::FadeIn | GameMovieFlags::FadeOut | GameMovieFlags::PauseMusic);
             devAutotestLog("  movie closed\n");
             return;
         case DEV_AUTOTEST_ACTION_CHECK_MOVIE: {
@@ -7096,9 +7096,9 @@ void devAutotestTick()
             bool destroyedKnown = wmAreaIsKnown(CITY_DESTROYED_ARROYO);
             int asked = 0;
             for (int index = 0; index < static_cast<int>(step->a); index++) {
-                int movie = -1;
+                GameMovie movie = MOVIE_INVALID;
                 _scriptsCheckGameEvents(&movie, -1);
-                asked += movie != -1 ? 1 : 0;
+                asked += movie != MOVIE_INVALID ? 1 : 0;
             }
             bool ok = asked == 0 && gameGetGlobalVar(GVAR_TOWN_REP_ARROYO) == rep
                 && wmAreaIsKnown(CITY_ARROYO) == arroyoKnown && wmAreaIsKnown(CITY_DESTROYED_ARROYO) == destroyedKnown;

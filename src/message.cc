@@ -220,9 +220,6 @@ bool messageListLoad(MessageList* messageList, const char* path)
 // CE: `messageListLoad` from [language]'s folder.
 bool messageListLoadInLanguage(MessageList* messageList, const char* path, const char* language)
 {
-    char localized_path[COMPAT_MAX_PATH];
-    File* file_ptr;
-
     if (messageList == nullptr) {
         return false;
     }
@@ -231,15 +228,18 @@ bool messageListLoadInLanguage(MessageList* messageList, const char* path, const
         return false;
     }
 
+    char localized_path[COMPAT_MAX_PATH];
     snprintf(localized_path, sizeof(localized_path), "%s\\%s\\%s", "text", language, path);
 
-    file_ptr = fileOpen(localized_path, "rt");
+    File* file_ptr = fileOpen(localized_path, "rt");
+    bool isEnglish = compat_stricmp(language, ENGLISH) == 0;
 
     // SFALL: Fallback to english if requested localization does not exist.
     if (file_ptr == nullptr) {
-        if (compat_stricmp(language, ENGLISH) != 0) {
+        if (!isEnglish) {
             snprintf(localized_path, sizeof(localized_path), "%s\\%s\\%s", "text", ENGLISH, path);
             file_ptr = fileOpen(localized_path, "rt");
+            isEnglish = true;
         }
     }
 
@@ -247,10 +247,40 @@ bool messageListLoadInLanguage(MessageList* messageList, const char* path, const
         return false;
     }
 
-    return messageListLoadFromFile(messageList, file_ptr, localized_path);
+    if (!messageListLoadFromFile(messageList, file_ptr, localized_path)) {
+        return false;
+    }
+
+    // SFALL: Use English for missing message IDs, preserving localized entries
+    // (including empty text). Merge before callers apply text filters.
+    if (!isEnglish) {
+        snprintf(localized_path, sizeof(localized_path), "%s\\%s\\%s", "text", ENGLISH, path);
+        file_ptr = fileOpen(localized_path, "rt");
+        if (file_ptr != nullptr) {
+            MessageList fallback;
+            messageListInit(&fallback);
+            bool success = true;
+            if (messageListLoadFromFile(&fallback, file_ptr, localized_path)) {
+                for (int index = 0; index < fallback.entries_num; index++) {
+                    MessageListItem* entry = &fallback.entries[index];
+                    int localizedIndex;
+                    if (!_message_find(messageList, entry->num, &localizedIndex)
+                        && !_message_add(messageList, entry)) {
+                        success = false;
+                        break;
+                    }
+                }
+            }
+            messageListFree(&fallback);
+            return success;
+        }
+    }
+
+    return true;
 }
 
-// CE: The messages of [stream] (closed after), [name] in the errors.
+// CE: The messages of [stream] (closed after, also on parse errors), [name]
+// in the errors.
 bool messageListLoadFromFile(MessageList* messageList, File* stream, const char* name)
 {
     File* file_ptr = stream;

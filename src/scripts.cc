@@ -444,10 +444,7 @@ int gameTimeScheduleUpdateEvent()
 // 0x4A3620 gtime_q_process
 int gameTimeEventProcess(Object* obj, void* data)
 {
-    int movie_index;
-    int stopProcess;
-
-    movie_index = -1;
+    GameMovie movie_index = MOVIE_INVALID;
 
     debugPrint("\nQUEUE PROCESS: Midnight!");
 
@@ -461,13 +458,13 @@ int gameTimeEventProcess(Object* obj, void* data)
         _scriptsCheckGameEvents(&movie_index, -1);
     }
 
-    stopProcess = critterCheckRadiationEvent(gDude);
+    int stopProcess = critterCheckRadiationEvent(gDude);
 
     queueClearByEventType(EVENT_TYPE_GAME_TIME, nullptr);
 
     gameTimeScheduleUpdateEvent();
 
-    if (movie_index != -1) {
+    if (movie_index != MOVIE_INVALID) {
         stopProcess = 1;
     }
 
@@ -475,10 +472,10 @@ int gameTimeEventProcess(Object* obj, void* data)
 }
 
 // 0x4A3690
-int _scriptsCheckGameEvents(int* moviePtr, int window)
+int _scriptsCheckGameEvents(GameMovie* moviePtr, int window)
 {
-    int movie = -1;
-    int movieFlags = GAME_MOVIE_FADE_IN | GAME_MOVIE_FADE_OUT | GAME_MOVIE_PAUSE_MUSIC;
+    GameMovie movie = MOVIE_INVALID;
+    GameMovieFlags movieFlags = GameMovieFlags::FadeIn | GameMovieFlags::FadeOut | GameMovieFlags::PauseMusic;
     bool endgame = false;
     bool adjustRep = false;
 
@@ -500,7 +497,7 @@ int _scriptsCheckGameEvents(int* moviePtr, int window)
 
     if (gameGetGlobalVar(GVAR_ENEMY_ARROYO)) {
         movie = MOVIE_AFAILED;
-        movieFlags = GAME_MOVIE_FADE_IN | GAME_MOVIE_STOP_MUSIC;
+        movieFlags = GameMovieFlags::FadeIn | GameMovieFlags::StopMusic;
         endgame = true;
     } else {
         if (timerReached(gMovieTimerArtimer4) || gameGetGlobalVar(GVAR_FALLOUT_2) >= 3) {
@@ -523,9 +520,9 @@ int _scriptsCheckGameEvents(int* moviePtr, int window)
         }
     }
 
-    if (movie != -1) {
+    if (movie != MOVIE_INVALID) {
         if (gameMovieIsSeen(movie)) {
-            movie = -1;
+            movie = MOVIE_INVALID;
         } else {
             if (window != -1) {
                 windowHide(window);
@@ -667,6 +664,19 @@ void scriptsSyncObjectId(Object* object)
     if (scriptGetScript(object->sid, &script) != -1) {
         script->ownerId = object->id;
     }
+}
+
+bool scriptIsSavable(const Script* script)
+{
+    if ((script->flags & SCRIPT_FLAG_NO_SAVE) != SCRIPT_FLAG_NONE) {
+        return false;
+    }
+
+    if (script->owner != nullptr && !objectIsSavable(script->owner)) {
+        return false;
+    }
+
+    return true;
 }
 
 // 0x4A390C src_find_sid_from_program
@@ -2258,7 +2268,7 @@ static int scriptWrite(Script* scr, File* stream)
 // 0x4A5768
 int scriptSaveAll(File* stream)
 {
-    // Serialize persistent scripts without modifying the live lists. Runtime-only
+    // Serialize savable scripts without modifying the live lists. Runtime-only
     // scripts can occupy whole trailing extents, so live extent lengths cannot
     // be used as the lengths of the filtered on-disk extents.
     for (ScriptType type = SCRIPT_TYPE_FIRST; type < SCRIPT_TYPE_COUNT; type++) {
@@ -2266,7 +2276,7 @@ int scriptSaveAll(File* stream)
         for (ScriptListExtent* extent = gScriptLists[type].head; extent != nullptr; extent = extent->next) {
             for (int index = 0; index < extent->length; index++) {
                 Script* script = &extent->scripts[index];
-                if ((script->flags & SCRIPT_FLAG_NO_SAVE) == SCRIPT_FLAG_NONE) {
+                if (scriptIsSavable(script)) {
                     persistent.push_back(script);
                 }
             }
@@ -3236,7 +3246,7 @@ char* _scr_get_msg_str_speech(int messageListId, int messageId, int shouldStartS
             } else if (gameDialogWindowActive()) {
                 // Dialogue without a talking head, so just play the line
                 // without lip-sync instead of dropping it.
-                speechLoad(messageListItem.audio, GSOUND_LIMIT_AFTER, GSOUND_STREAM, GSOUND_NO_LOOP);
+                speechLoad(messageListItem.audio, GameSoundReadLimitMode::LimitAfter, GameSoundStorageType::Stream, GameSoundLoopingMode::NoLoop);
             } else {
                 // Outside dialogue (float_msg barks, timed events...), so use
                 // the float channels and let lines from different speakers

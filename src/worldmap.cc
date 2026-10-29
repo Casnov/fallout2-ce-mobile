@@ -3781,13 +3781,13 @@ static int wmWorldMapFunc(int a1)
             break;
         }
 
-        int mouseEvent = mouseGetEvent();
+        MouseButtonEvent mouseEvent = mouseGetEvent();
 
         if (wmTravelUpdate(now, worldX, worldY, &partyHealTime)) {
             break;
         }
 
-        if ((mouseEvent & MOUSE_EVENT_LEFT_BUTTON_DOWN) != 0 && (mouseEvent & MOUSE_EVENT_LEFT_BUTTON_REPEAT) == 0) {
+        if ((mouseEvent & MouseButtonEvent::LeftButtonDown) != MouseButtonEvent::None && (mouseEvent & MouseButtonEvent::LeftButtonRepeat) == MouseButtonEvent::None) {
             if (mouseHitTestInWindow(wmBkWin, WM_VIEW_X, WM_VIEW_Y, WM_VIEW_WIDTH + WM_VIEW_X, WM_VIEW_HEIGHT + WM_VIEW_Y)) {
                 if (!wmGenData.isWalking && !mousePressed && abs(wmGenData.worldPosX - worldX) < wmPartyClickRadius() && abs(wmGenData.worldPosY - worldY) < wmPartyClickRadius()) {
                     mousePressed = true;
@@ -3800,7 +3800,7 @@ static int wmWorldMapFunc(int a1)
             }
         }
 
-        if ((mouseEvent & MOUSE_EVENT_LEFT_BUTTON_UP) != 0) {
+        if ((mouseEvent & MouseButtonEvent::LeftButtonUp) != MouseButtonEvent::None) {
             if (mousePressed) {
                 mousePressed = false;
                 wmInterfaceRefresh();
@@ -3889,7 +3889,7 @@ static int wmWorldMapFunc(int a1)
             }
         }
 
-        if ((mouseEvent & MOUSE_EVENT_WHEEL) != 0) {
+        if ((mouseEvent & MouseButtonEvent::Wheel) != MouseButtonEvent::None) {
             int wheelX;
             int wheelY;
             mouseGetWheel(&wheelX, &wheelY);
@@ -5213,7 +5213,7 @@ static int wmInterfaceInit()
     const char* backgroundSoundFileName = gameSoundGetMusicOverride(
         wmGenData.isInCar ? "worldmap_car_music" : "worldmap_music",
         wmGenData.isInCar ? "20car" : "23world");
-    _gsound_background_play_level_music(backgroundSoundFileName, GSOUND_LIMIT_AFTER);
+    _gsound_background_play_level_music(backgroundSoundFileName, GameSoundReadLimitMode::LimitAfter);
 
     // CE: Hide entire interface, not just indicator bar, and disable tile
     // engine.
@@ -7733,7 +7733,7 @@ int wmMapMusicStart()
             break;
         }
 
-        if (_gsound_background_play_level_music(map->music, GSOUND_LIMIT_AFTER) == -1) {
+        if (_gsound_background_play_level_music(map->music, GameSoundReadLimitMode::LimitAfter) == -1) {
             break;
         }
 

@@ -108,9 +108,9 @@ int falloutMain(int argc, char** argv)
     // SFALL: Allow to skip intro movies
     int skipOpeningMovies = settings.ui.skip_opening_movies;
     if (skipOpeningMovies < 1 && !commandLineDevSkipOpeningMovies) {
-        gameMoviePlay(MOVIE_IPLOGO, GAME_MOVIE_FADE_IN);
-        gameMoviePlay(MOVIE_INTRO, 0);
-        gameMoviePlay(MOVIE_CREDITS, 0);
+        gameMoviePlay(MOVIE_IPLOGO, GameMovieFlags::FadeIn);
+        gameMoviePlay(MOVIE_INTRO, GameMovieFlags::None);
+        gameMoviePlay(MOVIE_CREDITS, GameMovieFlags::None);
     } else {
         // If the splash is shown but opening movies are skipped, fade it out
         // before the main menu starts its normal fade-in.
@@ -122,7 +122,7 @@ int falloutMain(int argc, char** argv)
         while (!done) {
             keyboardReset();
             if (!backgoundSoundIsPlaying()) {
-                _gsound_background_play_level_music(gameSoundGetMusicOverride("main_menu_music", "07desert"), GSOUND_LIMIT_BEFORE);
+                _gsound_background_play_level_music(gameSoundGetMusicOverride("main_menu_music", "07desert"), GameSoundReadLimitMode::LimitBefore);
             }
             mainMenuWindowUnhide(true);
 
@@ -147,8 +147,8 @@ int falloutMain(int argc, char** argv)
             switch (mainMenuRc) {
             case MAIN_MENU_INTRO:
                 mainMenuWindowHide(true);
-                gameMoviePlay(MOVIE_INTRO, GAME_MOVIE_STOP_MUSIC);
-                gameMoviePlay(MOVIE_CREDITS, 0);
+                gameMoviePlay(MOVIE_INTRO, GameMovieFlags::StopMusic);
+                gameMoviePlay(MOVIE_CREDITS, GameMovieFlags::None);
                 break;
             case MAIN_MENU_NEW_GAME: {
                 mainMenuBeginSubscreen();
@@ -157,7 +157,7 @@ int falloutMain(int argc, char** argv)
                     mainMenuFinishSubscreen();
 
                     if (!devNewGame) {
-                        gameMoviePlay(MOVIE_ELDER, GAME_MOVIE_STOP_MUSIC);
+                        gameMoviePlay(MOVIE_ELDER, GameMovieFlags::StopMusic);
                     }
                     randomSeedPrerandom(-1);
 
@@ -241,7 +241,7 @@ int falloutMain(int argc, char** argv)
                 // FALLTHROUGH
             case MAIN_MENU_SCREENSAVER:
                 mainMenuWindowHide(true);
-                gameMoviePlay(MOVIE_INTRO, GAME_MOVIE_PAUSE_MUSIC);
+                gameMoviePlay(MOVIE_INTRO, GameMovieFlags::PauseMusic);
                 break;
             case MAIN_MENU_OPTIONS: {
                 mainMenuBeginSubscreen();
@@ -599,7 +599,7 @@ static void showDeath()
                 break;
             }
 
-            while (mouseGetEvent() != 0) {
+            while (mouseGetEvent() != MouseButtonEvent::None) {
                 sharedFpsLimiter.mark();
 
                 inputGetInput();
@@ -666,7 +666,7 @@ static void showDeath()
             speechSetEndCallback(_main_death_voiceover_callback);
 
             unsigned int delay;
-            if (speechLoad(deathFileName, GSOUND_LOAD_NO_PLAY, GSOUND_STREAM, GSOUND_NO_LOOP) == -1) {
+            if (speechLoad(deathFileName, GameSoundReadLimitMode::LoadNoPlay, GameSoundStorageType::Stream, GameSoundLoopingMode::NoLoop) == -1) {
                 delay = 3000;
             } else {
                 delay = UINT_MAX;
@@ -699,7 +699,7 @@ static void showDeath()
 
             speechDelete();
 
-            while (mouseGetEvent() != 0) {
+            while (mouseGetEvent() != MouseButtonEvent::None) {
                 sharedFpsLimiter.mark();
 
                 inputGetInput();

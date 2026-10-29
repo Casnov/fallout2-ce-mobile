@@ -505,7 +505,7 @@ int critterCheckRadiationEvent(Object* obj)
     else
         radiationLevel = RADIATION_LEVEL_NONE;
 
-    if (statRoll(obj, STAT_ENDURANCE, gRadiationEnduranceModifiers[radiationLevel], nullptr) <= ROLL_FAILURE) {
+    if (rollIsFailure(statRoll(obj, STAT_ENDURANCE, gRadiationEnduranceModifiers[radiationLevel], nullptr))) {
         radiationLevel++;
     }
 
@@ -1281,7 +1281,7 @@ int sneakEventProcess(Object* obj, void* data)
     int time;
 
     int sneak = skillGetValue(gDude, SKILL_SNEAK);
-    if (skillRoll(gDude, SKILL_SNEAK, 0, nullptr) < ROLL_SUCCESS) {
+    if (rollIsFailure(skillRoll(gDude, SKILL_SNEAK, 0, nullptr))) {
         time = 600;
         _sneak_working = false;
 
@@ -1393,7 +1393,7 @@ int critterSetWhoHitMe(Object* critter, Object* hitMe)
     }
 
     if (ProtoId(critter).objectType() == OBJ_TYPE_CRITTER) {
-        if (hitMe == nullptr || critter->data.critter.combat.team != hitMe->data.critter.combat.team || (statRoll(critter, STAT_INTELLIGENCE, -1, nullptr) < 2 && (!objectIsPartyMember(critter) || !objectIsPartyMember(hitMe)))) {
+        if (hitMe == nullptr || critter->data.critter.combat.team != hitMe->data.critter.combat.team || (rollIsFailure(statRoll(critter, STAT_INTELLIGENCE, -1, nullptr)) && (!objectIsPartyMember(critter) || !objectIsPartyMember(hitMe)))) {
             critter->data.critter.combat.whoHitMe = hitMe;
             if (hitMe == gDude) {
                 reactionSetValue(critter, -3);

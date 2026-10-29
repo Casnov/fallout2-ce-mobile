@@ -983,7 +983,7 @@ void preferencesPlaySoundEffectSample()
 
 void preferencesPlaySpeechSample()
 {
-    speechLoad("narrator\\options", GSOUND_LIMIT_AFTER, GSOUND_MEMORY, GSOUND_NO_LOOP);
+    speechLoad("narrator\\options", GameSoundReadLimitMode::LimitAfter, GameSoundStorageType::Memory, GameSoundLoopingMode::NoLoop);
 }
 
 // 0x493224
@@ -1173,7 +1173,7 @@ static int preferencesWindowInit()
 
     int preferencesWindowX = (screenGetWidth() - PREFERENCES_WINDOW_WIDTH) / 2;
     int preferencesWindowY = (screenGetHeight() - PREFERENCES_WINDOW_HEIGHT) / 2;
-    int preferencesWindowFlags = mainMenuSubscreenWindowFlags(WINDOW_MODAL | WINDOW_DONT_MOVE_TOP, WINDOW_MODAL | WINDOW_MOVE_ON_TOP);
+    WindowFlags preferencesWindowFlags = mainMenuSubscreenWindowFlags(WINDOW_MODAL | WINDOW_DONT_MOVE_TOP, WINDOW_MODAL | WINDOW_MOVE_ON_TOP);
 
     gPreferencesWindow = windowCreate(preferencesWindowX,
         preferencesWindowY,
@@ -1275,7 +1275,7 @@ static int preferencesWindowInit()
             mouseUpEventCode = 505 + i;
         }
 
-        gPreferenceDescriptions[i].btn = buttonCreate(gPreferencesWindow, x, y, width, height, mouseEnterEventCode, mouseExitEventCode, mouseDownEventCode, mouseUpEventCode, nullptr, nullptr, nullptr, 32);
+        gPreferenceDescriptions[i].btn = buttonCreate(gPreferencesWindow, x, y, width, height, mouseEnterEventCode, mouseExitEventCode, mouseDownEventCode, mouseUpEventCode, nullptr, nullptr, nullptr, BUTTON_FLAG_TRANSPARENT);
     }
 
     _plyrspdbid = buttonCreate(gPreferencesWindow,
@@ -1672,7 +1672,7 @@ static void _DoThing(int eventCode)
 
             mouseGetPositionInWindow(gPreferencesWindow, &x, &y);
 
-            if (mouseGetEvent() & 0x10) {
+            if ((mouseGetEvent() & MouseButtonEvent::LeftButtonUp) != MouseButtonEvent::None) {
                 soundPlayFile("ib1lu1x1");
                 _UpdateThing(preferenceIndex);
                 windowRefresh(gPreferencesWindow);
@@ -1732,7 +1732,7 @@ static void _DoThing(int eventCode)
                 speechSetVolume(gPreferencesSpeechVolume1);
                 redrawLabels = true;
                 if (speechVolumeExample == 0) {
-                    speechLoad("narrator\\options", GSOUND_LIMIT_AFTER, GSOUND_MEMORY, GSOUND_NO_LOOP);
+                    speechLoad("narrator\\options", GameSoundReadLimitMode::LimitAfter, GameSoundStorageType::Memory, GameSoundLoopingMode::NoLoop);
                     speechVolumeExample = 40;
                 } else {
                     speechVolumeExample--;

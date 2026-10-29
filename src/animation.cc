@@ -3109,6 +3109,45 @@ static void _object_anim_compact()
     gAnimationCurrentSad = index;
 }
 
+// Returns the AP a combat move keeps for an attack with the current weapon
+// mode while Ctrl is held, or -1 when Ctrl is up.
+int dudeMoveGetReservedActionPoints()
+{
+    if (!gPressedPhysicalKeys[SDL_SCANCODE_RCTRL] && !gPressedPhysicalKeys[SDL_SCANCODE_LCTRL]) {
+        return -1;
+    }
+
+    HitMode hitMode;
+    bool aiming;
+    interfaceGetCurrentHitMode(&hitMode, &aiming);
+
+    return itemGetActionPointCost(gDude, hitMode, aiming);
+}
+
+// Returns how many hexes a Ctrl move can walk on `actionPoints` (AP plus free
+// move) and still keep the attack cost, or -1 when Ctrl is up. Returns 0 when
+// the dude cannot keep the attack cost at all. Free move only pays for walking,
+// so the attack has to fit in the dude's own AP.
+int dudeMoveGetReservedStepLimit(int actionPoints)
+{
+    int reservedActionPoints = dudeMoveGetReservedActionPoints();
+    if (reservedActionPoints == -1) {
+        return -1;
+    }
+
+    if (gDude->data.critter.combat.ap < reservedActionPoints) {
+        return 0;
+    }
+
+    int moveActionPoints = actionPoints - reservedActionPoints;
+    if (moveActionPoints <= 0) {
+        return 0;
+    }
+
+    int stepCost = critterGetMovementPointCostAdjustedForCrippledLegs(gDude, 1);
+    return stepCost > 0 ? moveActionPoints / stepCost : moveActionPoints;
+}
+
 // CE: Mouse position -> tile, see `dudeCheckMoveTile`.
 //
 // 0x417FFC
@@ -3135,15 +3174,30 @@ int dudeCheckMoveTile(int tile, int* actionPointsPtr)
 
     if (isInCombat()) {
         if (*actionPointsPtr != -1) {
-            if (gPressedPhysicalKeys[SDL_SCANCODE_RCTRL] || gPressedPhysicalKeys[SDL_SCANCODE_LCTRL]) {
-                HitMode hitMode;
-                bool aiming;
-                interfaceGetCurrentHitMode(&hitMode, &aiming);
-
-                *actionPointsPtr -= itemGetActionPointCost(gDude, hitMode, aiming);
-                if (*actionPointsPtr <= 0) {
+            int steps = dudeMoveGetReservedStepLimit(*actionPointsPtr);
+            if (steps != -1) {
+                if (steps == 0) {
                     return -1;
                 }
+
+                // The walk itself only stops when AP runs out, so end the
+                // path early to keep the attack cost. animateMoveObjectToTile
+                // reads `steps` as a hex limit when the target is occupied.
+                unsigned char rotations[800];
+                int pathLength = _make_path(gDude, gDude->tile, tile, rotations, 0);
+                if (steps < pathLength) {
+                    tile = gDude->tile;
+                    for (int index = 0; index < steps; index++) {
+                        tile = tileGetTileInDirection(tile, static_cast<Rotation>(rotations[index]), 1);
+                    }
+                }
+
+                // Callers expect AP back, but this hands back hexes. Both
+                // callers only pass the value on to animateMoveObjectToTile,
+                // which uses it to cap `sad->length`, a hex count. A step can
+                // cost more than 1 AP (crippled legs), so `steps` is the
+                // number that cap needs.
+                *actionPointsPtr = steps;
             }
         }
     } else {
@@ -3181,13 +3235,16 @@ int dudeMoveToTile(int tile, int actionPoints)
     // 0x51072C
     static int lastDestination = -2;
 
+    int availableActionPoints = actionPoints;
     tile = dudeCheckMoveTile(tile, &actionPoints);
     if (tile == -1) {
         return -1;
     }
 
+    // _dude_run checks the move again, so hand it the AP from before the
+    // Ctrl reserve to keep the reserve from being taken twice.
     if (lastDestination == tile) {
-        return dudeRunToTile(tile, actionPoints);
+        return dudeRunToTile(tile, availableActionPoints);
     }
 
     lastDestination = tile;
