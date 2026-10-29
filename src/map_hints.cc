@@ -271,7 +271,8 @@ namespace {
 
     // The tile dude walks to or would move to in combat, lying on the
     // ground as the tactical view's tiles: filled faintly, its edge in
-    // [color].
+    // [color], thinner zoomed out (down to 60%: tiles get small, the edge
+    // stays seen).
     void addTileMarker(MuiContext& ui, int tile, MuiColor color)
     {
         std::array<SDL_Point, ROTATION_COUNT> corners;
@@ -283,7 +284,7 @@ namespace {
             outline.push_back(cornerPoint(corner));
         }
         groundLinesAddFill(outline, color.withAlpha(45));
-        groundLinesAddPath(outline, true, ui.dp(1.6f), color);
+        groundLinesAddPath(outline, true, ui.dp(1.6f) * std::clamp(worldViewGetZoom(), 0.6f, 1.0f), color);
     }
 
     float outlineRight(const std::vector<SDL_FPoint>& points)
@@ -456,6 +457,9 @@ namespace {
 
 void mapHintsInit()
 {
+    // The tile markers lie on the ground in any mode (`addTileMarker`).
+    objectSetCoverRecorded(true);
+
     if (!gMapHintsPushed) {
         // Under the HUD (screens draw in the order they were pushed).
         muiPush(&gMapHintsScreen);

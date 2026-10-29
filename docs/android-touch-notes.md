@@ -612,10 +612,14 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
 - Tile markers: the tile dude walks to and the one he'd move to in combat
   lie on the ground as the tactical view's lines (`addTileMarker`,
   ground_lines.h: one mitered stroke, a faint fill, both dimmed behind
-  scenery and see-through critters, hidden under the dude), drawn in one
-  batch with the tactical view; the move cost and the "can't" icon stay
-  over everything. (They were separate MUI segments with round caps: a
-  translucent edge showed bright corners.)
+  scenery and critters, hidden under the dude), in any mode: what covers
+  the ground is kept whenever the map is drawn (`objectSetCoverRecorded`,
+  from `mapHintsInit`; no frame time measured on perfmap), not only while
+  the tactical view draws see-through. The edge is thinner zoomed out, down
+  to 60%. Drawn in one batch with the tactical view; the move cost and the
+  "can't" icon stay over everything. (They were separate MUI segments with
+  round caps: a translucent edge showed bright corners.) Autotest
+  `groundcover`.
 - The map's view (one finger, pinch) moves while the game lets the map
   scroll and also while it waits for its own animation over the map (its
   watch cursor: changing weapons, a combat starting; on a computer the map

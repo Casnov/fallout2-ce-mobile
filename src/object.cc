@@ -282,6 +282,10 @@ static std::vector<unsigned char> gSeeThroughCover;
 // standing objects to the roofs of the part being redrawn.
 static bool gSeeThroughMarking = false;
 
+// `objectSetCoverRecorded`: [gSeeThroughCover] is kept while not
+// see-through too.
+static bool gObjectsCoverRecorded = false;
+
 // The dude as last drawn while see-through (`objectRenderPreRoof`): its
 // pixels' colors in [gSeeThroughDudeRect], -1 - not the dude's. Kept over
 // the tactical view's tiles and the outlines.
@@ -917,8 +921,9 @@ void _obj_render_pre_roof(Rect* rect, MapElevation elevation)
         }
     }
 
-    // CE: The tactical view: what stands on the ground covers it from now.
-    if (gObjectsSeeThrough) {
+    // CE: The tactical view, the tile markers: what stands on the ground
+    // covers it from now.
+    if (gObjectsSeeThrough || gObjectsCoverRecorded) {
         objectSeeThroughCoverStart(updatedRect);
     }
 
@@ -3104,7 +3109,7 @@ void _intensity_mask_buf_to_buf(unsigned char* src, int srcWidth, int srcHeight,
 
 const unsigned char* objectSeeThroughCover(int* width, int* height, int* pitch)
 {
-    if (!gObjectsSeeThrough || gSeeThroughCover.empty()) {
+    if ((!gObjectsSeeThrough && !gObjectsCoverRecorded) || gSeeThroughCover.empty()) {
         return nullptr;
     }
 
@@ -3225,11 +3230,27 @@ void objectSetSeeThrough(bool seeThrough)
     }
 
     gObjectsSeeThrough = seeThrough;
-    if (!seeThrough) {
+    if (!seeThrough && !gObjectsCoverRecorded) {
         gSeeThroughCover.clear();
         gSeeThroughCover.shrink_to_fit();
         gSeeThroughMarking = false;
     }
+    tileWindowRefresh();
+}
+
+void objectSetCoverRecorded(bool recorded)
+{
+    if (recorded == gObjectsCoverRecorded) {
+        return;
+    }
+
+    gObjectsCoverRecorded = recorded;
+    if (!recorded && !gObjectsSeeThrough) {
+        gSeeThroughCover.clear();
+        gSeeThroughCover.shrink_to_fit();
+        gSeeThroughMarking = false;
+    }
+    // What is shown now gets its cover.
     tileWindowRefresh();
 }
 
