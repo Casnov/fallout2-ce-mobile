@@ -423,6 +423,10 @@ enum DevAutotestAction {
     // Drags the map by ([a], [b]); PASS when the view moved ([c] = 1) or
     // stayed ([c] = 0).
     DEV_AUTOTEST_ACTION_PAN_CHECKED,
+    // Real fingers (SDL events): one drags the map for 40 frames, another
+    // presses HUD element [a] meanwhile (frames 15-21); PASS when the view
+    // followed the first every frame of the press.
+    DEV_AUTOTEST_ACTION_PAN_WITH_UI_PRESS,
     // A script's game_ui_disable ([a] = 1) or game_ui_enable ([a] = 0).
     DEV_AUTOTEST_ACTION_SCRIPT_UI,
     // The scroll limit around the dude on ([a] = 1) or off, as the settings
@@ -1325,6 +1329,15 @@ static int gDevAutotestRoofStartTile = -1;
 static float gDevAutotestPanX = 0.0f;
 static float gDevAutotestPanY = 0.0f;
 static int gDevAutotestPanFrames = 0;
+
+// PAN_WITH_UI_PRESS in progress: its frame (-1 - none), the HUD element's
+// center (fractions of the window), the view's last left / top, frames of
+// the press the view moved in.
+static int gDevAutotestUiPressFrame = -1;
+static float gDevAutotestUiPressX = 0.0f;
+static float gDevAutotestUiPressY = 0.0f;
+static Rect gDevAutotestUiPressView;
+static int gDevAutotestUiPressMoved = 0;
 
 // PERF_LOG: frames so far, the previous log's frame, time and uploads.
 static int gDevAutotestFrames = 0;
@@ -3103,6 +3116,8 @@ static const DevAutotestStep kDevAutotestWeaponPanSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "wp00_map" },
     { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 9, HAND_LEFT, 0, 20, "wp01_smg" },
     { DEV_AUTOTEST_ACTION_PAN_DURING_HAND_SWAP, 150, 60, 2, 90, "wp02_pan_while_swapping" },
+    // The swap button pressed with another finger while one drags the map.
+    { DEV_AUTOTEST_ACTION_PAN_WITH_UI_PRESS, HUD_ELEMENT(HandRight), 0, 0, 90, "wp02b_press_while_dragging" },
     { DEV_AUTOTEST_ACTION_SCRIPT_UI, 1, 0, 0, 10, "wp03_script_scene" },
     { DEV_AUTOTEST_ACTION_PAN_CHECKED, -150, -60, 0, 40, "wp04_pan_in_scene" },
     { DEV_AUTOTEST_ACTION_SCRIPT_UI, 0, 0, 0, 10, "wp05_scene_over" },
@@ -3885,6 +3900,38 @@ void devAutotestTick()
     if (gDevAutotestPanFrames > 0) {
         gDevAutotestPanFrames--;
         worldViewPanBy(gDevAutotestPanX, gDevAutotestPanY);
+    }
+
+    if (gDevAutotestUiPressFrame != -1) {
+        constexpr SDL_FingerID kMapFinger = 8;
+        constexpr SDL_FingerID kUiFinger = 9;
+        constexpr int kPressFrom = 15;
+        constexpr int kPressTo = 21;
+        int frame = gDevAutotestUiPressFrame++;
+        Rect view;
+        worldViewGetVisibleRect(&view);
+        if (frame > kPressFrom && frame <= kPressTo && (view.left != gDevAutotestUiPressView.left || view.top != gDevAutotestUiPressView.top)) {
+            gDevAutotestUiPressMoved++;
+        }
+        gDevAutotestUiPressView = view;
+
+        // Leftwards: the view goes right, into the start map.
+        float x = 0.65f - 0.006f * frame;
+        if (frame == 0) {
+            devAutotestPushFinger(SDL_FINGERDOWN, kMapFinger, x, 0.45f);
+        } else if (frame < 40) {
+            devAutotestPushFinger(SDL_FINGERMOTION, kMapFinger, x, 0.45f);
+        } else {
+            devAutotestPushFinger(SDL_FINGERUP, kMapFinger, x, 0.45f);
+            int frames = kPressTo - kPressFrom;
+            devAutotestLog("  the view moved in %d of the press's %d frames: %s\n", gDevAutotestUiPressMoved, frames, gDevAutotestUiPressMoved == frames ? "PASS" : "FAIL");
+            gDevAutotestUiPressFrame = -1;
+        }
+        if (frame == kPressFrom) {
+            devAutotestPushFinger(SDL_FINGERDOWN, kUiFinger, gDevAutotestUiPressX, gDevAutotestUiPressY);
+        } else if (frame == kPressTo) {
+            devAutotestPushFinger(SDL_FINGERUP, kUiFinger, gDevAutotestUiPressX, gDevAutotestUiPressY);
+        }
     }
 
     if (gDevAutotestTimedName != nullptr && !animationIsBusy(gDude)) {
@@ -4838,6 +4885,20 @@ void devAutotestTick()
             bool beyond = dx >= 480 || dy >= 400;
             devAutotestLog("  view's center %d x %d from the dude, %s: %s\n", dx, dy, step->a != 0 ? "past the limit" : "within it",
                 beyond == (step->a != 0) ? "PASS" : "FAIL");
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_PAN_WITH_UI_PRESS: {
+            int x;
+            int y;
+            if (touchHudGetElementScreenCenter(static_cast<HudElementId>(static_cast<int>(step->a)), &x, &y)) {
+                gDevAutotestUiPressX = static_cast<float>(x) / screenGetWidth();
+                gDevAutotestUiPressY = static_cast<float>(y) / screenGetHeight();
+                gDevAutotestUiPressMoved = 0;
+                gDevAutotestUiPressFrame = 0;
+                devAutotestLog("  a finger drags the map, another presses hud element %d at (%d, %d)\n", static_cast<int>(step->a), x, y);
+            } else {
+                devAutotestLog("  no hud element %d: FAIL\n", static_cast<int>(step->a));
+            }
             break;
         }
         case DEV_AUTOTEST_ACTION_SCRIPT_UI:
