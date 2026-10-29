@@ -237,6 +237,8 @@ enum DevAutotestAction {
     // each disposition: either it goes to a packet of that disposition or
     // it stays where it was (aiSetDisposition, combat_ai.cc).
     DEV_AUTOTEST_ACTION_CHECK_DISPOSITIONS,
+    // The party member of pid `0x01000000 + a` is on AI packet [b].
+    DEV_AUTOTEST_ACTION_CHECK_PARTY_PACKET,
     // A bag (pid `a`) with a thing (pid `c`) in it two hexes east of the
     // dude, a dead critter (pid `b`) with the same thing two hexes
     // south-west, and the thing alone with the game's "no highlight" flag
@@ -3163,6 +3165,19 @@ static const DevAutotestStep kDevAutotestDispositionsSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_DISPOSITIONS, 0, 0, 0, 1, "dp01_rule" },
 };
 
+// Fallout: Sonora's gl_partyai goes on past its write_int (sfall_opcodes.cc)
+// and puts a companion on his own packet when the game loads: Arthur's
+// proto has "Person Tough" (21), his packet is "PARTY ARTUR" (52).
+static const DevAutotestStep kDevAutotestSonoraPartySteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "sp00_map" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 98, 2, ROTATION_SE, 10, "sp01_arthur" },
+    { DEV_AUTOTEST_ACTION_CHECK_PARTY_PACKET, 98, 21, 0, 1, "sp02_proto_packet" },
+    // Slot 10 (Sonora has no automatic quick saves: a quick save asks).
+    { DEV_AUTOTEST_ACTION_SAVE_GAME, 9, 0, 0, 30, "sp03_saved", "sonoraparty" },
+    { DEV_AUTOTEST_ACTION_LOAD_GAME, 9, 0, 0, 90, "sp04_loaded" },
+    { DEV_AUTOTEST_ACTION_CHECK_PARTY_PACKET, 98, 52, 0, 1, "sp05_own_packet" },
+};
+
 // The mobile talk screen's control tab with Dogmeat (RPU's test game): his
 // packets are sorted by name, so berserk is off; aggressive and the custom
 // settings work.
@@ -3483,6 +3498,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "dispositions") == 0) {
         gDevAutotestSteps = kDevAutotestDispositionsSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestDispositionsSteps) / sizeof(kDevAutotestDispositionsSteps[0]);
+    } else if (strcmp(name, "sonoraparty") == 0) {
+        gDevAutotestSteps = kDevAutotestSonoraPartySteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestSonoraPartySteps) / sizeof(kDevAutotestSonoraPartySteps[0]);
     } else if (strcmp(name, "dogmeatcontrol") == 0) {
         gDevAutotestSteps = kDevAutotestDogmeatControlSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestDogmeatControlSteps) / sizeof(kDevAutotestDogmeatControlSteps[0]);
@@ -7142,6 +7160,19 @@ void devAutotestTick()
                     goes.empty() ? "-" : goes.c_str(), stays.empty() ? "-" : stays.c_str());
             }
             devAutotestLog("  %d party members: %s\n", members, failures == 0 ? "PASS" : "FAIL");
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_PARTY_PACKET: {
+            int pid = 0x01000000 | static_cast<int>(step->a);
+            Object* member = nullptr;
+            for (Object* candidate : get_all_party_members_objects(false)) {
+                if (candidate->pid == pid) {
+                    member = candidate;
+                }
+            }
+            int packet = member != nullptr ? member->data.critter.combat.aiPacket : -1;
+            devAutotestLog("  party member pid %d: packet %d, expected %d: %s\n",
+                pid, packet, static_cast<int>(step->b), packet == static_cast<int>(step->b) ? "PASS" : "FAIL");
             break;
         }
         case DEV_AUTOTEST_ACTION_MISSING_SCRIPT: {
