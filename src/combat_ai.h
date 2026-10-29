@@ -91,6 +91,9 @@ void aiSetBurstDisabled(Object* critter, bool disable);
 void aiRemoveBurstDisabled(Object* critter);
 Disposition aiGetDisposition(Object* obj);
 int aiSetDisposition(Object* obj, Disposition disposition);
+// CE: The critter has a packet of that disposition to switch to (see
+// `aiSetDisposition`).
+bool aiCanSetDisposition(Object* obj, Disposition disposition);
 int _caiSetupTeamCombat(Object* attackerTeam, Object* defenderTeam);
 int _caiTeamCombatInit(Object** crittersList, int crittersListLength);
 void _caiTeamCombatExit();

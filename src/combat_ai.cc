@@ -917,8 +917,18 @@ Disposition aiGetDisposition(Object* obj)
     return ai->disposition;
 }
 
-// 0x428354
-int aiSetDisposition(Object* obj, Disposition disposition)
+// CE: The packet `aiSetDisposition` switches the critter to, -1 - none.
+//
+// The original takes `packet_num - (disposition - current)` blindly: it
+// relies on a party member's packets going custom, coward, defensive,
+// aggressive, berserk with decreasing numbers. Where ai.txt is not like that
+// the critter got another critter's packet, and the custom settings then
+// changed that packet for everyone using it: Dogmeat's packets are sorted by
+// name (berserk gave him "Tough Khan"), temporary followers (Karl, Jonny,
+// Lloyd) have generic packets, Sonora's companions have only a custom one.
+// So the critter has to be on a packet of a disposition, and the one it goes
+// to has to be of the requested disposition.
+static int aiGetDispositionPacketNum(Object* obj, Disposition disposition)
 {
     if (obj == nullptr) {
         return -1;
@@ -929,9 +939,36 @@ int aiSetDisposition(Object* obj, Disposition disposition)
     }
 
     AiPacket* ai = aiGetPacket(obj);
-    obj->data.critter.combat.aiPacket = ai->packet_num - (disposition - ai->disposition);
+    if (!dispositionIsValid(ai->disposition)) {
+        return -1;
+    }
+
+    int packetNum = ai->packet_num - (disposition - ai->disposition);
+    for (int index = 0; index < gAiPacketsLength; index++) {
+        if (gAiPackets[index].packet_num == packetNum) {
+            return gAiPackets[index].disposition == disposition ? packetNum : -1;
+        }
+    }
+
+    return -1;
+}
+
+// 0x428354
+int aiSetDisposition(Object* obj, Disposition disposition)
+{
+    int packetNum = aiGetDispositionPacketNum(obj, disposition);
+    if (packetNum == -1) {
+        return -1;
+    }
+
+    obj->data.critter.combat.aiPacket = packetNum;
 
     return 0;
+}
+
+bool aiCanSetDisposition(Object* obj, Disposition disposition)
+{
+    return aiGetDispositionPacketNum(obj, disposition) != -1;
 }
 
 // 0x428398
