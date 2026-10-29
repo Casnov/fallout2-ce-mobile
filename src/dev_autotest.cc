@@ -416,6 +416,21 @@ enum DevAutotestAction {
     // Ends the turn and [c] frames later drags the map by ([a], [b]) while
     // others act.
     DEV_AUTOTEST_ACTION_PAN_DURING_ENEMY_TURN,
+    // Swaps the hands (the dude takes out his weapon) and [c] frames later
+    // drags the map by ([a], [b]); PASS when the view moved and the drag
+    // began while the game waited for the animation (its watch cursor).
+    DEV_AUTOTEST_ACTION_PAN_DURING_HAND_SWAP,
+    // Drags the map by ([a], [b]); PASS when the view moved ([c] = 1) or
+    // stayed ([c] = 0).
+    DEV_AUTOTEST_ACTION_PAN_CHECKED,
+    // A script's game_ui_disable ([a] = 1) or game_ui_enable ([a] = 0).
+    DEV_AUTOTEST_ACTION_SCRIPT_UI,
+    // The scroll limit around the dude on ([a] = 1) or off, as the settings
+    // screen's row sets it.
+    DEV_AUTOTEST_ACTION_SCROLL_LIMIT,
+    // The view's center from the dude (screen pixels); PASS when at the
+    // limit's 480 x 400 or past it ([a] = 1), or within it ([a] = 0).
+    DEV_AUTOTEST_ACTION_CHECK_VIEW_FROM_DUDE,
     // Talks to the first party member, or with `a` the one of pid
     // `0x01000000 + a` (the dialog loop runs inside); he's the party member
     // of the party actions below.
@@ -1272,6 +1287,13 @@ static int gDevAutotestTouchFrame = -1;
 // Frames to wait before the touch starts.
 static int gDevAutotestTouchDelay = 0;
 
+// PAN_DURING_HAND_SWAP / PAN_CHECKED: the view before the drag, whether it
+// should move (-1 - not checked), whether the drag began during the game's
+// wait (-1 - not asked).
+static Rect gDevAutotestPanBefore;
+static int gDevAutotestPanExpectMoved = -1;
+static int gDevAutotestPanBeganWaiting = -1;
+
 // `MUI_TAP_OUTSIDE_WINDOW` tapped the world next to a window.
 static bool gDevAutotestTappedOutside = false;
 
@@ -1365,6 +1387,10 @@ static bool devAutotestTouchTick()
 
     const DevAutotestTouch& touch = gDevAutotestTouch;
     int frame = gDevAutotestTouchFrame++;
+    if (frame == 0 && gDevAutotestPanBeganWaiting == 0) {
+        gDevAutotestPanBeganWaiting = gameMouseGetCursor() == MOUSE_CURSOR_WAIT_WATCH ? 1 : 0;
+        devAutotestLog("  drag begins: the game waiting %d\n", gDevAutotestPanBeganWaiting);
+    }
 
     if (frame == touch.captureFrame) {
         gDevAutotestPendingCapture = touch.captureName;
@@ -3068,6 +3094,31 @@ static const DevAutotestStep kDevAutotestFirstMapSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_LOADED_WORLD, 0, 0, 0, 1, "fm01_world" },
 };
 
+// The map's view moves while the dude takes out his weapon (the game waits
+// for the animation), not while a script holds the game's UI.
+static const DevAutotestStep kDevAutotestWeaponPanSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "wp00_map" },
+    { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 9, HAND_LEFT, 0, 20, "wp01_smg" },
+    { DEV_AUTOTEST_ACTION_PAN_DURING_HAND_SWAP, 150, 60, 2, 90, "wp02_pan_while_swapping" },
+    { DEV_AUTOTEST_ACTION_SCRIPT_UI, 1, 0, 0, 10, "wp03_script_scene" },
+    { DEV_AUTOTEST_ACTION_PAN_CHECKED, -150, -60, 0, 40, "wp04_pan_in_scene" },
+    { DEV_AUTOTEST_ACTION_SCRIPT_UI, 0, 0, 0, 10, "wp05_scene_over" },
+    { DEV_AUTOTEST_ACTION_PAN_CHECKED, -150, -60, 1, 40, "wp06_pan_again" },
+};
+
+// The scroll limit around the dude: on, the view stops a screen from him;
+// off (the phone's default, the settings' row), it goes past. Run with
+// --dev-map=arvillag.map: the start map's edges come before the limit.
+static const DevAutotestStep kDevAutotestScrollLimitSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "sl00_map" },
+    { DEV_AUTOTEST_ACTION_SCROLL_LIMIT, 1, 0, 0, 5, "sl01_limit_on" },
+    { DEV_AUTOTEST_ACTION_PAN_FRAMES, 0, -25, 60, 70, "sl02_pan_far" },
+    { DEV_AUTOTEST_ACTION_CHECK_VIEW_FROM_DUDE, 0, 0, 0, 1, "sl03_stopped" },
+    { DEV_AUTOTEST_ACTION_SCROLL_LIMIT, 0, 0, 0, 5, "sl04_limit_off" },
+    { DEV_AUTOTEST_ACTION_PAN_FRAMES, 0, -25, 60, 70, "sl05_pan_far" },
+    { DEV_AUTOTEST_ACTION_CHECK_VIEW_FROM_DUDE, 1, 0, 0, 1, "sl06_past" },
+};
+
 // A script whose file isn't there doesn't take the game down
 // (alexbatalov/fallout2-ce#396).
 static const DevAutotestStep kDevAutotestMissingScriptSteps[] = {
@@ -3360,6 +3411,12 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
+    } else if (strcmp(name, "scrolllimit") == 0) {
+        gDevAutotestSteps = kDevAutotestScrollLimitSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestScrollLimitSteps) / sizeof(kDevAutotestScrollLimitSteps[0]);
+    } else if (strcmp(name, "weaponpan") == 0) {
+        gDevAutotestSteps = kDevAutotestWeaponPanSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestWeaponPanSteps) / sizeof(kDevAutotestWeaponPanSteps[0]);
     } else if (strcmp(name, "firstmap") == 0) {
         gDevAutotestSteps = kDevAutotestFirstMapSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestFirstMapSteps) / sizeof(kDevAutotestFirstMapSteps[0]);
@@ -4712,6 +4769,52 @@ void devAutotestTick()
             gDevAutotestTouchDelay = static_cast<int>(step->c);
             break;
         }
+        case DEV_AUTOTEST_ACTION_PAN_DURING_HAND_SWAP:
+        case DEV_AUTOTEST_ACTION_PAN_CHECKED: {
+            worldViewGetVisibleRect(&gDevAutotestPanBefore);
+            bool swap = step->action == DEV_AUTOTEST_ACTION_PAN_DURING_HAND_SWAP;
+            gDevAutotestPanExpectMoved = swap ? 1 : static_cast<int>(step->c);
+            gDevAutotestPanBeganWaiting = swap ? 0 : -1;
+            if (swap) {
+                gameCommandPost(GameCommandType::SwapHands);
+            }
+            float x = static_cast<float>(screenGetWidth() / 2);
+            float y = static_cast<float>(screenGetVisibleHeight() / 2);
+            devAutotestStartTouch(x, y, x + step->a, y + step->b, 0, 15);
+            gDevAutotestTouchDelay = swap ? static_cast<int>(step->c) : 0;
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_SCROLL_LIMIT:
+            if (step->a != 0) {
+                tileScrollLimitingEnable();
+            } else {
+                tileScrollLimitingDisable();
+            }
+            devAutotestLog("  scroll limit around the dude %d\n", tileScrollLimitingIsEnabled() ? 1 : 0);
+            break;
+        case DEV_AUTOTEST_ACTION_CHECK_VIEW_FROM_DUDE: {
+            int centerX;
+            int centerY;
+            int dudeX;
+            int dudeY;
+            tileToScreenXY(gCenterTile, &centerX, &centerY);
+            tileToScreenXY(gDude->tile, &dudeX, &dudeY);
+            int dx = abs(centerX - dudeX);
+            int dy = abs(centerY - dudeY);
+            // tileSetCenter's limit: a step that far is refused.
+            bool beyond = dx >= 480 || dy >= 400;
+            devAutotestLog("  view's center %d x %d from the dude, %s: %s\n", dx, dy, step->a != 0 ? "past the limit" : "within it",
+                beyond == (step->a != 0) ? "PASS" : "FAIL");
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_SCRIPT_UI:
+            if (step->a != 0) {
+                gameUiDisableByScript();
+            } else {
+                gameUiEnable();
+            }
+            devAutotestLog("  game UI disabled by a script %d\n", gameUiIsDisabledByScript() ? 1 : 0);
+            break;
         case DEV_AUTOTEST_ACTION_TOUCH_DRAG: {
             float x = static_cast<float>(screenGetWidth() / 2);
             float y = static_cast<float>(screenGetVisibleHeight() / 2);
@@ -7289,6 +7392,13 @@ void devAutotestPump()
         worldViewGetVisibleRect(&visibleRect);
         devAutotestLog("  after touch: visible world rect (%d, %d) - (%d, %d)%s\n", visibleRect.left, visibleRect.top, visibleRect.right, visibleRect.bottom,
             isInCombat() && _combat_whose_turn() != gDude ? ", others' turn" : "");
+        if (gDevAutotestPanExpectMoved != -1) {
+            bool moved = visibleRect.left != gDevAutotestPanBefore.left || visibleRect.top != gDevAutotestPanBefore.top;
+            bool ok = moved == (gDevAutotestPanExpectMoved == 1) && gDevAutotestPanBeganWaiting != 0;
+            devAutotestLog("  view %s, %s: %s\n", moved ? "moved" : "stayed", gDevAutotestPanExpectMoved == 1 ? "should move" : "should stay", ok ? "PASS" : "FAIL");
+            gDevAutotestPanExpectMoved = -1;
+            gDevAutotestPanBeganWaiting = -1;
+        }
     }
 }
 
