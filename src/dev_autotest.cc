@@ -220,8 +220,8 @@ enum DevAutotestAction {
     // title; 3 shows them again.
     DEV_AUTOTEST_ACTION_WORLDMAP_NAMES,
     // Corpses, containers and items within `a` hexes of the dude and their
-    // outlines; b = 1: checks corpses and containers with things in them
-    // are outlined.
+    // outlines; b = 1: checks corpses and containers with things in them and
+    // "no highlight" things that can be picked up are outlined.
     DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT,
     // The game event checks (`_scriptsCheckGameEvents`) `a` times: no
     // Arroyo dream asked for, GVAR_TOWN_REP_ARROYO and the Arroyo areas as
@@ -234,8 +234,9 @@ enum DevAutotestAction {
     // the game goes on, as in the original.
     DEV_AUTOTEST_ACTION_MISSING_SCRIPT,
     // A bag (pid `a`) with a thing (pid `c`) in it two hexes east of the
-    // dude, and a dead critter (pid `b`) with the same thing two hexes
-    // south-west.
+    // dude, a dead critter (pid `b`) with the same thing two hexes
+    // south-west, and the thing alone with the game's "no highlight" flag
+    // (a mod's hidden stash) two hexes north-east.
     DEV_AUTOTEST_ACTION_PLACE_STASH,
     DEV_AUTOTEST_ACTION_WORLDMAP_DRAG,
     DEV_AUTOTEST_ACTION_WORLDMAP_TAP,
@@ -3042,7 +3043,8 @@ static const DevAutotestStep kDevAutotestWorldmapNamesSteps[] = {
 
 // The HUD's highlight on the start map: corpses and containers next to the
 // dude outlined whatever the mod's highlighting settings (Fallout Et Tu
-// turns them off), as the port's settings say.
+// turns them off), and a hidden thing that can be picked up, as the port's
+// settings say.
 static const DevAutotestStep kDevAutotestHighlightAllSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "hl00_start" },
     // A bag with a stimpak, a dead Sulik with one.
@@ -6811,6 +6813,11 @@ void devAutotestTick()
                 itemAdd(critter, thing, 1);
                 devAutotestLog("  dead critter pid %d at tile %d\n", static_cast<int>(step->b), critter->tile);
             }
+            if (objectCreateWithProtoId(&thing, ProtoId(static_cast<int>(step->c))) == 0) {
+                objectSetLocation(thing, tileGetTileInDirection(gDude->tile, ROTATION_NE, 2), gDude->elevation, nullptr);
+                thing->flags |= OBJECT_NO_HIGHLIGHT;
+                devAutotestLog("  hidden thing pid %d at tile %d\n", static_cast<int>(step->c), thing->tile);
+            }
             tileWindowRefresh();
             break;
         }
@@ -6883,16 +6890,17 @@ void devAutotestTick()
                     continue;
                 }
                 bool full = (corpse || container) && obj->data.inventory.length > 0;
+                bool hidden = !corpse && !container && (obj->flags & OBJECT_NO_HIGHLIGHT) != 0 && (obj->flags & OBJECT_HIDDEN) == 0 && _proto_action_can_pickup(ProtoId(obj));
                 devAutotestLog("  %s %08x at tile %d: items %d, no highlight %d, outline %d\n", corpse ? "corpse" : container ? "container" : "item",
                     ProtoId(obj).pid(), obj->tile, (corpse || container) ? obj->data.inventory.length : 0, (obj->flags & OBJECT_NO_HIGHLIGHT) != 0 ? 1 : 0, obj->outline);
-                if (full) {
+                if (full || hidden) {
                     wanted++;
                     outlined += obj->outline != OUTLINE_TYPE_NONE ? 1 : 0;
                 }
             }
             if (step->b == 1) {
                 bool ok = wanted > 0 && outlined == wanted;
-                devAutotestLog("  corpses and containers with things %d, outlined %d: %s\n", wanted, outlined, ok ? "PASS" : "FAIL");
+                devAutotestLog("  corpses and containers with things, hidden things %d, outlined %d: %s\n", wanted, outlined, ok ? "PASS" : "FAIL");
             }
             break;
         }
