@@ -51,6 +51,18 @@ test('mods-only install inherits original DAT/music and replaces the whole mod s
   assert.equal(third.files.some(file => /rpu\.dat|ddraw\.ini/.test(file.path)),false);
 });
 
+test('a master.dat folder replaces a master.dat file and the other way',async () => {
+  // Fallout 2 replaced by Fallout: Nevada 1.00 (master.dat a folder), then back.
+  const opts = fixture();
+  await importGameZip(await zip(base),opts);
+  const nevada = await importGameZip(await zip([['Fallout_Nevada/master.dat/art/intrface/mainmenu.frm',enc.encode('art')],['Fallout_Nevada/critter.dat',enc.encode('critter')],['Fallout_Nevada/fallout2.cfg',enc.encode('[system]\nmaster_dat=master.dat\n')]]),opts);
+  assert.equal(nevada.files.some(file => file.path === 'master.dat'),false);
+  assert.ok(nevada.files.some(file => file.path === 'master.dat/art/intrface/mainmenu.frm'));
+  const back = await importGameZip(await zip(base),opts);
+  assert.ok(back.files.some(file => file.path === 'master.dat'));
+  assert.equal(back.files.some(file => file.path.startsWith('master.dat/')),false);
+});
+
 test('mods require a base and incomplete DAT pairs are never treated as a mod overlay',async () => {
   const opts = fixture();
   await assert.rejects(prepareGameZip(await zip([['mods/rpu.dat',enc.encode('rpu')]]),opts),error => importErrorInfo(error).code === 'base_required');

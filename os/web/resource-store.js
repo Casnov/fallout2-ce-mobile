@@ -39,8 +39,11 @@ function filesOf(files) {
       if (seen.has(parts.slice(0,i).join('/'))) throw new Error('File/directory resource collision');
     }
   }
-  if (bytes > 10 * 1024 ** 3 || !['master.dat','critter.dat'].every(key =>
-    entries.some(file => resourcePath(file.path) === key && file.size > 0))) throw new Error('Incomplete resource manifest');
+  // master.dat and critter.dat: files, or folders (Fallout: Nevada 1.00's master.dat).
+  if (bytes > 10 * 1024 ** 3 || !['master.dat','critter.dat'].every(key => entries.some(file => {
+    const path = resourcePath(file.path);
+    return (path === key && file.size > 0) || path.startsWith(key + '/');
+  }))) throw new Error('Incomplete resource manifest');
   return entries;
 }
 function checkFormat(value) {
