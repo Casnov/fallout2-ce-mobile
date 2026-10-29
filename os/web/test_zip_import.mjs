@@ -237,3 +237,49 @@ test('retryable collection failure does not block reading a validated active ins
   assert.deepEqual(await store.read(active,active.files[0],0,base[0][1].length),base[0][1]);
   await store.close(); await expectOld(opts,active);
 });
+
+// Fallout 1.5: Resurrection as its installer leaves it: a subfolder of
+// Fallout 2 whose ddraw.ini names its own config, the mod's music in
+// Fallout 2's sound\music (as Android's GameFilesTest).
+const withResurrection = () => [...base.map(([name,data]) => ['Fallout 2/' + name,data]),
+  ['Fallout 2/fallout2.cfg',bytes('[system]\nlanguage=russian\n')],
+  ['Fallout 2/sound/music/25albuq.acm',bytes('mod music')],
+  ['Fallout 2/data/sound/music/02mstrlr.acm',bytes('fallout 2 music')],
+  ['Fallout 2/Resurrection/ddraw.ini',bytes('[Main]\r\nStartingMap=nh_cave.map\r\n[Misc]\r\nConfigFile=fores.cfg\r\n')],
+  ['Fallout 2/Resurrection/fores.cfg',bytes('[sound]\r\nmusic_path1=..\\data\\sound\\music\\\r\nmusic_path2=..\\sound\\music\\\r\n[system]\r\ncritter_dat=..\\critter.dat\r\nlanguage=english\r\nmaster_dat=..\\master.dat\r\n')],
+  ['Fallout 2/Resurrection/fores.dat',bytes('mod data')],
+  ['Fallout 2/Resurrection/data/sound/music/own.acm',bytes('own music')]];
+
+test('a mod in Fallout 2\'s subfolder is a choice; chosen, it gets Fallout 2\'s files and the music its config names',async () => {
+  const opts = fixture(), zip = await archive(withResurrection());
+  const asked = await prepareGameZip(zip,opts);
+  assert.deepEqual(asked.summary.choices,['Fallout 2/','Fallout 2/Resurrection/']);
+  await assert.rejects(asked.install(),error => importErrorInfo(error).code === 'stale_plan');
+  await asked.dispose();
+
+  const plan = await prepareGameZip(zip,{...opts,choice:'Fallout 2/Resurrection/'});
+  assert.equal(plan.summary.root,'Fallout 2/Resurrection/');
+  assert.equal(plan.summary.description.language,'english');
+  const manifest = await plan.install();
+  const paths = manifest.files.map(file => file.path).sort();
+  assert.deepEqual(paths,['critter.dat','data/sound/music/25albuq.acm','data/sound/music/own.acm','ddraw.ini','fores.cfg','fores.dat','master.dat','sound/music/02mstrlr.acm']);
+  const store = await opts.storeFactory();
+  try {
+    const active = await store.active(), file = active.files.find(item => item.path === 'master.dat');
+    assert.deepEqual(await store.read(active,file,0,file.size),base[0][1]);
+  } finally { await store.close(); }
+});
+
+test('Fallout 2 chosen leaves its mod\'s folder out',async () => {
+  const opts = fixture(), plan = await prepareGameZip(await archive(withResurrection()),{...opts,choice:'Fallout 2/'});
+  const manifest = await plan.install();
+  assert.equal(manifest.files.some(file => /resurrection|fores/i.test(file.path)),false);
+  assert.ok(manifest.files.some(file => file.path === 'sound/music/25albuq.acm'));
+});
+
+test('master.dat may be a folder (Fallout: Nevada 1.00)',async () => {
+  const entry = (filename,extra = {}) => ({filename,uncompressedSize:1,compressionMethod:0,externalFileAttributes:0,...extra});
+  const files = planArchive(['Fallout_Nevada/master.dat/art/intrface/mainmenu.frm','Fallout_Nevada/master.dat/maps/vault.map',
+    'Fallout_Nevada/critter.dat','Fallout_Nevada/fallout2.cfg'].map(path => entry(path)));
+  assert.deepEqual(files.map(file => file.path).sort(),['critter.dat','fallout2.cfg','master.dat/art/intrface/mainmenu.frm','master.dat/maps/vault.map']);
+});

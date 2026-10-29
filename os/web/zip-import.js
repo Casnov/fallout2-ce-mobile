@@ -1,7 +1,7 @@
 import './vendor/zipjs/zip.min.js';
 import {BLOCK_SIZE, blockWriter, blockBatch, checkCancelled} from './storage-common.js';
 import {openResourceStore} from './resource-store.js';
-import {originalFile,describeGame,decodeConfig} from './game-config.js';
+import {originalFile,describeGame,decodeConfig,configName,configValue,CONFIG} from './game-config.js';
 const {ZipReader, BlobReader, configure} = globalThis.zip;
 configure({useWebWorkers:false,chunkSize:BLOCK_SIZE});
 export const ZIP_LIMITS = Object.freeze({entries:50000,bytes:10 * 1024 ** 3,
@@ -70,17 +70,47 @@ export function zipFiles(entries) {
   }
   return files;
 }
-function archivePlan(entries,previous = null) {
-  const files = zipFiles(entries);
-  // Same rule as Android: a unique complete game at the shallowest level.
+// The source's folders (lower case, ending with "/"; "" for its top).
+function folderKeys(files) {
+  const folders = new Set(['']);
+  for (const file of files) {
+    const parts = file.key.split('/');
+    for (let index = 1; index < parts.length; index++) folders.add(parts.slice(0,index).join('/') + '/');
+  }
+  return folders;
+}
+// [key]'s folder ("a/b/") in the case [file] has it.
+const folderPath = (file,key) => file.path.split('/').slice(0,key.split('/').filter(Boolean).length).join('/') + (key ? '/' : '');
+// [key] (lower case) is a file or a folder of the source: master.dat and
+// critter.dat may be folders (CE opens both).
+const present = (keys,folders,key) => keys.has(key) || folders.has(key + '/');
+// The files at [key]: the file, or all in the folder, with their paths from it.
+function filesAt(files,key) {
+  const file = files.find(item => item.key === key);
+  if (file) return [{file,rest:''}];
+  return files.filter(item => item.key.startsWith(key + '/')).map(item => ({file:item,rest:item.path.slice(key.length + 1)}));
+}
+// [value], a config's relative path, from [folder] (lower case): null for a
+// full path or one out of the source.
+function resolveIn(folder,value) {
+  const path = value.trim().replaceAll('\\','/');
+  if (!path || path.includes(':') || path.startsWith('/')) return null;
+  const parts = folder.split('/').filter(Boolean);
+  for (const part of path.split('/')) {
+    if (part === '..') { if (!parts.length) return null; parts.pop(); }
+    else if (part && part !== '.') parts.push(part.toLowerCase());
+  }
+  return parts.join('/');
+}
+// Same rule as Android: a unique complete game at the shallowest level.
+function gameRoot(files,previous) {
   // Set membership avoids a quadratic scan on an adversarial directory.
-  const keys = new Set(files.map(file => file.key));
-  const roots = files.filter(file => file.key === 'master.dat' || file.key.endsWith('/master.dat'))
-    .filter(file => keys.has(file.key.slice(0,-10) + 'critter.dat'))
-    .map(file => ({path:file.path.slice(0,-10),key:file.key.slice(0,-10),depth:file.path.split('/').length - 1}));
+  const keys = new Set(files.map(file => file.key)), folders = folderKeys(files);
+  const roots = [...folders].filter(folder => present(keys,folders,folder + 'master.dat') && present(keys,folders,folder + 'critter.dat'))
+    .map(key => ({path:folderPath(files.find(file => file.key.startsWith(key)),key),key,depth:key.split('/').filter(Boolean).length}));
   let modsOnly = false;
   if (!roots.length) {
-    if (files.some(file => /(^|\/)(master|critter)\.dat$/.test(file.key))) invalid('missing_game','Incomplete original DAT pair');
+    if (files.some(file => /(^|\/)(master|critter)\.dat(\/|$)/.test(file.key))) invalid('missing_game','Incomplete original DAT pair');
     const candidates = new Map();
     for (const file of files) {
       let root;
@@ -98,22 +128,69 @@ function archivePlan(entries,previous = null) {
   const shallow = roots.filter(root => root.depth === depth);
   if (!shallow.length) invalid('missing_game','ZIP must contain master.dat and critter.dat together');
   if (shallow.length !== 1) invalid('ambiguous_root','Several complete game folders at the same level');
-  const root = shallow[0], selected = [];
-  for (const file of files) {
-    if (!file.key.startsWith(root.key)) continue;
-    const path = file.path.split('/').slice(root.depth).join('/');
-    if (skipGameFile(path)) continue;
+  return {root:shallow[0],modsOnly};
+}
+// Folders under [root] whose config (`configName` of their ddraw.ini) names
+// master.dat and critter.dat outside them, both in the source (a mod in
+// Fallout 2's subfolder: Fallout Et Tu, Fallout 1.5: Resurrection). Each
+// gets those files and the music folders its config names outside (as
+// Resurrection keeps its own in Fallout 2's sound\music), at the paths
+// fixGameConfig gives them; the mod's own files win. As Android's
+// GameImport.findLinked.
+async function linkedGames(files,root,read) {
+  const keys = new Set(files.map(file => file.key)), folders = folderKeys(files), linked = new Map();
+  for (const folder of folders) {
+    if (folder === root.key || !folder.startsWith(root.key)) continue;
+    const ddraw = files.find(file => file.key === folder + 'ddraw.ini');
+    const name = configName(ddraw ? await read(ddraw) : ''), config = files.find(file => file.key === folder + name.toLowerCase());
+    if (!config) continue;
+    const text = await read(config), outside = [], mapped = new Set();
+    let dats = true;
+    for (const [key,target] of [['master_dat','master.dat'],['critter_dat','critter.dat']]) {
+      const value = configValue(text,'system',key), path = value ? resolveIn(folder,value) : null;
+      if (!path || path.startsWith(folder) || !present(keys,folders,path)) { dats = false; break; }
+      for (const {file,rest} of filesAt(files,path)) { outside.push({file,path:rest ? target + '/' + rest : target}); mapped.add(file.key); }
+    }
+    if (!dats) continue;
+    const own = new Set(files.filter(file => file.key.startsWith(folder)).map(file => file.key.slice(folder.length)));
+    for (const [key,target] of [['music_path1','sound/music/'],['music_path2','data/sound/music/']]) {
+      const value = configValue(text,'sound',key), path = value ? resolveIn(folder,value) : null;
+      if (!path || (path + '/').startsWith(folder)) continue;
+      for (const {file,rest} of filesAt(files,path)) {
+        if (rest && !mapped.has(file.key) && !own.has((target + rest).toLowerCase())) { outside.push({file,path:target + rest}); mapped.add(file.key); }
+      }
+    }
+    linked.set(folder,{path:folderPath(config,folder),key:folder,depth:folder.split('/').filter(Boolean).length,outside});
+  }
+  return linked;
+}
+// [options.chosen]: a mod of `linkedGames` ([options.linked]) the player
+// chose, else Fallout 2's folder itself (its mods' folders left out).
+// [options.previousConfig]: the installed game's config, kept with its
+// originals when only mods come.
+function archivePlan(entries,previous = null,{linked = new Map(),chosen = null,previousConfig = CONFIG} = {}) {
+  const files = zipFiles(entries);
+  const found = gameRoot(files,previous), mod = chosen !== null ? linked.get(chosen.toLowerCase()) : null;
+  const root = mod || found.root, modsOnly = found.modsOnly, selected = [], selectedKeys = new Set();
+  const add = (file,path) => {
     if (encoder.encode(path).length > ZIP_LIMITS.pathBytes || path.split('/').length > ZIP_LIMITS.depth) {
       invalid('limit','Game path exceeds the engine limit: ' + path);
     }
-    selected.push({...file,path});
+    if (!selectedKeys.has(path.toLowerCase())) { selectedKeys.add(path.toLowerCase()); selected.push({...file,path}); }
+  };
+  for (const file of files) {
+    if (!file.key.startsWith(root.key)) continue;
+    if (!mod && [...linked.keys()].some(folder => file.key.startsWith(folder))) continue;
+    const path = file.path.split('/').slice(root.depth).join('/');
+    if (skipGameFile(path)) continue;
+    add(file,path);
   }
+  for (const {file,path} of mod ? mod.outside : []) add(file,path);
   if (selected.some(file => ['master.dat','critter.dat'].includes(file.path.toLowerCase()) && !file.size)) {
     invalid('missing_game','Required game DAT is empty');
   }
   if (!selected.length) invalid('missing_game','No game files selected');
-  const keysSelected = new Set(selected.map(file => file.path.toLowerCase()));
-  const kept = modsOnly ? previous.files.filter(file => (originalFile(file.path) || file.path.toLowerCase() === 'fallout2.cfg') && !keysSelected.has(file.path.toLowerCase())) : [];
+  const kept = modsOnly ? previous.files.filter(file => (originalFile(file.path) || file.path.toLowerCase() === previousConfig.toLowerCase()) && !selectedKeys.has(file.path.toLowerCase())) : [];
   return {files:selected,kept,modsOnly,root:root.path,ignored:files.length - selected.length,total:selected.reduce((sum,file) => sum + file.size,0)};
 }
 export const planArchive = entries => archivePlan(entries).files;
@@ -162,7 +239,10 @@ export async function readZipFile(item,max,signal) {
   await item.entry.getData(writer.stream,{signal,checkCrc32:true,checkOverlappingEntry:true,strictness:'strict',checkLocalFilename:true});
   return data;
 }
-export async function prepareGameZip(file,{signal,storeFactory = openResourceStore,
+// [choice]: with Fallout 2 and mods in its subfolders (`linkedGames`), the
+// root the player chose of the summary's `choices`; without it such an
+// archive gives only the choices.
+export async function prepareGameZip(file,{signal,choice = null,storeFactory = openResourceStore,
   estimate = () => globalThis.navigator?.storage?.estimate?.()} = {}) {
   const started = performance.now(), archive = await openGameArchive(file,{signal});
   const dispose = archive.dispose;
@@ -173,16 +253,29 @@ export async function prepareGameZip(file,{signal,storeFactory = openResourceSto
     try { previous = await store.active(); space = await estimate(); }
     finally { await store.close(); }
     checkCancelled(signal);
-    const plan = archivePlan(archive.entries,previous);
-    const config = plan.files.find(file => file.path.toLowerCase() === 'fallout2.cfg');
-    let configText = config ? decodeConfig(await readZipFile(config,1024 ** 2,signal)) : '';
+    const readText = async item => decodeConfig(await readZipFile(item,1024 ** 2,signal));
+    const readPrevious = async item => {
+      const source = await storeFactory();
+      try { return decodeConfig(await source.read(previous,item,0,Math.min(item.size,1024 ** 2))); }
+      finally { await source.close(); }
+    };
+    const previousDdraw = previous?.files.find(item => item.path.toLowerCase() === 'ddraw.ini');
+    const previousConfig = configName(previousDdraw ? await readPrevious(previousDdraw) : '');
+    const found = gameRoot(archive.files,previous);
+    const linked = found.modsOnly ? new Map() : await linkedGames(archive.files,found.root,readText);
+    if (linked.size && choice === null) {
+      const choices = [found.root.path,...[...linked.values()].map(mod => mod.path).sort()];
+      return {summary:Object.freeze({token:crypto.randomUUID(),choices}),dispose,
+        async install() { invalid('stale_plan','Choose which game to install first'); }};
+    }
+    const plan = archivePlan(archive.entries,previous,{linked,chosen:choice,previousConfig});
+    const ddraw = plan.files.find(item => item.path.toLowerCase() === 'ddraw.ini');
+    const name = plan.modsOnly && !ddraw ? previousConfig : configName(ddraw ? await readText(ddraw) : '');
+    const config = plan.files.find(item => item.path.toLowerCase() === name.toLowerCase());
+    let configText = config ? await readText(config) : '';
     if (!config && plan.modsOnly) {
-      const oldConfig = previous.files.find(file => file.path.toLowerCase() === 'fallout2.cfg');
-      if (oldConfig) {
-        const source = await storeFactory();
-        try { configText = decodeConfig(await source.read(previous,oldConfig,0,Math.min(oldConfig.size,1024 ** 2))); }
-        finally { await source.close(); }
-      }
+      const oldConfig = previous.files.find(item => item.path.toLowerCase() === previousConfig.toLowerCase());
+      if (oldConfig) configText = await readPrevious(oldConfig);
     }
     const composition = [...plan.kept,...plan.files.map(({path,size}) => ({path,size}))];
     const description = describeGame(composition,configText);

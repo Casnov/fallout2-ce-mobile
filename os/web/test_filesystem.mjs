@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {developmentFiles, isDevelopmentHost} from './filesystem.js';
+import {gameConfigPath} from './working-files.js';
 
 test('development adapter accepts only loopback and private IPv4 hosts', () => {
   for (const host of ['localhost', '[::1]', '127.0.0.1', '127.0.0.2', '10.1.2.3', '172.16.0.1', '172.31.255.254', '192.168.3.6']) {
@@ -40,4 +41,15 @@ test('network adapter remains opt-in and keeps all reads under the session path'
     globalThis.window = previousWindow;
     globalThis.fetch = previousFetch;
   }
+});
+
+test('the game\'s config is the one ddraw.ini names, in the case the game has it', () => {
+  const fake = files => ({
+    analyzePath:() => ({exists:true}),
+    readdir:() => Object.keys(files),
+    readFile:path => new TextEncoder().encode(files[path.split('/').at(-1)]),
+  });
+  assert.equal(gameConfigPath(fake({'master.dat':'', 'fallout2.cfg':''}), '/game'), 'fallout2.cfg');
+  assert.equal(gameConfigPath(fake({'DDRAW.INI':'[Misc]\r\nConfigFile=fores.cfg\r\n', 'Fores.cfg':''}), '/game'), 'Fores.cfg');
+  assert.equal(gameConfigPath(fake({'ddraw.ini':'[Misc]\nConfigFile=..\\other.cfg\n'}), '/game'), 'fallout2.cfg');
 });

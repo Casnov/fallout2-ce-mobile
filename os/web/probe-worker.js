@@ -44,7 +44,7 @@ self.onmessage = async ({data}) => {
     switch (data.type) {
       case 'inspect':
         await disposePlan();
-        prepared = await prepareGameZip(data.file,{signal:controller.signal});
+        prepared = await prepareGameZip(data.file,{signal:controller.signal,choice:data.choice ?? null});
         active = await activeSnapshot();
         break;
       case 'install': {

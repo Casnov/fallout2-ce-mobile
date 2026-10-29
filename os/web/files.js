@@ -117,6 +117,17 @@ export function createFilesManager({root = document, mode = null, resources = nu
       buttons(!plan.addError && plan.added ? [n('saves_add'),() => send('install-saves',{token:plan.token})] : null,
         !plan.replaceError ? [n('saves_replace_all'),confirmReplace] : null);
       back(() => send('discard'));
+    } else if (plan.choices) {
+      // Fallout 2 and a mod in its subfolder that uses its files (Android's
+      // ImportActivity.showChoice): which one to install. More mods than one:
+      // the archive with one of them.
+      if (plan.choices.length !== 2) {
+        show(labels.title,errors.ambiguous_root); buttons([t('try_again'),() => send('discard')],null); return;
+      }
+      const [base,mod] = plan.choices, name = mod.replace(/\/$/,'').split('/').at(-1);
+      show(labels.title,t('import_choose_game',name));
+      buttons([name,() => send('inspect',{file,choice:mod})],[t('fallout2'),() => send('inspect',{file,choice:base})]);
+      back(() => send('discard'));
     } else {
       const game = plan.description, delta = plan.changes;
       show(labels.title,n('import_found'),

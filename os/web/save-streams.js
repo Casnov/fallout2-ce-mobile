@@ -6,7 +6,7 @@ import {temporaryExport} from './opfs-export.js';
 import {BLOCK_SIZE,checkCancelled} from './storage-common.js';
 import {ImportError,pathInZip} from './zip-import.js';
 import {slotName,slotNumber,saveIdentity,parseRecords,recordText,quickRange} from './save-format.js';
-import {configValue,decodeConfig} from './game-config.js';
+import {configValue,decodeConfig,configName} from './game-config.js';
 const encode = text => new TextEncoder().encode(text), decode = bytes => new TextDecoder().decode(bytes);
 const fail = (code,message) => { throw new ImportError(code,message); };
 const input = bytes => ({size:bytes.length,read:async (at,n) => bytes.subarray(at,at + n)});
@@ -19,13 +19,17 @@ async function textFile(store,path,{job,root = 'root',limit = 16 * 1024 ** 2} = 
   for (let at = 0; at < bytes.length; at += BLOCK_SIZE) bytes.set(await store.read(node.content,at,Math.min(BLOCK_SIZE,bytes.length - at)),at);
   return decode(bytes);
 }
+// The installed game's config (`configName` of its ddraw.ini) and ddraw.ini:
+// the player's saved copies, else the game's own.
 async function gameConfigs(owner,active,store) {
-  return Promise.all(['fallout2.cfg','ddraw.ini'].map(async path => {
+  const read = async path => {
     const saved = await textFile(store,'settings/' + path,{limit:1024 ** 2}); if (saved) return saved;
-    const file = active?.files.find(f => f.path.toLowerCase() === path);
+    const file = active?.files.find(f => f.path.toLowerCase() === path.toLowerCase());
     if (!file) return ''; if (file.size > 1024 ** 2) fail('limit','Unexpectedly large game configuration');
     return decodeConfig(await owner.read(active,file,0,file.size));
-  }));
+  };
+  const ddraw = await read('ddraw.ini');
+  return [await read(configName(ddraw)),ddraw];
 }
 async function installed(store) {
   const root = await store.resolve('savegame'), slots = new Map(), occupied = new Set();
@@ -73,7 +77,8 @@ export async function prepareSaveZip(file,{signal,storeFactory = openResourceSto
       const match = /^(.*?)(slot\d+)\/(.+)$/i.exec(path), slot = match && slotNumber(match[2]);
       const relative = match?.[3];
       const save = slot && !entry.directory && lower.startsWith(hint) && !relative.split('/').some(p => p.startsWith('.')) && !/(^|\/)ce-meta\.txt$/i.test(relative);
-      const metadata = !entry.directory && /(^|\/)(fallout2-saves\.txt|fallout2\.cfg|ddraw\.ini)$/.test(lower);
+      // Any .cfg: ddraw.ini may name the game's config (`configName`).
+      const metadata = !entry.directory && /(^|\/)(fallout2-saves\.txt|[^/]+\.cfg|ddraw\.ini)$/.test(lower);
       if (!save && !metadata) continue; // Reader still drains and CRC-checks it.
       const result = await store.putStream(scan,path,entry.chunks(),{root:scanRoot,signal,limit:metadata ? 16 * 1024 ** 2 : Number.MAX_SAFE_INTEGER});
       bytes += result.node.size; extractedFiles++;
@@ -92,7 +97,8 @@ export async function prepareSaveZip(file,{signal,storeFactory = openResourceSto
     const found = shallow[0], parent = found.root.replace(/[^/]+\/$/,''), current = await installed(store);
     const info = await textFile(store,found.root + 'fallout2-saves.txt',{job:scan,root:scanRoot}) || await textFile(store,parent + 'fallout2-saves.txt',{job:scan,root:scanRoot});
     const sourceRecords = parseRecords(info), [first,end] = quickRange(...await gameConfigs(owner,active,store));
-    const sourceQuick = quickRange(await textFile(store,parent + 'fallout2.cfg',{job:scan,root:scanRoot}),await textFile(store,parent + 'ddraw.ini',{job:scan,root:scanRoot}));
+    const sourceDdraw = await textFile(store,parent + 'ddraw.ini',{job:scan,root:scanRoot});
+    const sourceQuick = quickRange(await textFile(store,parent + configName(sourceDdraw),{job:scan,root:scanRoot}),sourceDdraw);
     const ids = new Set([...current.slots.values()].map(s => s.id)), saves = [...found.slots.values()], unordered = [];
     const currentComposition = (await textFile(store,'port/resource-installation.txt')).trim() === active.run
       ? (await textFile(store,'port/game-composition.txt')).trim() : '';
@@ -213,5 +219,6 @@ async function writeExport(owner,store,{signal,progress = () => {},temporary = t
 }
 export async function launcherFont({name = USER_DATABASE} = {}) {
   const {userSettingText} = await import('./user-report.js');
-  return configValue(await userSettingText('settings/fallout2.cfg',{name}),'touch','font') === '1' ? 1 : 0;
+  const config = configName(await userSettingText('settings/ddraw.ini',{name}));
+  return configValue(await userSettingText('settings/' + config,{name}),'touch','font') === '1' ? 1 : 0;
 }

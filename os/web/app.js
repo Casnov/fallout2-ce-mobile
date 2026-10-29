@@ -1,4 +1,5 @@
 import {developmentFiles, mountGame} from './filesystem.js';
+import {gameConfigPath} from './working-files.js';
 import {createTextInput, createGameAudio, createGameViewport, createAudioTiming, createGameWindow} from './browser.js';
 import {localFiles} from './resource-store.js';
 import {createFilesView} from './files-view.js';
@@ -173,7 +174,7 @@ async function play() {
     if (inspect && parameters.get('stats') === '1') {
       // Only this explicit dev session gets frame timing. Root configs live in
       // writable MEMFS; the Mac's source config is never changed.
-      const config = '/game/fallout2.cfg';
+      const config = '/game/' + gameConfigPath(module.FS,'/game');
       const previous = module.FS.analyzePath(config).exists ? module.FS.readFile(config) : new Uint8Array();
       const suffix = new TextEncoder().encode('\n[debug]\nperf_log=1\n');
       const measuredConfig = new Uint8Array(previous.length + suffix.length);

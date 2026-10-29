@@ -13,6 +13,15 @@ export function configValue(text,section,key) {
   }
   return null;
 }
+export const CONFIG = 'fallout2.cfg';
+// The game's config as the engine finds it: sfall's [Misc] ConfigFile of
+// ddraw.ini (a mod's own, as Fallout 1.5: Resurrection's fores.cfg), else
+// fallout2.cfg. Android's GameFiles.configName is the same rule.
+export function configName(ddraw) {
+  const path = (ddraw ? configValue(ddraw,'misc','configfile') || '' : '').replaceAll('\\','/');
+  if (!path || path.includes(':') || path.startsWith('/') || path.split('/').includes('..')) return CONFIG;
+  return path;
+}
 export function fixGameConfig(text) {
   const defaults = {master_dat:'master.dat',critter_dat:'critter.dat',master_patches:'data',critter_patches:'data',music_path1:'sound/music/',music_path2:'data/sound/music/'};
   return text.split(/\r?\n/).map(line => {
@@ -46,7 +55,8 @@ export function mergePlayerSettings(template,previous) {
   for (const [id,value] of settings) { const [section,key] = id.split('\t'); lines.push('[' + section + ']',key + '=' + value); }
   return fixGameConfig(lines.join('\n'));
 }
-export const originalFile = path => /^(master\.dat|critter\.dat|patch000\.dat)$/i.test(path)
+// master.dat and critter.dat may be folders too (CE opens both).
+export const originalFile = path => /^(master\.dat|critter\.dat)(\/|$)/i.test(path) || /^patch000\.dat$/i.test(path)
   || /^(data\/)?sound\/music\//i.test(path);
 export function describeGame(files,config = '') {
   return {language:configValue(config,'system','language') || 'english',

@@ -227,3 +227,16 @@ test('download retains disk File URLs through resume and retries until pagehide,
   assert.deepEqual(requested,['1','1','2']);assert.deepEqual(revoked,[]);assert.equal(attached,0);
   events.get('pagehide')();assert.deepEqual(revoked,['1','2']);
 }));
+
+test('Fallout 2 with a mod in its subfolder asks which one to install, then inspects the chosen one',async()=>page('',async({element,worker,emit})=>{
+  emit({action:'status'});
+  element('primary').click();
+  const archive=new Blob();element('archive').files=[archive];await element('archive').onchange();
+  assert.equal(worker.sent.at(-1).type,'inspect');
+  emit({action:'inspect',plan:{token:'c',choices:['Fallout 2/','Fallout 2/Resurrection/']}});
+  assert.match(element('message').textContent,/Resurrection/);
+  assert.equal(element('primary').textContent,'Resurrection');
+  assert.equal(element('secondary').textContent,'Fallout 2');
+  element('primary').click();
+  assert.deepEqual([worker.sent.at(-1).type,worker.sent.at(-1).choice,worker.sent.at(-1).file],['inspect','Fallout 2/Resurrection/',archive]);
+}));

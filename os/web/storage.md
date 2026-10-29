@@ -50,8 +50,11 @@ the user reviews a plan; installation reacquires exclusive ownership.
 The parser accepts Store/Deflate and ZIP64, strict UTF-8 or CP866 names.
 It rejects encryption, links/special files, invalid paths, NFC/case aliases,
 file/directory collisions and malformed local/central metadata. A unique game
-at the shallowest root wins, matching Android. Engine ce.dat, SAVEGAME, session
-map state and known platform/temporary files are excluded.
+at the shallowest root wins, matching Android: master.dat and critter.dat as
+files or folders, the config ddraw.ini's ConfigFile names, and a mod in its
+subfolder using Fallout 2's files offered as a choice (docs/android-touch-notes.md
+"Game layouts"). Engine ce.dat, SAVEGAME, session map state and known
+platform/temporary files are excluded.
 
 Limits: 12 GiB archive, 10 GiB declared unpacked data, 50,000 entries,
 16 MiB directory metadata/read allocation, 240 UTF-8 bytes/32 components per

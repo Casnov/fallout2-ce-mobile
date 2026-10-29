@@ -2,11 +2,21 @@ import {resourcePath} from './resource-store.js';
 import {mountLazyUserFiles} from './user-runtime.js';
 import {USER_DATABASE} from './user-store.js';
 import {digest} from './storage-common.js';
-import {decodeConfig,encodeConfig,mergePlayerSettings} from './game-config.js';
+import {decodeConfig,encodeConfig,mergePlayerSettings,configName} from './game-config.js';
+
 export const USER_ROOT = USER_DATABASE;
 
 // Resource bytes are immutable. These categories describe the lifetime of the
 // separate writable view; a mod's loose .pro is still an installed resource.
+// The game's config under [root] (`configName` of its ddraw.ini), in the case
+// the game has it: configs and ddraw.ini are files of the session's MEMFS.
+export function gameConfigPath(FS,root) {
+  const names = FS.analyzePath(root).exists ? FS.readdir(root) : [];
+  const ddraw = names.find(name => name.toLowerCase() === 'ddraw.ini');
+  const name = configName(ddraw ? decodeConfig(FS.readFile(root + '/' + ddraw)) : '');
+  return name.includes('/') ? name : names.find(item => item.toLowerCase() === name.toLowerCase()) || name;
+}
+
 export function fileLifetime(path) {
   const key = resourcePath(path.replace(/^\/game\//,''));
   if (/(^|\/)savegame(\/|$)/.test(key)) return 'save';
@@ -94,13 +104,17 @@ export async function connectUserFiles(module, user, source = {}) {
       const key = path.toLowerCase(), target = templateKeys.get(key);
       if (target && (previousHashes[key] === hashes[key] || (!hasProvenance && !source.importMode))) combined.set(target,data);
     }
-    const config = [...templates.keys()].find(path => path.toLowerCase() === 'fallout2.cfg');
-    const old = [...saved.keys()].find(path => path.toLowerCase() === 'fallout2.cfg');
+    // The game's config (`configName` of its ddraw.ini) keeps the player's
+    // settings of the one saved.
+    const ddraw = [...templates.keys()].find(path => path.toLowerCase() === 'ddraw.ini');
+    const name = configName(ddraw ? decodeConfig(templates.get(ddraw)) : '').toLowerCase();
+    const config = [...templates.keys()].find(path => path.toLowerCase() === name);
+    const old = [...saved.keys()].find(path => path.toLowerCase() === name);
     if (config && old) combined.set(config,encodeConfig(mergePlayerSettings(decodeConfig(templates.get(config)),decodeConfig(saved.get(old)))));
     await writeSettings(FS,'/game',combined);
   };
   await user.restoreSettings();
-  const cfg = '/game/fallout2.cfg';
+  const cfg = '/game/' + gameConfigPath(FS,'/game');
   const config = FS.analyzePath(cfg).exists ? FS.readFile(cfg,{encoding:'utf8'}) : '';
   // SAVEGAME and its staging/backup/catalog directories share one mounted FS:
   // native rename operations keep their normal atomic-directory semantics.

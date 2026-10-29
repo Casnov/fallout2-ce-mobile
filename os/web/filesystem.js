@@ -1,4 +1,4 @@
-import {fileLifetime, mountUserFiles, connectUserFiles} from './working-files.js';
+import {fileLifetime, mountUserFiles, connectUserFiles, gameConfigPath} from './working-files.js';
 import {decodeConfig,encodeConfig,fixGameConfig} from './game-config.js';
 // A range-reader contract independent of the persistent storage backend.
 // The development adapter is opt-in and reads the server's game folder only.
@@ -32,7 +32,9 @@ export async function developmentFiles() {
     }
     seen.add(file.path.toLowerCase());
   }
-  if (!seen.has('master.dat') || !seen.has('critter.dat')) throw new Error('The game is incomplete.');
+  // master.dat and critter.dat may be folders too (CE opens both).
+  const has = name => seen.has(name) || [...seen].some(path => path.startsWith(name + '/'));
+  if (!has('master.dat') || !has('critter.dat')) throw new Error('The game is incomplete.');
   return {
     entries:manifest.files,
     mouseAsTouch:location.searchParams.get('mouse') === '1',
@@ -78,7 +80,8 @@ export async function mountGame(module, source) {
       module.GameFS.createFile(path, entry.size, (offset, length) => source.read(entry, offset, length));
     }
   }
-  const config = root + '/fallout2.cfg';
+  // The config ddraw.ini names (a mod's own, as Resurrection's fores.cfg).
+  const config = root + '/' + gameConfigPath(FS,root);
   const original = FS.analyzePath(config).exists ? decodeConfig(FS.readFile(config)) : '[system]\nmaster_dat=master.dat\ncritter_dat=critter.dat\nmaster_patches=data\ncritter_patches=data\nlanguage=english\n';
   FS.writeFile(config,encodeConfig(fixGameConfig(original)));
   // The engine's own assets always come from the same bundle as JS and WASM.
