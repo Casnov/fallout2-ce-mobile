@@ -127,6 +127,25 @@ static void op_read_byte(Program* program)
     programStackPushInteger(program, value);
 }
 
+// write_int
+static void op_write_int(Program* program)
+{
+    int value = programStackPopInteger(program);
+    int addr = programStackPopInteger(program);
+
+    // Fallout: Sonora's gl_partyai NOPs `sub edx, ecx; sub eax, edx` of
+    // ai_set_disposition_, so that a disposition doesn't take a companion
+    // off its only packet. `aiSetDisposition` already only switches to a
+    // packet of the requested disposition: the script goes on (it puts each
+    // companion on its packet) instead of stopping here.
+    if (addr == 0x428389 && value == static_cast<int>(0x90909090)) {
+        return;
+    }
+
+    // As an undefined opcode: the script stops.
+    programFatalError("%s: 'write_int' at 0x%x is not supported", program->name, addr);
+}
+
 // set_pc_base_stat
 static void op_set_pc_base_stat(Program* program)
 {
@@ -2311,7 +2330,8 @@ void sfallOpcodesInit()
 
     // ^ 0x81cf - void  write_byte(int address, int value)
     // ^ 0x81d0 - void  write_short(int address, int value)
-    // ^ 0x81d1 - void  write_int(int address, int value)
+    // 0x81d1 - void  write_int(int address, int value)
+    interpreterRegisterOpcode(0x81D1, op_write_int);
     // ^ 0x821b - void  write_string(int address, string value)
 
     // ^ 0x81d2 - void  call_offset_v0(int address)
