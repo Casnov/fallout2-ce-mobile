@@ -3121,6 +3121,14 @@ static const DevAutotestStep kDevAutotestHighlightAllSteps[] = {
     { DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT, 12, 1, 0, 1, "hl02_outlines" },
 };
 
+// Any game's first map with the highlight button on: what lies around is
+// logged with its outline (players' reports on a mod's map).
+static const DevAutotestStep kDevAutotestHighlightLookSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "hk00_map" },
+    { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(Highlight), 0, 0, 30, "hk01_highlight" },
+    { DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT, 60, 0, 0, 1, "hk02_outlines" },
+};
+
 // Negative movie timers (Fallout: Resurrection's config\game#patch.cfg,
 // Fallout of Nevada's ddraw.ini): the Arroyo dreams never come. Run on such
 // a mod's copy; with Fallout 2's own timers it passes as well (day 0).
@@ -3533,6 +3541,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "highlightall") == 0) {
         gDevAutotestSteps = kDevAutotestHighlightAllSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestHighlightAllSteps) / sizeof(kDevAutotestHighlightAllSteps[0]);
+    } else if (strcmp(name, "highlightlook") == 0) {
+        gDevAutotestSteps = kDevAutotestHighlightLookSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestHighlightLookSteps) / sizeof(kDevAutotestHighlightLookSteps[0]);
     } else if (strcmp(name, "worldmapnames") == 0) {
         gDevAutotestSteps = kDevAutotestWorldmapNamesSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestWorldmapNamesSteps) / sizeof(kDevAutotestWorldmapNamesSteps[0]);
