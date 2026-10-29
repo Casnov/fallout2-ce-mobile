@@ -117,6 +117,9 @@ static char _aBuildHash[] = _BUILD_HASH;
 // 0x5186B4 game_ui_disabled
 static bool gGameUiDisabled = false;
 
+// CE: See `gameUiDisableByScript`.
+static bool gGameUiDisabledByScript = false;
+
 // 0x5186B8 game_state_cur
 static GameState gGameState = GameState::Normal;
 
@@ -972,6 +975,8 @@ void gameUiDisable(int allowScrolling)
 // 0x443C30
 void gameUiEnable()
 {
+    gGameUiDisabledByScript = false;
+
     if (gGameUiDisabled) {
         interfaceBarEnable();
         keyboardEnable();
@@ -987,6 +992,17 @@ void gameUiEnable()
 bool gameUiIsDisabled()
 {
     return gGameUiDisabled;
+}
+
+void gameUiDisableByScript()
+{
+    gameUiDisable(0);
+    gGameUiDisabledByScript = true;
+}
+
+bool gameUiIsDisabledByScript()
+{
+    return gGameUiDisabledByScript;
 }
 
 // 0x443C68

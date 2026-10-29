@@ -4224,7 +4224,8 @@ static void opObjectClose(Program* program)
 // 0x45B3D0 op_game_ui_disable
 static void opGameUiDisable(Program* program)
 {
-    gameUiDisable(0);
+    // CE: Marked as the script's (the mobile UI keeps the map's view still).
+    gameUiDisableByScript();
 }
 
 // game_ui_enable

@@ -43,6 +43,10 @@ int gameHandleKey(int eventCode, bool isInCombatMode);
 void gameUiDisable(int allowScrolling);
 void gameUiEnable();
 bool gameUiIsDisabled();
+// CE: The game's UI disabled by a script (game_ui_disable): a scene played
+// as its authors meant it, until the UI is enabled again.
+void gameUiDisableByScript();
+bool gameUiIsDisabledByScript();
 int gameGetGlobalVar(GameGlobalVar var);
 int gameSetGlobalVar(GameGlobalVar var, int value);
 int globalVarsRead(const char* path, const char* section, int* variablesListLengthPtr, int** variablesListPtr);
