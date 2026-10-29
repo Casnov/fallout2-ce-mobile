@@ -405,4 +405,108 @@ public class GameFilesTest {
         GameImport.Found found = GameImport.find(source, false);
         assertEquals("", found.root);
     }
+
+    // Fallout 1.5: Resurrection as its installer leaves it: a subfolder of
+    // Fallout 2 whose ddraw.ini names its own config, the mod's music put in
+    // Fallout 2's sound\music.
+    private static MemorySource fallout2WithResurrection() {
+        return new MemorySource()
+            .put("Fallout 2/master.dat", "MASTER")
+            .put("Fallout 2/critter.dat", "CRITTER")
+            .put("Fallout 2/fallout2.cfg", "[system]\nlanguage=english\n")
+            .put("Fallout 2/sound/music/25albuq.acm", "MOD MUSIC")
+            .put("Fallout 2/data/sound/music/02mstrlr.acm", "FALLOUT 2 MUSIC")
+            .put("Fallout 2/Resurrection/ddraw.ini", "[Main]\r\nStartingMap=nh_cave.map\r\n[Misc]\r\nConfigFile=fores.cfg\r\n")
+            .put("Fallout 2/Resurrection/fores.cfg", "[sound]\r\nmusic_path1=..\\data\\sound\\music\\\r\nmusic_path2=..\\sound\\music\\\r\n"
+                + "[system]\r\ncritter_dat=..\\critter.dat\r\nlanguage=english\r\nmaster_dat=..\\master.dat\r\n")
+            .put("Fallout 2/Resurrection/fores.dat", "MOD")
+            .put("Fallout 2/Resurrection/data/maps/nh_cave.map", "MAP");
+    }
+
+    @Test
+    public void configNameFromDdrawIni() {
+        assertEquals("fallout2.cfg", GameFiles.configName((String) null));
+        assertEquals("fallout2.cfg", GameFiles.configName("[Main]\nUseCommandLine=0\n"));
+        assertEquals("fores.cfg", GameFiles.configName("[Misc]\r\nConfigFile = fores.cfg ; the mod's\r\n"));
+        assertEquals("fallout2.cfg", GameFiles.configName("[Misc]\nConfigFile=\n"));
+        // Out of the game's folder, or another section: the default.
+        assertEquals("fallout2.cfg", GameFiles.configName("[Misc]\nConfigFile=..\\fallout2.cfg\n"));
+        assertEquals("fallout2.cfg", GameFiles.configName("[Main]\nConfigFile=fores.cfg\n"));
+    }
+
+    @Test
+    public void modWithItsOwnConfigAndMusicOutside() throws IOException {
+        try {
+            GameImport.find(fallout2WithResurrection(), false);
+            fail("no choice");
+        } catch (GameImport.ChooseGameException e) {
+            assertEquals(Arrays.asList("Fallout 2/", "Fallout 2/Resurrection/"), e.roots);
+        }
+
+        game = temporary.newFolder("game");
+        MemorySource source = fallout2WithResurrection();
+        GameImport.Found found = GameImport.find(source, false, "Fallout 2/Resurrection/");
+        assertEquals("fores.cfg", found.config);
+        GameFiles.Plan plan = GameImport.plan(found, game, true);
+        GameImport.install(source, found, plan, true, game, NO_PROGRESS);
+
+        assertEquals("MASTER", read("master.dat"));
+        assertEquals("CRITTER", read("critter.dat"));
+        assertEquals("MOD", read("fores.dat"));
+        // The config's two music folders at the paths fixConfig gives them.
+        assertEquals("FALLOUT 2 MUSIC", read("sound/music/02mstrlr.acm"));
+        assertEquals("MOD MUSIC", read("data/sound/music/25albuq.acm"));
+        String config = read("fores.cfg");
+        assertTrue(config, config.contains("master_dat=master.dat"));
+        assertTrue(config, config.contains("music_path1=sound/music/"));
+        assertTrue(config, config.contains("music_path2=data/sound/music/"));
+        assertFalse(exists("fallout2.cfg"));
+        assertEquals(new File(game, "fores.cfg"), GameFiles.configFile(game));
+        assertTrue(GameImport.isInstalled(game));
+    }
+
+    @Test
+    public void modsOwnFilesWinOverItsMusicOutside() throws IOException {
+        game = temporary.newFolder("game");
+        MemorySource source = fallout2WithResurrection()
+            .put("Fallout 2/Resurrection/data/sound/music/25albuq.acm", "MOD'S OWN");
+        GameImport.Found found = GameImport.find(source, false, "Fallout 2/Resurrection/");
+        GameFiles.Plan plan = GameImport.plan(found, game, true);
+        GameImport.install(source, found, plan, true, game, NO_PROGRESS);
+        assertEquals("MOD'S OWN", read("data/sound/music/25albuq.acm"));
+    }
+
+    @Test
+    public void replacingKeepsTheSettingsOfTheGamesOwnConfig() throws IOException {
+        game = temporary.newFolder("game");
+        GameImport.Found found = GameImport.find(fallout2WithResurrection(), false, "Fallout 2/Resurrection/");
+        GameImport.install(fallout2WithResurrection(), found, GameImport.plan(found, game, true), true, game, NO_PROGRESS);
+        write("fores.cfg", read("fores.cfg") + "\n[preferences]\ngame_difficulty=2\n");
+
+        // The same game again, as "Replace game": the player's setting stays.
+        MemorySource again = fallout2WithResurrection();
+        GameImport.Found replacing = GameImport.find(again, true, "Fallout 2/Resurrection/");
+        GameFiles.Plan plan = GameImport.plan(replacing, game, false);
+        assertFalse(plan.removed.contains("fores.cfg"));
+        GameImport.install(again, replacing, plan, false, game, NO_PROGRESS);
+        assertTrue(read("fores.cfg"), read("fores.cfg").contains("game_difficulty=2"));
+    }
+
+    @Test
+    public void masterDatAsAFolder() throws IOException {
+        // Fallout: Nevada 1.00: master.dat is a folder.
+        game = temporary.newFolder("game");
+        MemorySource source = new MemorySource()
+            .put("Fallout_Nevada/master.dat/art/intrface/mainmenu.frm", "ART")
+            .put("Fallout_Nevada/master.dat/maps/vault.map", "MAP")
+            .put("Fallout_Nevada/critter.dat", "CRITTER")
+            .put("Fallout_Nevada/fallout2.cfg", "[system]\nlanguage=russian\nmaster_dat=master.dat\n");
+        GameImport.Found found = GameImport.find(source, false);
+        assertEquals("Fallout_Nevada/", found.root);
+        assertEquals("russian", found.language);
+        GameImport.install(source, found, GameImport.plan(found, game, true), true, game, NO_PROGRESS);
+        assertEquals("ART", read("master.dat/art/intrface/mainmenu.frm"));
+        assertTrue(GameImport.isInstalled(game));
+        assertTrue(GameFiles.isOriginalFile("master.dat/maps/vault.map"));
+    }
 }

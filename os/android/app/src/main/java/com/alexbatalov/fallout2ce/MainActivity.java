@@ -58,7 +58,7 @@ public class MainActivity extends SDLActivity {
         // import (a computer's paths: no music).
         if (externalFilesDir != null) {
             try {
-                GameImport.fixConfig(new File(externalFilesDir, GameFiles.CONFIG));
+                GameImport.fixConfig(GameFiles.configFile(externalFilesDir));
             } catch (IOException e) {
                 e.printStackTrace();
             }

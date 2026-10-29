@@ -32,8 +32,70 @@ final class GameFiles {
     static final String JOURNAL = ".import-commit";
     private static final String JOURNAL_TEMP = ".import-commit.tmp";
     static final String CONFIG = "fallout2.cfg";
+    static final String SFALL_CONFIG = "ddraw.ini";
 
     private GameFiles() {
+    }
+
+    // The game's config as the engine finds it: sfall's [Misc] ConfigFile of
+    // ddraw.ini (a mod's own, as Fallout 1.5: Resurrection's fores.cfg), else
+    // fallout2.cfg. [ddrawText]: ddraw.ini's text, null without it.
+    static String configName(String ddrawText) {
+        String value = ddrawText != null ? GameSaves.configValue(ddrawText, "Misc", "ConfigFile") : null;
+        if (value == null) {
+            return CONFIG;
+        }
+        String path = value.replace('\\', '/');
+        if (path.isEmpty() || path.contains(":") || path.startsWith("/") || ("/" + path + "/").contains("/../")) {
+            return CONFIG;
+        }
+        return path;
+    }
+
+    // `configName` of [game]'s ddraw.ini.
+    static String configName(File game) {
+        File ddraw = findIgnoreCase(game, SFALL_CONFIG);
+        try {
+            return configName(ddraw != null ? readText(ddraw) : null);
+        } catch (IOException e) {
+            return CONFIG;
+        }
+    }
+
+    // [game]'s config file (`configName` of its ddraw.ini), in the case its
+    // folder has it.
+    static File configFile(File game) {
+        String name = configName(game);
+        File found = findIgnoreCase(game, name);
+        return found != null ? found : new File(game, name);
+    }
+
+    // [path] (may have folders) in [folder] by its name in any case, null
+    // without it.
+    static File findIgnoreCase(File folder, String path) {
+        File current = folder;
+        for (String part : path.split("/")) {
+            File exact = new File(current, part);
+            if (exact.exists()) {
+                current = exact;
+                continue;
+            }
+            File[] children = current.listFiles();
+            File match = null;
+            if (children != null) {
+                for (File child : children) {
+                    if (child.getName().equalsIgnoreCase(part)) {
+                        match = child;
+                        break;
+                    }
+                }
+            }
+            if (match == null) {
+                return null;
+            }
+            current = match;
+        }
+        return current;
     }
 
     // The game's files (replaced and removed by "Replace game"): all but the
@@ -53,11 +115,14 @@ final class GameFiles {
     }
 
     // Fallout 2's own files (not mods'): kept when the source has no
-    // master.dat and critter.dat (only the mods are replaced).
+    // master.dat and critter.dat (only the mods are replaced). Both may be
+    // folders too (CE opens them so).
     static boolean isOriginalFile(String path) {
         String lower = path.toLowerCase(Locale.ROOT);
         return lower.equals("master.dat")
             || lower.equals("critter.dat")
+            || lower.startsWith("master.dat/")
+            || lower.startsWith("critter.dat/")
             || lower.equals("patch000.dat")
             || lower.startsWith("sound/music/")
             || lower.startsWith("data/sound/music/");
@@ -135,9 +200,10 @@ final class GameFiles {
             }
         }
 
+        String installedConfig = configName(target).toLowerCase(Locale.ROOT);
         for (Map.Entry<String, String> file : installed.entrySet()) {
             String lower = file.getKey();
-            if (source.contains(lower) || (modsOnly && isOriginalFile(lower)) || lower.equals(CONFIG)) {
+            if (source.contains(lower) || (modsOnly && isOriginalFile(lower)) || lower.equals(installedConfig)) {
                 continue;
             }
             plan.removed.add(file.getValue());
@@ -324,16 +390,28 @@ final class GameFiles {
     }
 
     // Moves [staged] (in the staging folder) in and removes [removed]: the
-    // journal first, then `finish`. fallout2.cfg gets the player's settings
-    // of the one it replaces (`mergeSettings`).
+    // journal first, then `finish`. The game's config (`configName`) gets the
+    // player's settings of the one it replaces (`mergeSettings`).
     static void commit(File target, List<String> staged, List<String> removed, Map<String, String> installed) throws IOException {
         File staging = new File(target, STAGING);
 
-        // The new config: a computer's paths fixed, the player's settings of
-        // the current one.
-        File currentConfig = new File(target, CONFIG);
+        // The new config (named by the new ddraw.ini, else the installed
+        // one's): a computer's paths fixed, the player's settings of the
+        // current one.
+        File currentConfig = configFile(target);
+        String newConfigName = configName(target).toLowerCase(Locale.ROOT);
+        for (String path : removed) {
+            if (path.equalsIgnoreCase(SFALL_CONFIG)) {
+                newConfigName = CONFIG;
+            }
+        }
         for (String path : staged) {
-            if (path.equalsIgnoreCase(CONFIG)) {
+            if (path.equalsIgnoreCase(SFALL_CONFIG)) {
+                newConfigName = configName(readText(new File(staging, path))).toLowerCase(Locale.ROOT);
+            }
+        }
+        for (String path : staged) {
+            if (path.toLowerCase(Locale.ROOT).equals(newConfigName)) {
                 File newConfig = new File(staging, path);
                 GameImport.fixConfig(newConfig);
                 if (currentConfig.isFile()) {

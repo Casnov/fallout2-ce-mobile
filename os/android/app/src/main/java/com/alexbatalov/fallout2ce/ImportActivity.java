@@ -98,7 +98,7 @@ public class ImportActivity extends Activity {
     private void applyFont(View view) {
         boolean mono = false;
         try {
-            File config = new File(getExternalFilesDir(null), "fallout2.cfg");
+            File config = GameFiles.configFile(getExternalFilesDir(null));
             if (config.isFile()) {
                 mono = "1".equals(GameSaves.configValue(GameFiles.readText(config), "touch", "font"));
             }

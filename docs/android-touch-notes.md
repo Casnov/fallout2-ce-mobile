@@ -1453,3 +1453,26 @@ with "Start combat" (the A key), see the weapon group above.
   options; a new package asks on the phone once), `adb shell input` needs a
   SIM card ("USB debugging (security settings)"), so touch testing on the
   device is manual.
+
+## Game layouts the import understands (Android and web)
+
+On a computer CE reads a game where its installer left it. The phone and
+the browser copy it into the app's own storage, so the import lays the
+files out as CE would find them there (`GameImport` / `GameFiles` on
+Android, `zip-import.js` / `game-config.js` / `working-files.js` on the
+web, the same rules, tests on both):
+
+- The game's config is the one sfall's `[Misc] ConfigFile` of ddraw.ini
+  names (Fallout 1.5: Resurrection's `fores.cfg`), else `fallout2.cfg`
+  (`GameFiles.configName`, `configName`). Paths are fixed, the player's
+  settings carried over and saves read in that file.
+- master.dat and critter.dat may be folders (Fallout: Nevada 1.00).
+- A mod in Fallout 2's subfolder whose config names master.dat and
+  critter.dat outside it (`..\master.dat`: Fallout Et Tu, Resurrection) is a
+  game of its own; with Fallout 2 around it the player chooses which.
+  The mod gets those files and the music folders its config names outside
+  (Resurrection keeps its own in Fallout 2's `sound\music`) at the paths
+  the config fix gives them; the mod's own files win. Fallout 2 chosen
+  leaves the mod's folder out.
+- Checked 2026-10-29 on the real releases: Nevada 1.00, Resurrection 1.5
+  installed onto Fallout 2, Fallout 2 with Et Tu, RPU.

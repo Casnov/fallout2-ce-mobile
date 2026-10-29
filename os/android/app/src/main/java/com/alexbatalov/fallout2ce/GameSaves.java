@@ -475,6 +475,9 @@ final class GameSaves {
         GameImport.Entry info = null;
         GameImport.Entry config = null;
         GameImport.Entry ddraw = null;
+        // The game's config is `GameFiles.configName` of its ddraw.ini: the
+        // top folder's .cfg files are kept until ddraw.ini tells which.
+        Map<String, GameImport.Entry> configs = new HashMap<>();
         Map<String, Long> sourceArchives = new HashMap<>();
         for (GameImport.Entry entry : entries) {
             String lower = entry.path.toLowerCase(Locale.ROOT);
@@ -484,14 +487,21 @@ final class GameSaves {
             }
             if (gameRoot != null && lower.startsWith(gameRoot.toLowerCase(Locale.ROOT))) {
                 String path = lower.substring(gameRoot.length());
-                if (path.equals("fallout2.cfg")) {
-                    config = entry;
+                if (path.endsWith(".cfg") && path.indexOf('/') == -1) {
+                    configs.put(path, entry);
                 } else if (path.equals("ddraw.ini")) {
                     ddraw = entry;
                 } else if (isArchive(path)) {
                     sourceArchives.put(path, entry.size);
                 }
             }
+        }
+
+        if (ddraw != null) {
+            String name = GameFiles.configName(new String(readAll(source, Collections.singletonList(ddraw)).get(ddraw), StandardCharsets.ISO_8859_1));
+            config = configs.get(name.toLowerCase(Locale.ROOT));
+        } else {
+            config = configs.get(GameFiles.CONFIG);
         }
 
         // One pass: the saves' SAVE.DAT, the records, the configs.
@@ -507,7 +517,7 @@ final class GameSaves {
         Map<GameImport.Entry, byte[]> contents = readAll(source, wanted);
 
         String language = "english";
-        File installedConfig = new File(game, "fallout2.cfg");
+        File installedConfig = GameFiles.configFile(game);
         if (installedConfig.isFile()) {
             String value = configValue(new String(readAll(installedConfig), StandardCharsets.ISO_8859_1), "system", "language");
             language = value != null ? value : language;
@@ -756,7 +766,7 @@ final class GameSaves {
     }
 
     private static String readConfig(File game) {
-        File config = new File(game, "fallout2.cfg");
+        File config = GameFiles.configFile(game);
         try {
             return config.isFile() ? new String(readAll(config), StandardCharsets.ISO_8859_1) : null;
         } catch (IOException e) {
