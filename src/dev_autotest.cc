@@ -34,6 +34,7 @@
 #include "hero_appearance.h"
 #include "input.h"
 #include "interface.h"
+#include "interpreter.h"
 #include "inventory.h"
 #include "item.h"
 #include "kb.h"
@@ -226,6 +227,12 @@ enum DevAutotestAction {
     // Arroyo dream asked for, GVAR_TOWN_REP_ARROYO and the Arroyo areas as
     // they were (a mod with negative movie timers).
     DEV_AUTOTEST_ACTION_CHECK_GAME_EVENTS,
+    // Scripts whose files aren't there, outside a running script (a map's
+    // objects starting, `mapLoad`): `programCreateByPath` of a made-up name,
+    // and the start procedure of the first scripts.lst entry without its
+    // file (Fallout 1.5: Resurrection's xnefunk7.int in New Hope) fail and
+    // the game goes on, as in the original.
+    DEV_AUTOTEST_ACTION_MISSING_SCRIPT,
     // A bag (pid `a`) with a thing (pid `c`) in it two hexes east of the
     // dude, and a dead critter (pid `b`) with the same thing two hexes
     // south-west.
@@ -3052,6 +3059,13 @@ static const DevAutotestStep kDevAutotestMovieTimersOffSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_GAME_EVENTS, 3, 0, 0, 1, "mt01_events" },
 };
 
+// A script whose file isn't there doesn't take the game down
+// (alexbatalov/fallout2-ce#396).
+static const DevAutotestStep kDevAutotestMissingScriptSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "ms00_map" },
+    { DEV_AUTOTEST_ACTION_MISSING_SCRIPT, 0, 0, 0, 1, "ms01_missing" },
+};
+
 // Party member control tab of the mobile talk screen (test save, Sulik).
 static const DevAutotestStep kDevAutotestPartySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "q00_start" },
@@ -3337,6 +3351,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
+    } else if (strcmp(name, "missingscript") == 0) {
+        gDevAutotestSteps = kDevAutotestMissingScriptSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestMissingScriptSteps) / sizeof(kDevAutotestMissingScriptSteps[0]);
     } else if (strcmp(name, "movietimersoff") == 0) {
         gDevAutotestSteps = kDevAutotestMovieTimersOffSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMovieTimersOffSteps) / sizeof(kDevAutotestMovieTimersOffSteps[0]);
@@ -6812,6 +6829,44 @@ void devAutotestTick()
             devAutotestLog("  day %d: %d of %d checks asked for a movie, GVAR_TOWN_REP_ARROYO %d -> %d, areas %d/%d -> %d/%d: %s\n",
                 static_cast<int>(gameTimeGetTime() / GAME_TIME_TICKS_PER_DAY), asked, static_cast<int>(step->a), rep, gameGetGlobalVar(GVAR_TOWN_REP_ARROYO),
                 arroyoKnown ? 1 : 0, destroyedKnown ? 1 : 0, wmAreaIsKnown(CITY_ARROYO) ? 1 : 0, wmAreaIsKnown(CITY_DESTROYED_ARROYO) ? 1 : 0, ok ? "PASS" : "FAIL");
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MISSING_SCRIPT: {
+            Program* made = programCreateByPath("scripts\\devautotest_missing.int");
+            bool ok = made == nullptr;
+            devAutotestLog("  scripts\\devautotest_missing.int: %s\n", made == nullptr ? "not loaded" : "loaded");
+
+            int missing = -1;
+            char fileName[COMPAT_MAX_PATH];
+            for (int index = 0; index < scriptsGetListLength() && missing == -1; index++) {
+                char path[COMPAT_MAX_PATH];
+                if (scriptsGetFileName(index, fileName, sizeof(fileName)) == 0) {
+                    snprintf(path, sizeof(path), "scripts\\%s", fileName);
+                    File* stream = fileOpen(path, "rb");
+                    if (stream != nullptr) {
+                        fileClose(stream);
+                    } else {
+                        missing = index;
+                    }
+                }
+            }
+
+            if (missing == -1) {
+                devAutotestLog("  every scripts.lst entry has its file\n");
+            } else {
+                int sid;
+                Script* script;
+                int result = 0;
+                if (scriptAdd(&sid, SCRIPT_TYPE_SPATIAL) == 0 && scriptGetScript(sid, &script) == 0) {
+                    script->index = missing;
+                    result = scriptExecProc(sid, SCRIPT_PROC_START);
+                    scriptRemove(sid);
+                }
+                ok = ok && result == -1;
+                scriptsGetFileName(missing, fileName, sizeof(fileName));
+                devAutotestLog("  scripts.lst entry %d, %s: start procedure %d\n", missing, fileName, result);
+            }
+            devAutotestLog("  the game goes on: %s\n", ok ? "PASS" : "FAIL");
             break;
         }
         case DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT: {
