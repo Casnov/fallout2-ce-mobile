@@ -625,7 +625,13 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
   watch cursor: changing weapons, a combat starting; on a computer the map
   doesn't scroll then), not while a script holds the game's UI
   (`game_ui_disable`, `gameUiIsDisabledByScript`: a scene seen as its
-  authors meant it). Autotest `weaponpan`.
+  authors meant it). A finger the map follows stays the map's while the
+  mobile UI holds another (a HUD button pressed while the view moves:
+  `muiHandleFingerEvent`, only a modal screen keeps other fingers from the
+  game; before, the view stood still for the press, ~90 ms on the phone).
+  Autotest `weaponpan` (real SDL fingers for the press).
+- Frame timing log (`[debug] perf_log=1`, below) also writes a line for
+  every frame of 40 ms or more: its time, as actions.log's, and its parts.
 - Scroll limit around the dude (the original's, `tile.cc` 480 x 400, the
   hi-res patch's IGNORE_PLAYER_SCROLL_LIMITS, CE's `[ui]
   ignore_scroll_limit`): on the phone and the web the player's setting,

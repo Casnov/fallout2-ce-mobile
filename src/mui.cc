@@ -1283,8 +1283,10 @@ bool muiHandleFingerEvent(const SDL_Event* event)
     }
 
     if (!gFingerCaptured || finger.fingerId != gCapturedFinger) {
-        // Other fingers while UI is modal don't reach the game either.
-        return gFingerCaptured || muiHasModal();
+        // Other fingers while UI is modal don't reach the game either. A
+        // finger the map follows stays the map's while the UI holds
+        // another (a button pressed while the view moves).
+        return muiHasModal();
     }
 
     if (event->type == SDL_FINGERMOTION) {
