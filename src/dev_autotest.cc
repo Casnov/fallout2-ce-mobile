@@ -3061,6 +3061,13 @@ static const DevAutotestStep kDevAutotestMovieTimersOffSteps[] = {
     { DEV_AUTOTEST_ACTION_CHECK_GAME_EVENTS, 3, 0, 0, 1, "mt01_events" },
 };
 
+// A new game on any game: its first map loaded, the world drawn, the dude on
+// it, the map taking touches (out/dev/realgames.sh, the import's check).
+static const DevAutotestStep kDevAutotestFirstMapSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "fm00_map" },
+    { DEV_AUTOTEST_ACTION_CHECK_LOADED_WORLD, 0, 0, 0, 1, "fm01_world" },
+};
+
 // A script whose file isn't there doesn't take the game down
 // (alexbatalov/fallout2-ce#396).
 static const DevAutotestStep kDevAutotestMissingScriptSteps[] = {
@@ -3353,6 +3360,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
+    } else if (strcmp(name, "firstmap") == 0) {
+        gDevAutotestSteps = kDevAutotestFirstMapSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestFirstMapSteps) / sizeof(kDevAutotestFirstMapSteps[0]);
     } else if (strcmp(name, "missingscript") == 0) {
         gDevAutotestSteps = kDevAutotestMissingScriptSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMissingScriptSteps) / sizeof(kDevAutotestMissingScriptSteps[0]);
