@@ -484,13 +484,16 @@ int _scriptsCheckGameEvents(int* moviePtr, int window)
 
     int day = gGameTime / GAME_TIME_TICKS_PER_DAY;
 
-    // A negative timer: that dream never comes. sfall's fork documents
-    // MovieTimer_artimer* "-1 to disable the game event", and mods set it so
-    // (Fallout of Nevada; Fallout: Resurrection's config\game#patch.cfg for
-    // CE). Taken as days, -1 played the dream at once and, its movie not in
-    // the mod, again at every check, each time lowering GVAR_TOWN_REP_ARROYO
-    // and changing the Arroyo areas, which are the mod's own globals and
-    // towns.
+    // REBUILDS: a negative timer means that dream never comes, as sfall's
+    // 5.x line documents MovieTimer_artimer* "-1 to disable". Only Foxx's
+    // rebuilds set -1 (Fallout of Nevada EV's ddraw.ini, Fallout 1.5:
+    // Resurrection FE's config\game#patch.cfg); the official releases use
+    // 5000-9999 or the defaults, and mainline sfall clamps the timers to 0
+    // and up. As days, -1 played the dream at once and, its movie not in the
+    // mod, again at every check, each time lowering GVAR_TOWN_REP_ARROYO and
+    // changing the Arroyo areas - the mod's own global and towns (New Hope,
+    // Resurrection's start, gone from the world map). Not offered to CE
+    // (fallout2-ce#896 closed), see docs/sfall-fixes-carried.md.
     auto timerReached = [day](int timer) {
         return timer >= 0 && day >= timer;
     };

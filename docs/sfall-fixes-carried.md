@@ -58,5 +58,19 @@ from upstream `main`, a pull request, a cherry-pick here, an autotest.
 |---|---|---|---|---|
 | Corpse aging after 6/14 days, party member placement's first direction, a new critter proto's team: three changes of fallout2-ce#675 that differ from the original (the automap dots, a bug of the original, stay as CE has them) | 379f3359, 11682f53 | [fallout2-ce#849](https://github.com/fallout2-ce/fallout2-ce/pull/849) | `orig675` | open |
 | Saved maps' script lists: the extents written with the lengths of the saved scripts (party members' scripts over an extent's edge broke them), older saves' longer extents recovered when only not saved scripts are past the count. Since fallout2-ce#786 checks the lengths, such a map loaded as new and a transition's destination was lost (issue #16: Sonora's destroyer stairs led to the pier). aizerin's fix, carried as is (our #895 was a duplicate) | bdfcf15c | [fallout2-ce#893](https://github.com/fallout2-ce/fallout2-ce/pull/893) | `scriptsave` (`stairs` for a save's stairs) | open |
-| Movie timers: a negative `[movies] artimer1-4` (sfall fork's MovieTimer_artimer* "-1 to disable") means the Arroyo dream never comes. As days it came at once and, its movie missing, at every game event check: GVAR_TOWN_REP_ARROYO -15 each time, the Arroyo areas changed - a mod's own global and towns (Fallout: Resurrection's config\game#patch.cfg for CE, Fallout of Nevada's ddraw.ini) | d6c28db2 | [fallout2-ce#896](https://github.com/fallout2-ce/fallout2-ce/pull/896) | `movietimersoff` (on the mod's copy) | open |
 | mods_order.txt made from the mods folder lists its folders named *.dat too, sorted, as sfall's LoadOrder.cpp (files only before: the Nevada repack's InventoryFilter, KeysHelp and Glasses folders were never loaded) | 97741231 | [fallout2-ce#897](https://github.com/fallout2-ce/fallout2-ce/pull/897) | - (Nevada copy: the made file) | open |
+
+## Kept for rebuilds, not offered to CE
+
+The port follows CE and mainline sfall. A few small changes are kept only
+because third-party rebuilds of mods (Foxx's, made for sfall's 5.x line)
+rely on that line's conventions and break without them. Each one changes
+nothing for the official releases of the mods or for Fallout 2, isn't
+something CE needs, and is marked `REBUILDS:` in the code (search for it).
+If CE takes such a change after all, its version wins in a conflict; if CE
+changes that code, the port's change goes with CE's way unless the rebuild
+still breaks.
+
+| Change | Port commit | Why not CE | Autotest | Rebuilds it serves |
+|---|---|---|---|---|
+| Movie timers: a negative `[movies] artimer1-4` means that Arroyo dream never comes (sfall 5.x: "-1 to disable"). As days, -1 came at once and, the movie missing, at every game event check: GVAR_TOWN_REP_ARROYO -15 each time, the Arroyo areas changed (Resurrection FE: its start town New Hope gone from the world map, its reputation falling) | d6c28db2 | official releases use 5000-9999 or the defaults; mainline sfall clamps to 0 and up ([fallout2-ce#896](https://github.com/fallout2-ce/fallout2-ce/pull/896) closed) | `movietimersoff` (on a rebuild's copy) | Fallout of Nevada EV (ddraw.ini), Fallout 1.5: Resurrection FE (config\game#patch.cfg) |
