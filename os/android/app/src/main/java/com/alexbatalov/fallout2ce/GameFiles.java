@@ -619,10 +619,11 @@ final class GameFiles {
     // and what CE takes from the game's f2_res.ini (game_config_migration.cc):
     // it does that at the game's first start, for the keys its config lacks,
     // and only while it has no [screen] resolution_x. Fallout 1.5:
-    // Resurrection's own fores.dat is its f2_res.ini's f2_res_dat.
+    // Resurrection's own fores.dat is its f2_res.ini's f2_res_dat. Not the
+    // scroll limit around the player: on the phone it's the player's.
     private static final Set<String> F2_RES_UI_KEYS = new HashSet<>(Arrays.asList(
         "iface_bar_mode", "iface_bar_width", "iface_bar_side_art", "iface_bar_sides_ori",
-        "ignore_scroll_limit", "alternate_ammo_meter", "ignore_map_edges", "splash_screen_size",
+        "alternate_ammo_meter", "ignore_map_edges", "splash_screen_size",
         "death_screen_size", "end_slide_size", "movie_aspect_fit", "main_menu_scale_mode"));
 
     private static boolean isPlayerSetting(String section, String key) {

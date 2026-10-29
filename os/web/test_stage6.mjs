@@ -102,12 +102,14 @@ test('PC config paths are fixed and new game system/language win while player fo
 
 test('the new game keeps its own screen settings: CE takes them from its f2_res.ini',() => {
   const merged = mergePlayerSettings('[system]\nmaster_dat=master.dat\n[ui]\nauto_quick_save=0\n',
-    '[system]\nf2_res_dat=f2_res.dat\n[screen]\nresolution_x=1066\n[ui]\nauto_quick_save=1\niface_bar_side_art=2\ndisplay_bonus_damage=1\n');
+    '[system]\nf2_res_dat=f2_res.dat\n[screen]\nresolution_x=1066\n[ui]\nauto_quick_save=1\niface_bar_side_art=2\ndisplay_bonus_damage=1\nignore_scroll_limit=1\n');
   assert.equal(configValue(merged,'screen','resolution_x'),null);
   assert.equal(configValue(merged,'system','f2_res_dat'),null);
   assert.equal(configValue(merged,'ui','iface_bar_side_art'),null);
   assert.equal(configValue(merged,'ui','auto_quick_save'),'1');
   assert.equal(configValue(merged,'ui','display_bonus_damage'),'1');
+  // The scroll limit around the hero is the player's in the browser.
+  assert.equal(configValue(merged,'ui','ignore_scroll_limit'),'1');
 });
 
 test('inherited-reference transaction quota failure preserves the complete old installation',async () => {

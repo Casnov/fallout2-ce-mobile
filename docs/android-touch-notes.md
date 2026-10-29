@@ -609,6 +609,28 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
   outlined too) until dude is done or another command is given; its own
   outline comes back then, the refresh covers the outline border
   (`mapHintsSetInteraction`). Move cost is drawn inside the selected tile.
+- Tile markers: the tile dude walks to and the one he'd move to in combat
+  lie on the ground as the tactical view's lines (`addTileMarker`,
+  ground_lines.h: one mitered stroke, a faint fill, both dimmed behind
+  scenery and see-through critters, hidden under the dude), drawn in one
+  batch with the tactical view; the move cost and the "can't" icon stay
+  over everything. (They were separate MUI segments with round caps: a
+  translucent edge showed bright corners.)
+- The map's view (one finger, pinch) moves while the game lets the map
+  scroll and also while it waits for its own animation over the map (its
+  watch cursor: changing weapons, a combat starting; on a computer the map
+  doesn't scroll then), not while a script holds the game's UI
+  (`game_ui_disable`, `gameUiIsDisabledByScript`: a scene seen as its
+  authors meant it). Autotest `weaponpan`.
+- Scroll limit around the dude (the original's, `tile.cc` 480 x 400, the
+  hi-res patch's IGNORE_PLAYER_SCROLL_LIMITS, CE's `[ui]
+  ignore_scroll_limit`): on the phone and the web the player's setting,
+  off by default (settings.h), the Display row "View limited around the
+  hero" (game\ce.msg 455-456); a game's f2_res.ini doesn't set it there
+  (game_config_migration.cc, as the screen is the device's) and it's
+  carried from game to game. Map edges and scroll blockers stay. Autotest
+  `scrolllimit --dev-map=arvillag.map` (the start map's edges come before
+  the limit).
 - Frame timing log: `[debug] perf_log=1` in fallout2.cfg appends to
   `perf.log` next to the data once a second: game modes, fps, longest frame,
   ms per frame for the game's loop, screen upload + map, mobile UI, present,

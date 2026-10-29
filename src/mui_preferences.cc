@@ -28,6 +28,7 @@
 #include "preferences.h"
 #include "settings.h"
 #include "svga.h"
+#include "tile.h"
 #include "world_view.h"
 #include "xfile.h"
 
@@ -122,6 +123,8 @@ namespace {
     constexpr int kTextHighlightCorpsesNote = 452;
     constexpr int kTextHighlightHiddenItems = 453;
     constexpr int kTextHighlightHiddenItemsNote = 454;
+    constexpr int kTextScrollLimit = 455;
+    constexpr int kTextScrollLimitNote = 456;
     constexpr int kTextGroupText = 395;
     constexpr int kTextGroupSaves = 396;
     constexpr int kTextGroupSpeed = 397;
@@ -224,6 +227,7 @@ namespace {
         bool partyLootAndBarter;
         bool partyMemberExtraInfo;
         bool karmaChanges;
+        bool scrollLimit;
         bool bonusDamage;
         // Tens, 0 - none (`lsgSetQuickSaveCount`).
         int quickSaves;
@@ -255,6 +259,7 @@ namespace {
         values.partyLootAndBarter = settings.qol.party_loot_and_barter;
         values.partyMemberExtraInfo = settings.ui.party_member_extra_info;
         values.karmaChanges = settings.ui.display_karma_changes;
+        values.scrollLimit = !settings.ui.ignore_scroll_limit;
         values.bonusDamage = settings.ui.display_bonus_damage;
         values.quickSaves = lsgQuickSaveCount();
         return values;
@@ -289,6 +294,7 @@ namespace {
         UISettings ui;
         values.partyMemberExtraInfo = ui.party_member_extra_info;
         values.karmaChanges = ui.display_karma_changes;
+        values.scrollLimit = !ui.ignore_scroll_limit;
         values.bonusDamage = ui.display_bonus_damage;
         values.quickSaves = kDefaultQuickSaves;
         return values;
@@ -385,6 +391,13 @@ namespace {
             // apply at once.
             settings.ui.display_karma_changes = values.karmaChanges;
             settings.ui.display_bonus_damage = values.bonusDamage;
+            // At once, as the map's loading sets it (map.cc).
+            settings.ui.ignore_scroll_limit = !values.scrollLimit;
+            if (values.scrollLimit) {
+                tileScrollLimitingEnable();
+            } else {
+                tileScrollLimitingDisable();
+            }
         };
         applyPort(values);
 
@@ -699,6 +712,12 @@ namespace {
             Row row { Section::Display, RowKind::Toggle, kTextHighlightHiddenItems, "Highlight button: hidden things", Origin::Port, kTextHighlightHiddenItemsNote, "Things the game doesn't highlight but you can pick up" };
             row.get = [](const Values& values) { return values.highlightHiddenItems ? 1.0f : 0.0f; };
             row.set = [](Values& values, float value) { values.highlightHiddenItems = value != 0.0f; };
+            rows.push_back(row);
+        }
+        {
+            Row row { Section::Display, RowKind::Toggle, kTextScrollLimit, "View limited around the hero", Origin::Ce, kTextScrollLimitNote, "As in the original: the map can't be moved more than a screen away from the hero" };
+            row.get = [](const Values& values) { return values.scrollLimit ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.scrollLimit = value != 0.0f; };
             rows.push_back(row);
         }
         {

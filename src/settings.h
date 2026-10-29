@@ -159,7 +159,15 @@ struct UISettings {
     bool edg_support = true;
 
     // Disables the player-centered map scroll limit.
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
+    // CE: On the phone and in the browser the limit is off by default and
+    // the player's setting, not the game's f2_res.ini's
+    // (game_config_migration.cc): the view is the device's and zooms out
+    // past the limit, a computer's screen.
+    bool ignore_scroll_limit = true;
+#else
     bool ignore_scroll_limit = false;
+#endif
 
     // Disables map edges, including vanilla scroll blockers and CE hi-res stencil.
     bool ignore_map_edges = false;

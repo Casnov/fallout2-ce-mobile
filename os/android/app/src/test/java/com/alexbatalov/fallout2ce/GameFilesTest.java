@@ -152,8 +152,9 @@ public class GameFilesTest {
         // names fores.dat; CE takes it from there while [screen] is missing.
         String newConfig = "[system]\nmaster_dat=master.dat\n\n[ui]\nauto_quick_save=0\n";
         String oldConfig = "[system]\nf2_res_dat=f2_res.dat\n\n[screen]\nresolution_x=1066\nresolution_y=480\n\n"
-            + "[ui]\nauto_quick_save=1\niface_bar_side_art=2\nsplash_screen_size=1\ndisplay_bonus_damage=1\n";
-        assertEquals("[system]\nmaster_dat=master.dat\n\n[ui]\nauto_quick_save=1\ndisplay_bonus_damage=1\n",
+            + "[ui]\nauto_quick_save=1\niface_bar_side_art=2\nsplash_screen_size=1\ndisplay_bonus_damage=1\nignore_scroll_limit=1\n";
+        // The scroll limit around the hero is the player's on the phone.
+        assertEquals("[system]\nmaster_dat=master.dat\n\n[ui]\nauto_quick_save=1\ndisplay_bonus_damage=1\nignore_scroll_limit=1\n",
             GameFiles.mergeSettings(newConfig, oldConfig));
     }
 

@@ -317,6 +317,8 @@
 {452}{}{The dead you can search}
 {453}{}{Highlight button: hidden things}
 {454}{}{Things the game doesn't highlight but you can pick up}
+{455}{}{View limited around the hero}
+{456}{}{As in the original: the map can't be moved more than a screen away from the hero}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

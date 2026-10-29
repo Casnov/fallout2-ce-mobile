@@ -188,6 +188,15 @@ bool gameConfigMigrateFromF2Res(const char* gameConfigFilePath, Config* gameConf
 
     bool migrated = false;
     for (const auto& entry : kF2ResMigrationEntries) {
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
+        // CE: On the phone and in the browser the scroll limit around the
+        // player is the player's setting (settings.h), as the screen is the
+        // device's (svga.cc): a game's f2_res.ini sets it for a computer's
+        // screen.
+        if (strcmp(entry.targetKey, GAME_CONFIG_IGNORE_SCROLL_LIMIT_KEY) == 0) {
+            continue;
+        }
+#endif
         if (gameConfigMigrateStringKey(legacyConfig.get(), gameConfig, entry)) {
             migrated = true;
         }
