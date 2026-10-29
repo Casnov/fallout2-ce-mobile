@@ -444,13 +444,24 @@ final class GameFiles {
 
     // Carries out the journal if there is one (again after a crash: each
     // step can be repeated), then removes the staging folder - also one left
-    // by an import that didn't get to its journal.
+    // by an import that didn't get to its journal. The removed files go
+    // first: one may stand where the new game has a folder (master.dat, a
+    // file, before Fallout: Nevada's master.dat folder) or the other way.
     static void finish(File target) throws IOException {
         File journalFile = new File(target, JOURNAL);
         File staging = new File(target, STAGING);
         if (journalFile.isFile()) {
-            String journal = readText(journalFile);
-            for (String line : journal.split("\n")) {
+            String[] lines = readText(journalFile).split("\n");
+            for (String line : lines) {
+                String[] parts = line.split("\t");
+                if (parts.length == 2 && parts[0].equals("D")) {
+                    File file = GameImport.targetFile(target, parts[1]);
+                    //noinspection ResultOfMethodCallIgnored
+                    file.delete();
+                    removeEmptyFolders(target, file.getParentFile());
+                }
+            }
+            for (String line : lines) {
                 String[] parts = line.split("\t");
                 if (parts.length == 3 && parts[0].equals("M")) {
                     File from = new File(staging, parts[1]);
@@ -470,11 +481,6 @@ final class GameFiles {
                             throw new IOException("can't move " + parts[1]);
                         }
                     }
-                } else if (parts.length == 2 && parts[0].equals("D")) {
-                    File file = GameImport.targetFile(target, parts[1]);
-                    //noinspection ResultOfMethodCallIgnored
-                    file.delete();
-                    removeEmptyFolders(target, file.getParentFile());
                 }
             }
             if (!journalFile.delete()) {

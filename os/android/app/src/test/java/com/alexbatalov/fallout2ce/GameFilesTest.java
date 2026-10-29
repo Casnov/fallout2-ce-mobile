@@ -520,4 +520,27 @@ public class GameFilesTest {
         assertTrue(GameImport.isInstalled(game));
         assertTrue(GameFiles.isOriginalFile("master.dat/maps/vault.map"));
     }
+
+    @Test
+    public void masterDatFileAndFolderReplaceEachOther() throws IOException {
+        // Fallout 2 (master.dat a file) replaced by Fallout: Nevada 1.00
+        // (a folder), then the other way.
+        installGame();
+        MemorySource nevada = new MemorySource()
+            .put("Fallout_Nevada/master.dat/art/intrface/mainmenu.frm", "ART")
+            .put("Fallout_Nevada/critter.dat", "CRITTER")
+            .put("Fallout_Nevada/fallout2.cfg", "[system]\nmaster_dat=master.dat\n");
+        GameImport.Found found = GameImport.find(nevada, true);
+        GameImport.install(nevada, found, GameImport.plan(found, game, false), false, game, NO_PROGRESS);
+        assertEquals("ART", read("master.dat/art/intrface/mainmenu.frm"));
+        assertFalse(GameFiles.isCommitPending(game));
+
+        MemorySource fallout2 = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER");
+        found = GameImport.find(fallout2, true);
+        GameImport.install(fallout2, found, GameImport.plan(found, game, false), false, game, NO_PROGRESS);
+        assertEquals("MASTER", read("master.dat"));
+        assertEquals("SAVE", read("data/SAVEGAME/SLOT01/SAVE.DAT"));
+    }
 }
