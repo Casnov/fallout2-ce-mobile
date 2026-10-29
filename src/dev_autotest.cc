@@ -428,6 +428,9 @@ enum DevAutotestAction {
     // The scroll limit around the dude on ([a] = 1) or off, as the settings
     // screen's row sets it.
     DEV_AUTOTEST_ACTION_SCROLL_LIMIT,
+    // What covers the ground outside the tactical view (the tile markers'):
+    // PASS when it's kept and the dude is over everything there.
+    DEV_AUTOTEST_ACTION_CHECK_GROUND_COVER,
     // The view's center from the dude (screen pixels); PASS when at the
     // limit's 480 x 400 or past it ([a] = 1), or within it ([a] = 0).
     DEV_AUTOTEST_ACTION_CHECK_VIEW_FROM_DUDE,
@@ -3106,6 +3109,13 @@ static const DevAutotestStep kDevAutotestWeaponPanSteps[] = {
     { DEV_AUTOTEST_ACTION_PAN_CHECKED, -150, -60, 1, 40, "wp06_pan_again" },
 };
 
+// The tile markers lie on the ground outside the tactical view too: what
+// covers it is kept, the dude over everything.
+static const DevAutotestStep kDevAutotestGroundCoverSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "gc00_map" },
+    { DEV_AUTOTEST_ACTION_CHECK_GROUND_COVER, 0, 0, 0, 1, "gc01_cover" },
+};
+
 // The scroll limit around the dude: on, the view stops a screen from him;
 // off (the phone's default, the settings' row), it goes past. Run with
 // --dev-map=arvillag.map: the start map's edges come before the limit.
@@ -3411,6 +3421,9 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "multihexblood") == 0) {
         gDevAutotestSteps = kDevAutotestMultihexBloodSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMultihexBloodSteps) / sizeof(kDevAutotestMultihexBloodSteps[0]);
+    } else if (strcmp(name, "groundcover") == 0) {
+        gDevAutotestSteps = kDevAutotestGroundCoverSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestGroundCoverSteps) / sizeof(kDevAutotestGroundCoverSteps[0]);
     } else if (strcmp(name, "scrolllimit") == 0) {
         gDevAutotestSteps = kDevAutotestScrollLimitSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestScrollLimitSteps) / sizeof(kDevAutotestScrollLimitSteps[0]);
@@ -4782,6 +4795,26 @@ void devAutotestTick()
             float y = static_cast<float>(screenGetVisibleHeight() / 2);
             devAutotestStartTouch(x, y, x + step->a, y + step->b, 0, 15);
             gDevAutotestTouchDelay = swap ? static_cast<int>(step->c) : 0;
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_GROUND_COVER: {
+            int width;
+            int height;
+            int pitch;
+            const unsigned char* cover = objectSeeThroughCover(&width, &height, &pitch);
+            int top = 0;
+            Rect dudeRect;
+            if (cover != nullptr) {
+                objectGetRect(gDude, &dudeRect);
+                for (int y = std::max(dudeRect.top, 0); y <= std::min(dudeRect.bottom, height - 1); y++) {
+                    for (int x = std::max(dudeRect.left, 0); x <= std::min(dudeRect.right, width - 1); x++) {
+                        top += cover[pitch * y + x] == static_cast<unsigned char>(ObjectSeeThroughCover::Top) ? 1 : 0;
+                    }
+                }
+            }
+            bool ok = cover != nullptr && !tacticalViewIsShown() && top > 0;
+            devAutotestLog("  ground cover %s, tactical view %d, the dude's pixels over everything %d: %s\n", cover != nullptr ? "kept" : "none",
+                tacticalViewIsShown() ? 1 : 0, top, ok ? "PASS" : "FAIL");
             break;
         }
         case DEV_AUTOTEST_ACTION_SCROLL_LIMIT:
