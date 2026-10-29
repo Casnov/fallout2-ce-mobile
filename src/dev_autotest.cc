@@ -1831,6 +1831,12 @@ static const DevAutotestStep kDevAutotestAboutSteps[] = {
     { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 40, "a01_menu" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "a02_settings", "menu.settings" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "a03_about", "prefs.sections.5" },
+    { DEV_AUTOTEST_ACTION_CHECK_WIDGET, 1, 0, 0, 1, "a03b_update_row", "prefs.about.update" },
+    // A build that can't update itself says so instead of the controls.
+    { DEV_AUTOTEST_ACTION_UPDATE_STATE, -1, 0, 0, 10, "a04_no_updates" },
+    { DEV_AUTOTEST_ACTION_CHECK_WIDGET, 1, 0, 0, 1, "a04b_manual_note", "prefs.about.update.manual" },
+    { DEV_AUTOTEST_ACTION_CHECK_WIDGET, 0, 0, 0, 1, "a04c_no_update_row", "prefs.about.update" },
+    { DEV_AUTOTEST_ACTION_UPDATE_STATE, 0, 0, 0, 10, "a04d_updates_back" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0, -0.5f, 0, 40, "a05_scrolled", "prefs.about" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0, -0.5f, 0, 40, "a06_scrolled", "prefs.about" },
     { DEV_AUTOTEST_ACTION_CHECK_WIDGET, 1, 0, 0, 1, "a07_source_button", "prefs.about.source" },

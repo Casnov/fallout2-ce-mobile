@@ -319,6 +319,12 @@
 {454}{}{Things the game doesn't highlight but you can pick up}
 {455}{}{View limited around the hero}
 {456}{}{As in the original: the map can't be moved more than a screen away from the hero}
+{457}{}{Updates}
+{458}{}{Contact}
+{459}{}{Thanks}
+{460}{}{Project}
+{461}{}{This build doesn't update itself: new versions are installed by hand.}
+{462}{}{The browser version updates itself when you open it.}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

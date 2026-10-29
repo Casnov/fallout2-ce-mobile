@@ -1057,12 +1057,19 @@ namespace {
         bool deleting = updates && !inGame && appUpdateReady() && appUpdateState() != AppUpdateState::Checking && appUpdateState() != AppUpdateState::Installing;
         auto notice = muiWrapText(label(kTextAboutNotice, "An unofficial mobile version of Fallout 2 Community Edition: CE's engine changed for touch screens. Not affiliated with or endorsed by Microsoft, Bethesda Softworks, ZeniMax or Interplay. Needs your own copy of Fallout 2."), rect.w - ui.dp(8.0f), size);
         auto thanksNote = muiWrapText(label(444, "The app, its updates and all of its features are free. A thank-you goes to the port's author personally: it is not a payment for Fallout 2 or for the app, and it has nothing to do with Microsoft, Bethesda Softworks, ZeniMax, Interplay or any other owner of Fallout. It gives no access to builds or features, no priority for fixes and no commitment to development."), rect.w - ui.dp(8.0f), size);
+        // A build that can't update itself says so where the controls are.
+#ifdef __EMSCRIPTEN__
+        auto manual = muiWrapText(label(462, "The browser version updates itself when you open it."), rect.w - ui.dp(8.0f), size);
+#else
+        auto manual = muiWrapText(label(461, "This build doesn't update itself: new versions are installed by hand."), rect.w - ui.dp(8.0f), size);
+#endif
         float titleHeight = ui.dp(24.0f);
+        float headerHeight = ui.dp(tall ? 44.0f : 36.0f);
         float noticeHeight = notice.size() * line;
         float updateNote = updates && inGame && appUpdateHasRelease() ? line * 2.0f : 0.0f;
-        float height = titleHeight + line + gap + noticeHeight + gap
-            + (updates ? rowHeight * (deleting ? 3.0f : 2.0f) + line + updateNote + gap : 0.0f) + rowHeight * 6.0f
-            + thanksNote.size() * line + gap;
+        float height = titleHeight + line + gap + noticeHeight + gap + headerHeight * 4.0f
+            + (updates ? rowHeight * (deleting ? 3.0f : 2.0f) + line + updateNote : manual.size() * line) + gap
+            + rowHeight * 6.0f + thanksNote.size() * line + gap;
         if (resetScroll) {
             ui.setScroll("prefs.about", 0.0f);
             resetScroll = false;
@@ -1108,8 +1115,26 @@ namespace {
             }
             return ui.button(id, button, verb, style);
         };
+        // A group's name, as the other sections show theirs.
+        auto group = [&](int id, const char* fallback) {
+            MuiRect header = { rect.x + ui.dp(4.0f), y + ui.dp(10.0f), rect.w, headerHeight - ui.dp(10.0f) };
+            y += headerHeight;
+            if (visible(header)) muiDrawTextAligned(label(id, fallback), header, ui.dp(tall ? 15.0f : 13.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
+        };
 
-        if (updates) {
+        // Updates, the author's pages, the thanks, then the project's
+        // source and licenses.
+        group(457, "Updates");
+        if (!updates) {
+            MuiRect hint = { rect.x + ui.dp(4.0f), y, rect.w - ui.dp(8.0f), manual.size() * line };
+            for (const auto& value : manual) {
+                muiDrawTextAligned(value, { hint.x, y, hint.w, line }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+                y += line;
+            }
+            y += gap;
+            if (visible(hint)) ui.mark("prefs.about.update.manual", hint);
+            separator();
+        } else {
             bool available = appUpdateHasRelease();
             bool busy = appUpdateState() == AppUpdateState::Checking || appUpdateState() == AppUpdateState::Installing;
             std::u32string verb = !inGame && available ? (appUpdateReady() ? label(408, "Install") : label(407, "Update")) : label(411, "Check");
@@ -1153,21 +1178,24 @@ namespace {
             y += line + gap;
             separator();
         }
-        // The author's pages, then the source; the thanks with what it is not.
+        group(458, "Contact");
         if (actionRow("prefs.about.telegram", label(440, "Developer news on Telegram"), label(438, "Open"))) SDL_OpenURL(kPortTelegramUrl);
         separator();
         if (actionRow("prefs.about.youtube", label(441, "Videos and guides on YouTube"), label(438, "Open"))) SDL_OpenURL(kPortYouTubeUrl);
         separator();
         if (actionRow("prefs.about.issues", label(442, "Report a problem"), label(438, "Open"))) SDL_OpenURL(kPortIssuesUrl);
         separator();
-        if (actionRow("prefs.about.source", label(437, "Source code"), label(438, "Open"))) SDL_OpenURL(kPortSourceUrl);
-        separator();
+        // The thanks with what it is not.
+        group(459, "Thanks");
         if (actionRow("prefs.about.thanks", label(443, "Thank the port's author"), U"Boosty")) SDL_OpenURL(kPortThanksUrl);
         for (const auto& value : thanksNote) {
             muiDrawTextAligned(value, { rect.x + ui.dp(4.0f), y, rect.w - ui.dp(8.0f), line }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
             y += line;
         }
         y += gap;
+        separator();
+        group(460, "Project");
+        if (actionRow("prefs.about.source", label(437, "Source code"), label(438, "Open"))) SDL_OpenURL(kPortSourceUrl);
         separator();
         if (actionRow("prefs.about.licenses", label(kTextAboutLicenses, "Licenses"), label(435, "View"))) pendingLicenses = true;
         separator();
