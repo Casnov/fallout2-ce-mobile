@@ -233,6 +233,10 @@ enum DevAutotestAction {
     // file (Fallout 1.5: Resurrection's xnefunk7.int in New Hope) fail and
     // the game goes on, as in the original.
     DEV_AUTOTEST_ACTION_MISSING_SCRIPT,
+    // Each party.txt member's critter (on its proto's packet) is switched to
+    // each disposition: either it goes to a packet of that disposition or
+    // it stays where it was (aiSetDisposition, combat_ai.cc).
+    DEV_AUTOTEST_ACTION_CHECK_DISPOSITIONS,
     // A bag (pid `a`) with a thing (pid `c`) in it two hexes east of the
     // dude, a dead critter (pid `b`) with the same thing two hexes
     // south-west, and the thing alone with the game's "no highlight" flag
@@ -3151,6 +3155,34 @@ static const DevAutotestStep kDevAutotestMissingScriptSteps[] = {
     { DEV_AUTOTEST_ACTION_MISSING_SCRIPT, 0, 0, 0, 1, "ms01_missing" },
 };
 
+// A party member's disposition only goes to a packet of it: every party.txt
+// member of the game, any game (Dogmeat's berserk gave him the Khans'
+// packets, Sonora's companions other companions').
+static const DevAutotestStep kDevAutotestDispositionsSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "dp00_map" },
+    { DEV_AUTOTEST_ACTION_CHECK_DISPOSITIONS, 0, 0, 0, 1, "dp01_rule" },
+};
+
+// The mobile talk screen's control tab with Dogmeat (RPU's test game): his
+// packets are sorted by name, so berserk is off; aggressive and the custom
+// settings work.
+static const DevAutotestStep kDevAutotestDogmeatControlSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "dc00_map" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 342, 2, ROTATION_SE, 10, "dc01_dogmeat", "ECDogMet.int" },
+    { DEV_AUTOTEST_ACTION_TALK_PARTY_MEMBER, 342, 0, 0, 150, "dc02_talk" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "dc02b_wait" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "dc03_party_tab", "dialog.tab.party" },
+    { DEV_AUTOTEST_ACTION_LOG_PARTY_CONTROL, 0, 0, 0, 1, "dc03b_log" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "dc04_berserk", "talk.party.disposition.4" },
+    { DEV_AUTOTEST_ACTION_LOG_PARTY_CONTROL, 0, 0, 0, 1, "dc04b_log" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "dc05_aggressive", "talk.party.disposition.3" },
+    { DEV_AUTOTEST_ACTION_LOG_PARTY_CONTROL, 0, 0, 0, 1, "dc05b_log" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "dc06_distance", "talk.party.setting.3" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "dc07_charge", "talk.party.values.1" },
+    { DEV_AUTOTEST_ACTION_LOG_PARTY_CONTROL, 0, 0, 0, 1, "dc07b_log" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "dc08_talk_tab", "dialog.tab.talk" },
+};
+
 // Party member control tab of the mobile talk screen (test save, Sulik).
 static const DevAutotestStep kDevAutotestPartySteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "q00_start" },
@@ -3448,6 +3480,12 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "firstmap") == 0) {
         gDevAutotestSteps = kDevAutotestFirstMapSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestFirstMapSteps) / sizeof(kDevAutotestFirstMapSteps[0]);
+    } else if (strcmp(name, "dispositions") == 0) {
+        gDevAutotestSteps = kDevAutotestDispositionsSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestDispositionsSteps) / sizeof(kDevAutotestDispositionsSteps[0]);
+    } else if (strcmp(name, "dogmeatcontrol") == 0) {
+        gDevAutotestSteps = kDevAutotestDogmeatControlSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestDogmeatControlSteps) / sizeof(kDevAutotestDogmeatControlSteps[0]);
     } else if (strcmp(name, "missingscript") == 0) {
         gDevAutotestSteps = kDevAutotestMissingScriptSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestMissingScriptSteps) / sizeof(kDevAutotestMissingScriptSteps[0]);
@@ -4211,10 +4249,16 @@ void devAutotestTick()
         case DEV_AUTOTEST_ACTION_LOG_PARTY_CONTROL: {
             PartyControlView view;
             if (gameDialogGetPartyControlView(&view)) {
-                devAutotestLog("  party control: weapon pid %d, armor pid %d, hp %d/%d, disposition %d, settings %d %d %d %d %d %d\n",
+                char offered[kPartyControlDispositionCount + 1];
+                for (int disposition = 0; disposition < kPartyControlDispositionCount; disposition++) {
+                    offered[disposition] = view.dispositionSupported[disposition] ? '1' : '0';
+                }
+                offered[kPartyControlDispositionCount] = '\0';
+                devAutotestLog("  party control: weapon pid %d, armor pid %d, hp %d/%d, disposition %d (offered %s), packet %d, settings %d %d %d %d %d %d\n",
                     view.weapon != nullptr ? view.weapon->pid : -1,
                     view.armor != nullptr ? view.armor->pid : -1,
-                    view.hitPoints, view.maximumHitPoints, view.disposition,
+                    view.hitPoints, view.maximumHitPoints, view.disposition, offered,
+                    gDevAutotestPartyMember != nullptr ? gDevAutotestPartyMember->data.critter.combat.aiPacket : -1,
                     view.settings[0], view.settings[1], view.settings[2], view.settings[3], view.settings[4], view.settings[5]);
             } else {
                 devAutotestLog("  party control: none\n");
@@ -7043,6 +7087,61 @@ void devAutotestTick()
             devAutotestLog("  day %d: %d of %d checks asked for a movie, GVAR_TOWN_REP_ARROYO %d -> %d, areas %d/%d -> %d/%d: %s\n",
                 static_cast<int>(gameTimeGetTime() / GAME_TIME_TICKS_PER_DAY), asked, static_cast<int>(step->a), rep, gameGetGlobalVar(GVAR_TOWN_REP_ARROYO),
                 arroyoKnown ? 1 : 0, destroyedKnown ? 1 : 0, wmAreaIsKnown(CITY_ARROYO) ? 1 : 0, wmAreaIsKnown(CITY_DESTROYED_ARROYO) ? 1 : 0, ok ? "PASS" : "FAIL");
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_CHECK_DISPOSITIONS: {
+            static const char* const names[] = { "custom", "coward", "defensive", "aggressive", "berserk" };
+            int members = 0;
+            int failures = 0;
+            for (int index = 1; index < gPartyMemberDescriptionsLength; index++) {
+                // Not on the map: a critter object of the member's pid and
+                // proto's packet, as one made from the proto has (its script
+                // could do anything).
+                const ProtoId protoId = gPartyMemberProtoIds[index];
+                Proto* proto;
+                if (!protoId.valid() || protoId.objectType() != OBJ_TYPE_CRITTER || protoGetProto(protoId, &proto) == -1) {
+                    continue;
+                }
+
+                Object object = {};
+                object.pid = protoId.pid();
+                object.fid = proto->fid;
+                object.sid = -1;
+                object.data.critter.combat.aiPacket = proto->critter.aiPacket;
+                Object* critter = &object;
+
+                members++;
+                int start = critter->data.critter.combat.aiPacket;
+                std::string goes;
+                std::string stays;
+                for (int value = 0; value < 5; value++) {
+                    Disposition disposition = static_cast<Disposition>(value);
+                    if (!partyMemberSupportsDisposition(critter, disposition)) {
+                        continue;
+                    }
+
+                    bool can = aiCanSetDisposition(critter, disposition);
+                    int rc = aiSetDisposition(critter, disposition);
+                    int packet = critter->data.critter.combat.aiPacket;
+                    bool ok = rc == 0
+                        ? can && aiGetDisposition(critter) == disposition
+                        : !can && packet == start;
+                    if (!ok) {
+                        failures++;
+                    }
+
+                    std::string& list = rc == 0 ? goes : stays;
+                    char item[48];
+                    snprintf(item, sizeof(item), "%s%s %d%s", list.empty() ? "" : ", ", names[value], packet, ok ? "" : " FAIL");
+                    list += item;
+                    critter->data.critter.combat.aiPacket = start;
+                }
+
+                devAutotestLog("  pid %d %s, packet %d (%d): goes to %s; stays at %s\n",
+                    protoId.pid(), objectGetName(critter), start, aiGetDisposition(critter),
+                    goes.empty() ? "-" : goes.c_str(), stays.empty() ? "-" : stays.c_str());
+            }
+            devAutotestLog("  %d party members: %s\n", members, failures == 0 ? "PASS" : "FAIL");
             break;
         }
         case DEV_AUTOTEST_ACTION_MISSING_SCRIPT: {
