@@ -1486,3 +1486,14 @@ web, the same rules, tests on both):
   leaves the mod's folder out.
 - Checked 2026-10-29 on the real releases: Nevada 1.00, Resurrection 1.5
   installed onto Fallout 2, Fallout 2 with Et Tu, RPU.
+- Real games' check (`out/dev/realgames.sh`, local: the games' list in
+  `out/dev/realgames.txt`, archives or folders, a mod's chosen root): each
+  game installed from scratch by Android's import (`RealGamesTest`, skipped
+  without `FALLOUT_REAL_GAMES`), every game replaced by every other (the
+  plans: the result is the other game's first install), a chain of real
+  replacements (files, the player's save and setting); the web's files of
+  the same archives are Android's (`test_real_games.mjs`); the engine starts
+  each installed game to its first map (autotest `firstmap`). Ten games
+  (Fallout 2 plain, GOG, RPU, Et Tu and Fallout 2 of the same archive,
+  Resurrection 1.5 and its rebuild, Nevada 1.00 and its rebuild, Sonora) in
+  about 3.5 minutes; a game more is a line in the list.

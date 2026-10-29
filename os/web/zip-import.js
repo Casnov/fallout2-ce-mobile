@@ -257,6 +257,16 @@ export async function readZipFile(item,max,signal) {
   await item.entry.getData(writer.stream,{signal,checkCrc32:true,checkOverlappingEntry:true,strictness:'strict',checkLocalFilename:true});
   return data;
 }
+// The game in [archive] (`openGameArchive`) and the files to put in:
+// {plan} (`archivePlan`), or {choices} (Fallout 2's root and its mods') for
+// Fallout 2 with mods in its subfolders and no [choice]. [readText]: a
+// file's text. [previous]: the installed game's manifest, for mods only.
+export async function planGameArchive(archive,{previous = null,choice = null,previousConfig = CONFIG,readText}) {
+  const found = gameRoot(archive.files,previous);
+  const linked = found.modsOnly ? new Map() : await linkedGames(archive.files,found.root,readText);
+  if (linked.size && choice === null) return {choices:[found.root.path,...[...linked.values()].map(mod => mod.path).sort()]};
+  return {plan:archivePlan(archive.entries,previous,{linked,chosen:choice,previousConfig})};
+}
 // [choice]: with Fallout 2 and mods in its subfolders (`linkedGames`), the
 // root the player chose of the summary's `choices`; without it such an
 // archive gives only the choices.
@@ -279,14 +289,11 @@ export async function prepareGameZip(file,{signal,choice = null,storeFactory = o
     };
     const previousDdraw = previous?.files.find(item => item.path.toLowerCase() === 'ddraw.ini');
     const previousConfig = configName(previousDdraw ? await readPrevious(previousDdraw) : '');
-    const found = gameRoot(archive.files,previous);
-    const linked = found.modsOnly ? new Map() : await linkedGames(archive.files,found.root,readText);
-    if (linked.size && choice === null) {
-      const choices = [found.root.path,...[...linked.values()].map(mod => mod.path).sort()];
+    const {choices,plan} = await planGameArchive(archive,{previous,choice,previousConfig,readText});
+    if (choices) {
       return {summary:Object.freeze({token:crypto.randomUUID(),choices}),dispose,
         async install() { invalid('stale_plan','Choose which game to install first'); }};
     }
-    const plan = archivePlan(archive.entries,previous,{linked,chosen:choice,previousConfig});
     const ddraw = plan.files.find(item => item.path.toLowerCase() === 'ddraw.ini');
     const name = plan.modsOnly && !ddraw ? previousConfig : configName(ddraw ? await readText(ddraw) : '');
     const config = plan.files.find(item => item.path.toLowerCase() === name.toLowerCase());
