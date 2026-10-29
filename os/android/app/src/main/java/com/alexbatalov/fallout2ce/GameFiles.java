@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -512,9 +513,9 @@ final class GameFiles {
     }
 
     // The new game's config with the player's settings of the old one:
-    // every section's values but [system] (the language and the game's
-    // files) and the music folders (the new game's). Keys and sections the
-    // new one lacks are added; its lines, comments and order stay.
+    // every section's values but the new game's own (`isPlayerSetting`).
+    // Keys and sections the new one lacks are added; its lines, comments and
+    // order stay.
     static String mergeSettings(String newText, String oldText) {
         Map<String, LinkedHashMap<String, String>> old = parseConfig(oldText);
         String newline = newText.contains("\r\n") ? "\r\n" : "\n";
@@ -588,11 +589,29 @@ final class GameFiles {
         merged.insert(end, missing);
     }
 
+    // The game's own settings, not carried over: [system] (the language and
+    // the game's files), the music folders, [screen] (the device's, svga.cc)
+    // and what CE takes from the game's f2_res.ini (game_config_migration.cc):
+    // it does that at the game's first start, for the keys its config lacks,
+    // and only while it has no [screen] resolution_x. Fallout 1.5:
+    // Resurrection's own fores.dat is its f2_res.ini's f2_res_dat.
+    private static final Set<String> F2_RES_UI_KEYS = new HashSet<>(Arrays.asList(
+        "iface_bar_mode", "iface_bar_width", "iface_bar_side_art", "iface_bar_sides_ori",
+        "ignore_scroll_limit", "alternate_ammo_meter", "ignore_map_edges", "splash_screen_size",
+        "death_screen_size", "end_slide_size", "movie_aspect_fit", "main_menu_scale_mode"));
+
     private static boolean isPlayerSetting(String section, String key) {
-        if (section.equals("system")) {
-            return false;
+        switch (section) {
+            case "system":
+            case "screen":
+                return false;
+            case "sound":
+                return !key.equals("music_path1") && !key.equals("music_path2");
+            case "ui":
+                return !F2_RES_UI_KEYS.contains(key);
+            default:
+                return true;
         }
-        return !(section.equals("sound") && (key.equals("music_path1") || key.equals("music_path2")));
     }
 
     // Sections (lower case) -> keys (lower case) -> values.

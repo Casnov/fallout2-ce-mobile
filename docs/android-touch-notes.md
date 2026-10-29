@@ -1466,6 +1466,13 @@ web, the same rules, tests on both):
   names (Fallout 1.5: Resurrection's `fores.cfg`), else `fallout2.cfg`
   (`GameFiles.configName`, `configName`). Paths are fixed, the player's
   settings carried over and saves read in that file.
+- The settings carried over are the player's, not the game's own:
+  `[system]`, the music folders, `[screen]` (the device decides it) and what
+  CE takes from the game's `f2_res.ini` stay the new game's. CE migrates
+  `f2_res.ini` at the game's first start, per key its config lacks, and only
+  while it has no `[screen] resolution_x`: Resurrection's own `fores.dat`
+  (its main menu, its art) is its `f2_res.ini`'s `f2_res_dat`, so a carried
+  `[screen]` left it out.
 - master.dat and critter.dat may be folders (Fallout: Nevada 1.00).
 - A mod in Fallout 2's subfolder whose config names master.dat and
   critter.dat outside it (`..\master.dat`: Fallout Et Tu, Resurrection) is a

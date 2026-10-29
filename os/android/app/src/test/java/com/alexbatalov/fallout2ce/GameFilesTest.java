@@ -144,6 +144,17 @@ public class GameFilesTest {
     }
 
     @Test
+    public void theGamesOwnScreenSettingsStay() {
+        // Fallout 1.5: Resurrection: fores.cfg has no [screen], its f2_res.ini
+        // names fores.dat; CE takes it from there while [screen] is missing.
+        String newConfig = "[system]\nmaster_dat=master.dat\n\n[ui]\nauto_quick_save=0\n";
+        String oldConfig = "[system]\nf2_res_dat=f2_res.dat\n\n[screen]\nresolution_x=1066\nresolution_y=480\n\n"
+            + "[ui]\nauto_quick_save=1\niface_bar_side_art=2\nsplash_screen_size=1\ndisplay_bonus_damage=1\n";
+        assertEquals("[system]\nmaster_dat=master.dat\n\n[ui]\nauto_quick_save=1\ndisplay_bonus_damage=1\n",
+            GameFiles.mergeSettings(newConfig, oldConfig));
+    }
+
+    @Test
     public void computerPathsInTheConfigFixed() throws IOException {
         game = temporary.newFolder("game");
         write("fallout2.cfg", "[sound]\r\nmusic_path1=C:\\Games\\Fallout 2\\data\\sound\\music\\\r\nmusic_path2=..\\data\\sound\\music\\\r\nmusic_volume=22000\r\n\r\n"
