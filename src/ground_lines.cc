@@ -217,6 +217,88 @@ void groundLinesAddPath(const std::vector<SDL_FPoint>& points, bool closed, floa
     }
 }
 
+void groundLinesAddFill(const std::vector<SDL_FPoint>& points, MuiColor color)
+{
+    int count = static_cast<int>(points.size());
+    if (count < 3) {
+        return;
+    }
+
+    float top = points[0].y;
+    float bottom = points[0].y;
+    for (const SDL_FPoint& point : points) {
+        top = std::min(top, point.y);
+        bottom = std::max(bottom, point.y);
+    }
+
+    // The polygon's span at [y] (convex: one), false outside it.
+    auto span = [&](float y, float* left, float* right) {
+        bool found = false;
+        for (int index = 0; index < count; index++) {
+            const SDL_FPoint& a = points[index];
+            const SDL_FPoint& b = points[(index + 1) % count];
+            if (std::min(a.y, b.y) > y || std::max(a.y, b.y) < y) {
+                continue;
+            }
+            float x = a.y == b.y ? a.x : a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y);
+            float x2 = a.y == b.y ? b.x : x;
+            if (!found) {
+                *left = std::min(x, x2);
+                *right = std::max(x, x2);
+                found = true;
+            } else {
+                *left = std::min(*left, std::min(x, x2));
+                *right = std::max(*right, std::max(x, x2));
+            }
+        }
+        return found;
+    };
+
+    auto addVertex = [&](float worldX, float worldY, float shown) {
+        Uint8 alpha = static_cast<Uint8>(std::lround(color.a * shown));
+        gState.vertices.push_back({ { gState.originX + worldX * gState.zoomX, gState.originY + worldY * gState.zoomY }, { color.r, color.g, color.b, alpha }, { 0.0f, 0.0f } });
+    };
+
+    // Rows a world pixel high: trapezoids between the polygon's sides at the
+    // row's top and bottom, cut where what covers the ground changes (by
+    // the row's middle).
+    for (int row = static_cast<int>(std::floor(top)); row < static_cast<int>(std::ceil(bottom)); row++) {
+        float upper = std::max(static_cast<float>(row), top);
+        float lower = std::min(static_cast<float>(row + 1), bottom);
+        float middle = (upper + lower) / 2.0f;
+        float upperLeft;
+        float upperRight;
+        float lowerLeft;
+        float lowerRight;
+        float left;
+        float right;
+        if (!span(upper, &upperLeft, &upperRight) || !span(lower, &lowerLeft, &lowerRight) || !span(middle, &left, &right) || right <= left) {
+            continue;
+        }
+
+        // [x] of the middle on the row's top and bottom.
+        auto across = [&](float x, float sideLeft, float sideRight) {
+            return sideLeft + (sideRight - sideLeft) * (x - left) / (right - left);
+        };
+
+        float from = left;
+        while (from < right) {
+            float shown = shownAt(from, middle);
+            float to = std::min(std::floor(from) + 1.0f, right);
+            while (to < right && shownAt(to, middle) == shown) {
+                to = std::min(to + 1.0f, right);
+            }
+            int first = static_cast<int>(gState.vertices.size());
+            addVertex(across(from, upperLeft, upperRight), upper, shown);
+            addVertex(across(to, upperLeft, upperRight), upper, shown);
+            addVertex(across(to, lowerLeft, lowerRight), lower, shown);
+            addVertex(across(from, lowerLeft, lowerRight), lower, shown);
+            gState.indices.insert(gState.indices.end(), { first, first + 1, first + 2, first, first + 2, first + 3 });
+            from = to;
+        }
+    }
+}
+
 void groundLinesEnd()
 {
     SDL_Renderer* renderer = muiDrawGetRenderer();
