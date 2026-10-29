@@ -99,8 +99,14 @@ final class GameFiles {
         return current;
     }
 
+    // The app's own logs in the game's folder (the engine's debug.log,
+    // perf.log, hud.log; the journal and the touch log with their old copies).
+    // A game's own .log files (Resurrection's fores_change.log) are its files.
+    private static final Set<String> APP_LOGS = new HashSet<>(Arrays.asList(
+        "actions.log", "actions.log.old", "touch.log", "touch.log.old", "debug.log", "perf.log", "hud.log"));
+
     // The game's files (replaced and removed by "Replace game"): all but the
-    // saves, the app's own (ce.dat, logs, the import's own files) and
+    // saves, the app's own (ce.dat, its logs, the import's own files) and
     // screenshots. [path]: from the game's folder, "/" between folders.
     static boolean isGameFile(String path) {
         String lower = path.toLowerCase(Locale.ROOT);
@@ -108,8 +114,7 @@ final class GameFiles {
             return false;
         }
         if (lower.indexOf('/') == -1) {
-            return !(lower.endsWith(".log")
-                || lower.endsWith(".log.old")
+            return !(APP_LOGS.contains(lower)
                 || (lower.startsWith("scr") && (lower.endsWith(".bmp") || lower.endsWith(".png"))));
         }
         return true;
@@ -173,8 +178,11 @@ final class GameFiles {
 
     // [paths] / [sizes]: the source's files; [installed]: `installedGameFiles`
     // of [target]. [modsOnly]: the original files stay (the source has no
-    // master.dat).
-    static Plan plan(List<String> paths, List<Long> sizes, File target, Map<String, String> installed, boolean modsOnly) {
+    // master.dat). [config]: the new game's config's name (`configName`):
+    // the installed one of that name stays (the player's settings, also
+    // when the source has none); another game's (Resurrection's fores.cfg)
+    // goes, its settings carried into the new one (`commit`).
+    static Plan plan(List<String> paths, List<Long> sizes, File target, Map<String, String> installed, boolean modsOnly, String config) {
         Plan plan = new Plan();
         Set<String> source = new HashSet<>();
         for (int index = 0; index < paths.size(); index++) {
@@ -201,10 +209,10 @@ final class GameFiles {
             }
         }
 
-        String installedConfig = configName(target).toLowerCase(Locale.ROOT);
+        String keptConfig = config.toLowerCase(Locale.ROOT);
         for (Map.Entry<String, String> file : installed.entrySet()) {
             String lower = file.getKey();
-            if (source.contains(lower) || (modsOnly && isOriginalFile(lower)) || lower.equals(installedConfig)) {
+            if (source.contains(lower) || (modsOnly && isOriginalFile(lower)) || lower.equals(keptConfig)) {
                 continue;
             }
             plan.removed.add(file.getValue());

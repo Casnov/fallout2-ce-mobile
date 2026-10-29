@@ -125,6 +125,9 @@ public class GameFilesTest {
         assertFalse(GameFiles.isGameFile("actions.log"));
         assertFalse(GameFiles.isGameFile("touch.log.old"));
         assertFalse(GameFiles.isGameFile("scr00001.bmp"));
+        assertFalse(GameFiles.isGameFile("debug.log"));
+        // A game's own log (Resurrection's change log) is its file.
+        assertTrue(GameFiles.isGameFile("fores_change.log"));
         assertFalse(GameFiles.isGameFile(".import-staging/master.dat"));
         assertTrue(GameFiles.isOriginalFile("MASTER.DAT"));
         assertTrue(GameFiles.isOriginalFile("sound/music/07desert.acm"));
@@ -542,5 +545,46 @@ public class GameFilesTest {
         GameImport.install(fallout2, found, GameImport.plan(found, game, false), false, game, NO_PROGRESS);
         assertEquals("MASTER", read("master.dat"));
         assertEquals("SAVE", read("data/SAVEGAME/SLOT01/SAVE.DAT"));
+    }
+
+    @Test
+    public void foldersTakeTheInstalledCase() throws IOException {
+        // CE sees one of "DATA/" and "data/": the files go into the one there.
+        installGame();
+        write("data/maps/old.map", "OLD MAP");
+        MemorySource source = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("DATA/MAPS/new.map", "NEW MAP")
+            .put("Data/Proto/items/00000001.pro", "PRO")
+            .put("DATA/proto/ITEMS/00000002.pro", "PRO 2");
+        // The paths, not the folders: this computer's disk may ignore case.
+        GameImport.Found found = GameImport.find(source, false);
+        GameFiles.Plan plan = GameImport.plan(found, game, false);
+        assertTrue(plan.paths.toString(), plan.paths.contains("data/maps/new.map"));
+        assertTrue(plan.paths.toString(), plan.paths.contains("data/Proto/items/00000001.pro"));
+        assertTrue(plan.paths.toString(), plan.paths.contains("data/Proto/items/00000002.pro"));
+        GameImport.install(source, found, plan, false, game, NO_PROGRESS);
+        assertEquals("PRO 2", read("data/Proto/items/00000002.pro"));
+    }
+
+    @Test
+    public void anotherGamesConfigGoesItsSettingsCarried() throws IOException {
+        // Resurrection (fores.cfg) replaced by Fallout 2 (fallout2.cfg).
+        game = temporary.newFolder("game");
+        GameImport.Found found = GameImport.find(fallout2WithResurrection(), false, "Fallout 2/Resurrection/");
+        GameImport.install(fallout2WithResurrection(), found, GameImport.plan(found, game, true), true, game, NO_PROGRESS);
+        write("fores.cfg", read("fores.cfg") + "\n[preferences]\ngame_difficulty=2\n");
+        write("fores_change.log", "CHANGES");
+
+        MemorySource fallout2 = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("fallout2.cfg", "[system]\nlanguage=english\n\n[preferences]\ngame_difficulty=1\n");
+        found = GameImport.find(fallout2, true);
+        GameImport.install(fallout2, found, GameImport.plan(found, game, false), false, game, NO_PROGRESS);
+        assertFalse(exists("fores.cfg"));
+        assertFalse(exists("fores_change.log"));
+        assertTrue(read("fallout2.cfg"), read("fallout2.cfg").contains("game_difficulty=2"));
     }
 }

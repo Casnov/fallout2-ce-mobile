@@ -637,24 +637,54 @@ final class GameImport {
     // (GameFiles.plan). [withSaves]: the source's saves come along (the
     // first install); else the installed ones are left as they are.
     static GameFiles.Plan plan(Found found, File target, boolean withSaves) {
+        Map<String, String> installed = GameFiles.installedGameFiles(target);
         List<String> paths = new ArrayList<>();
         List<Long> sizes = new ArrayList<>();
-        for (Entry entry : wanted(found, withSaves)) {
-            paths.add(found.pathOf(entry));
-            sizes.add(entry.size);
+        for (Map.Entry<Entry, String> file : gamePaths(found, withSaves, installed).entrySet()) {
+            paths.add(file.getValue());
+            sizes.add(file.getKey().size);
         }
-        return GameFiles.plan(paths, sizes, target, GameFiles.installedGameFiles(target), found.modsOnly);
+        return GameFiles.plan(paths, sizes, target, installed, found.modsOnly, found.config);
     }
 
-    private static List<Entry> wanted(Found found, boolean withSaves) {
-        List<Entry> wanted = new ArrayList<>();
+    // The files of [found] to copy and their paths in the game, each folder
+    // in one case: the installed game's ([installed], `installedGameFiles`),
+    // else the first in the source. CE finds a file in any case, but of the
+    // folders named the same in another case it sees one (compat_resolve_path):
+    // "DATA/" next to "data/" would hide files.
+    private static Map<Entry, String> gamePaths(Found found, boolean withSaves, Map<String, String> installed) {
+        Map<String, String> folders = new HashMap<>();
+        for (String path : installed.values()) {
+            inFolderCase(path, folders);
+        }
+        Map<Entry, String> paths = new LinkedHashMap<>();
         for (Entry entry : found.files) {
-            String path = found.pathOf(entry).toLowerCase(Locale.ROOT);
-            if (withSaves || !path.startsWith("data/savegame/")) {
-                wanted.add(entry);
+            String path = found.pathOf(entry);
+            if (withSaves || !path.toLowerCase(Locale.ROOT).startsWith("data/savegame/")) {
+                paths.put(entry, inFolderCase(path, folders));
             }
         }
-        return wanted;
+        return paths;
+    }
+
+    // [path] with its folders as [folders] (lower case -> as they are) has
+    // them; the ones it lacks are added as [path] has them.
+    private static String inFolderCase(String path, Map<String, String> folders) {
+        int slash = path.lastIndexOf('/');
+        if (slash == -1) {
+            return path;
+        }
+        String folder = "";
+        for (String part : path.substring(0, slash).split("/")) {
+            String name = folder + part;
+            String known = folders.get(name.toLowerCase(Locale.ROOT));
+            if (known == null) {
+                folders.put(name.toLowerCase(Locale.ROOT), name);
+                known = name;
+            }
+            folder = known + "/";
+        }
+        return folder + path.substring(slash + 1);
     }
 
     // Puts [found] into the game's folder [target] as [plan] says: copied
@@ -668,11 +698,8 @@ final class GameImport {
         GameFiles.finish(target);
 
         Map<String, String> installed = GameFiles.installedGameFiles(target);
-        List<Entry> wanted = wanted(found, withSaves);
-        Map<Entry, String> pathOf = new HashMap<>();
-        for (Entry entry : wanted) {
-            pathOf.put(entry, found.pathOf(entry));
-        }
+        Map<Entry, String> pathOf = gamePaths(found, withSaves, installed);
+        List<Entry> wanted = new ArrayList<>(pathOf.keySet());
 
         GameFiles.StagingSink sink = new GameFiles.StagingSink(target, installed, pathOf, plan.bytesToRead, (done, total, path) -> {
             if (progress.isCancelled()) {
