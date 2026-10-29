@@ -1201,16 +1201,16 @@ namespace {
     // Highlight button: outlines what can be picked up or searched, by the
     // options of sfall's highlighting mod (`[Highlighting]` of
     // mods\sfall-mods.ini, gl_highlighting.ssl, which works while its key is
-    // held) with the same rules and colors, toggled instead of held. Own
-    // options in the same section: IncludeNoHighlight=1 - also objects the
-    // game keeps out of highlighting (the mod only lets containers through),
-    // ExcludePids=a,b,... - protos never outlined.
+    // held) with the same rules and colors, toggled instead of held. The
+    // port's settings decide containers, corpses and the things the game
+    // keeps out of highlighting (`EnhancementSettings`). Own option in the
+    // same section: ExcludePids=a,b,... - protos never outlined.
     struct HighlightConfig {
         bool containers = false;
         bool corpses = false;
         bool critters = false;
         bool checkLineOfSight = false;
-        bool includeNoHighlight = false;
+        bool hiddenItems = false;
         int itemColor = 16;
         int containerColor = 32;
         int containerEmptyColor = 4;
@@ -1242,9 +1242,9 @@ namespace {
         // `EnhancementSettings`).
         config.containers = settings.enhancements.highlight_containers;
         config.corpses = settings.enhancements.highlight_corpses;
+        config.hiddenItems = settings.enhancements.highlight_hidden_items;
         config.critters = highlightOption("Critters", 0) != 0;
         config.checkLineOfSight = highlightOption("CheckLOS", 0) != 0;
-        config.includeNoHighlight = highlightOption("IncludeNoHighlight", 0) != 0;
         config.motionScanner = highlightOption("MotionScanner", 0);
 
         // Fallbacks as in the mod.
@@ -1305,7 +1305,10 @@ namespace {
             if (container && !config.containers) {
                 return 0;
             }
-            if ((object->flags & OBJECT_NO_HIGHLIGHT) != 0 && !container && !config.includeNoHighlight) {
+            // The game's "no highlight" things: containers as the mod has
+            // them (furniture, graves), the rest that can be picked up by
+            // the port's setting.
+            if ((object->flags & OBJECT_NO_HIGHLIGHT) != 0 && !container && !(config.hiddenItems && _proto_action_can_pickup(ProtoId(object)))) {
                 return 0;
             }
             if (config.checkLineOfSight && !dudeCanSee(object)) {

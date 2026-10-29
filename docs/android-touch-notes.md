@@ -590,15 +590,18 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
   2026-10-29, the user's wish; autotest `highlightall`), Critters
   (combat colors, not in combat), CheckLOS, colors, MotionScanner (1 - a
   motion sensor carried, 2 - a charge per switching on; messages
-  `game\ce.msg` 170-171). Own keys in the same section: IncludeNoHighlight=1
-  (also objects with the game's "no highlight" flag - 118 of 124 container
-  protos have it: all furniture, graves, bones, vents, wall safes; the mod
-  lets only containers through), ExcludePids= (protos never outlined).
+  `game\ce.msg` 170-171). Things with the game's "no highlight" flag (its
+  protos': mods' hidden stashes, Fallout: Nevada's road sign out of the
+  vault): containers as the mod has them (118 of 124 container protos have
+  the flag: furniture, graves, bones, vents, wall safes), the rest that can
+  be picked up (`_proto_action_can_pickup`) by the port's
+  `[enhancements] highlight_hidden_items` (on by default, Display row,
+  2026-10-29, the user's wish: a setting, not a per-game ini, so every game
+  has it); ones a script hides (`OBJECT_HIDDEN`) never. Own key in the same
+  section: ExcludePids= (protos never outlined).
   Line of sight uses sight blocking (walls, opaque objects), not the mod's
   line of fire, where critters standing between hid things. Refreshed every
-  250 ms; outlines of others (combat, interaction) are left alone. Phone:
-  IncludeNoHighlight=1, ExcludePids empty (the user wants everything: the
-  button is an opt-in simplification).
+  250 ms; outlines of others (combat, interaction) are left alone.
 - Interaction outline: an object dude is sent to (tap, skill / item on it,
   any radial action except look / rotate) or selected for use in combat is
   outlined green with the game's outline (`OUTLINE_TYPE_FRIENDLY`, set

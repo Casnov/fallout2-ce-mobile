@@ -403,6 +403,7 @@ void initSettingsRegistry(bool isMapper)
     SETTING(fast_menu_fades);
     SETTING(highlight_containers);
     SETTING(highlight_corpses);
+    SETTING(highlight_hidden_items);
 #undef SECT
 
 #define SECT touch

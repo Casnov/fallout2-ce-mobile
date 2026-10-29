@@ -120,6 +120,8 @@ namespace {
     constexpr int kTextHighlightContainersNote = 450;
     constexpr int kTextHighlightCorpses = 451;
     constexpr int kTextHighlightCorpsesNote = 452;
+    constexpr int kTextHighlightHiddenItems = 453;
+    constexpr int kTextHighlightHiddenItemsNote = 454;
     constexpr int kTextGroupText = 395;
     constexpr int kTextGroupSaves = 396;
     constexpr int kTextGroupSpeed = 397;
@@ -208,6 +210,7 @@ namespace {
         bool barterUnitPrice;
         bool highlightContainers;
         bool highlightCorpses;
+        bool highlightHiddenItems;
         int interfaceSize;
         int windows;
         int layout;
@@ -238,6 +241,7 @@ namespace {
         values.barterUnitPrice = settings.enhancements.barter_unit_price;
         values.highlightContainers = settings.enhancements.highlight_containers;
         values.highlightCorpses = settings.enhancements.highlight_corpses;
+        values.highlightHiddenItems = settings.enhancements.highlight_hidden_items;
         values.interfaceSize = settings.touch.hud_scale;
         values.windows = settings.touch.windows;
         values.layout = settings.touch.layout;
@@ -269,6 +273,7 @@ namespace {
         values.barterUnitPrice = EnhancementSettings().barter_unit_price;
         values.highlightContainers = EnhancementSettings().highlight_containers;
         values.highlightCorpses = EnhancementSettings().highlight_corpses;
+        values.highlightHiddenItems = EnhancementSettings().highlight_hidden_items;
         values.interfaceSize = TouchSettings().hud_scale;
         values.windows = TouchSettings().windows;
         values.layout = TouchSettings().layout;
@@ -361,6 +366,7 @@ namespace {
             settings.enhancements.barter_unit_price = values.barterUnitPrice;
             settings.enhancements.highlight_containers = values.highlightContainers;
             settings.enhancements.highlight_corpses = values.highlightCorpses;
+            settings.enhancements.highlight_hidden_items = values.highlightHiddenItems;
             settings.touch.hud_scale = values.interfaceSize;
             settings.touch.windows = values.windows;
             settings.touch.layout = values.layout;
@@ -687,6 +693,12 @@ namespace {
             Row row { Section::Display, RowKind::Toggle, kTextHighlightCorpses, "Highlight button: corpses", Origin::Port, kTextHighlightCorpsesNote, "The dead you can search" };
             row.get = [](const Values& values) { return values.highlightCorpses ? 1.0f : 0.0f; };
             row.set = [](Values& values, float value) { values.highlightCorpses = value != 0.0f; };
+            rows.push_back(row);
+        }
+        {
+            Row row { Section::Display, RowKind::Toggle, kTextHighlightHiddenItems, "Highlight button: hidden things", Origin::Port, kTextHighlightHiddenItemsNote, "Things the game doesn't highlight but you can pick up" };
+            row.get = [](const Values& values) { return values.highlightHiddenItems ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.highlightHiddenItems = value != 0.0f; };
             rows.push_back(row);
         }
         {

@@ -331,6 +331,11 @@ struct EnhancementSettings {
     // things. Colors and the rest still are the mod's.
     bool highlight_containers = true;
     bool highlight_corpses = true;
+    // ... and the things the game keeps out of highlighting (the "no
+    // highlight" flag of their protos: RPU's and other mods' hidden stashes,
+    // Fallout: Nevada's road sign) when they can be picked up
+    // (`_proto_action_can_pickup`). Ones a script hides stay dark.
+    bool highlight_hidden_items = true;
 };
 
 // CE: Zoomable map view, see world_view.h.
