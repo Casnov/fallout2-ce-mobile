@@ -192,6 +192,7 @@ export function createFilesManager({root = document, mode = null, resources = nu
       const response = await fetch('./build-info.json',{cache:'no-store'}); if (!response.ok) throw new Error('build-info');
       buildId = (await response.json()).buildId;
     }
+    $('notice').textContent = t('unofficial');
     $('build').textContent = buildId;
     failedWorker = false;
     worker = new Worker(new URL('./probe-worker.js',import.meta.url),{type:'module'});
