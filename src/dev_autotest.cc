@@ -107,11 +107,12 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_CENTER_DUDE,
     // Synthetic single finger touches (touch controls):
     // drag from view center by (a, b) screen pixels (in `c` frames, else 15;
-    // `widget` "marker" - by what brings the walk's marker to the center);
+    // `widget` "marker" - by what brings the walk's marker to the center,
+    // "placed" - the placed item);
     DEV_AUTOTEST_ACTION_TOUCH_DRAG,
     // tap on the tile `a` hexes away from dude (`c` - from tile `c`) in
     // direction `b` (-1 - towards the dude; -2 - the tile next to `c` the
-    // dude walks to by the shortest path);
+    // dude walks to by the shortest path; -3 - from the dude towards `c`);
     DEV_AUTOTEST_ACTION_TOUCH_TAP_TILE,
     // long press on the nearest critter;
     DEV_AUTOTEST_ACTION_TOUCH_LONG_PRESS_CRITTER,
@@ -475,7 +476,8 @@ enum DevAutotestAction {
     DEV_AUTOTEST_ACTION_SET_GVAR,
     // `a` - stat, `b` - base value (the dude).
     DEV_AUTOTEST_ACTION_SET_STAT,
-    // `a` - skill, `b` - unspent skill points put into it (the dude).
+    // `a` - skill, `b` - unspent skill points put into it (the dude); `c` 1 -
+    // `b` points without unspent ones (as a skill book).
     DEV_AUTOTEST_ACTION_ADD_SKILL,
     // Plays game movie [a] (the step completes first, the movie loop runs
     // the script on).
@@ -487,6 +489,9 @@ enum DevAutotestAction {
     // Puts dude [b] hexes from the critter of pid `0x01000000 + a` in
     // direction [c] (out of combat).
     DEV_AUTOTEST_ACTION_MOVE_NEAR_PID,
+    // Puts dude on his path to tile [b], [a] hexes before its end (out of
+    // combat).
+    DEV_AUTOTEST_ACTION_MOVE_ALONG_PATH,
     // A hostile critter of proto [a] (pid `0x01000000 + a`, no script) on
     // the free tile nearest to the one [b] hexes from dude in direction [c].
     DEV_AUTOTEST_ACTION_SPAWN_ENEMY,
@@ -1152,9 +1157,13 @@ static const DevAutotestStep kDevAutotestPromoGearSteps[] = {
     { DEV_AUTOTEST_ACTION_GIVE_ITEM, 144, 4, 0, 1, "pg02e_super_stimpaks" },
     { DEV_AUTOTEST_ACTION_GIVE_ITEM, 40, 8, 0, 1, "pg02f_stimpaks" },
     { DEV_AUTOTEST_ACTION_GIVE_ITEM, 106, 3, 0, 1, "pg02g_nuka_cola" },
-    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 3, ROTATION_SW, 10, "pg03a_sulik", "Kcsulik.int" },
-    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 7, 0, 0, 1, "pg03b_spear" },
-    { DEV_AUTOTEST_ACTION_WIELD_PARTY_ITEM, 7, 0, 0, 10, "pg03c_sulik_wields" },
+};
+
+// Sulik (a spear).
+static const DevAutotestStep kDevAutotestPromoSulikSteps[] = {
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 3, ROTATION_SW, 10, "pk01_sulik", "Kcsulik.int" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 7, 0, 0, 1, "pk02_spear" },
+    { DEV_AUTOTEST_ACTION_WIELD_PARTY_ITEM, 7, 0, 0, 10, "pk03_sulik_wields" },
 };
 
 // Marcus (a minigun) out in the wastes; Vault City's guards shoot at a
@@ -1169,34 +1178,42 @@ static const DevAutotestStep kDevAutotestPromoVicSteps[] = {
     { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 62, 3, ROTATION_W, 30, "pv01_vic", "DCVic.int" },
 };
 
-// Klamath's grazing woods in combat armor, with Sulik and Vic, played: a
-// look around (pinch, the map dragged to a trapper's cabin), a run into it (a
-// second tap on the tile) with the map dragged after the hero, the highlight
-// on, the cabin's bookcase looted (power armor, a rocket launcher and rockets
-// put in it with its own things), the armor put on and the launcher taken in
-// the empty hand, a run back in the armor.
+// Vault City's downtown in combat armor, alone, played: by the storage
+// behind the Amenities office, a look around (pinch), a run in (a second tap
+// on the tile) with the map dragged after the hero, the highlight on, a
+// locked locker picked (a long press, its skill button, Lockpick) and looted
+// (power armor, a rocket launcher and rockets put in it with its own
+// things), the armor put on and the launcher taken in the empty hand.
 static const DevAutotestStep kDevAutotestPromoTownArriveSteps[] = {
-    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 150, "pt00_klamath", "klagraz.map" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 150, "pt00_vault_city", "vctydwtn.map" },
     { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 17, 0, 0, 10, "pt01_combat_armor" },
 };
 
 static const DevAutotestStep kDevAutotestPromoTownSteps[] = {
-    { DEV_AUTOTEST_ACTION_PLACED_ITEM_AT_TILE, 24323, 0, 0, 1, "pt02_bookcase" },
+    // A locked locker of the storage behind the Amenities office; a
+    // lockpicker's hand opens it at the first try.
+    { DEV_AUTOTEST_ACTION_ADD_SKILL, SKILL_LOCKPICK, 120, 1, 1, "pt02_lockpick" },
+    { DEV_AUTOTEST_ACTION_PLACED_ITEM_AT_TILE, 19293, 0, 0, 1, "pt02b_locker" },
     { DEV_AUTOTEST_ACTION_GIVE_PLACED_ITEM, 349, 1, 0, 1, "pt03a_power_armor" },
     { DEV_AUTOTEST_ACTION_GIVE_PLACED_ITEM, 13, 1, 0, 1, "pt03b_rocket_launcher" },
     { DEV_AUTOTEST_ACTION_GIVE_PLACED_ITEM, 14, 4, 0, 1, "pt03c_rockets" },
+    { DEV_AUTOTEST_ACTION_MOVE_ALONG_PATH, 13, 19493, 0, 1, "pt04_by_the_storage" },
     { DEV_AUTOTEST_ACTION_CENTER_DUDE, 0, 0, 0, 60, "pt10_map" },
     { DEV_AUTOTEST_ACTION_PINCH, 0.42f, 0.24f, 0.0f, 40, "pt11_look_around", "dude" },
     { DEV_AUTOTEST_ACTION_PINCH, 0.24f, 0.38f, 0.0f, 40, "pt12_back_closer", "dude" },
-    { DEV_AUTOTEST_ACTION_TOUCH_DRAG, -220, -50, 50, 40, "pt12b_look_at_cabin" },
     // A run: the tile tapped twice; the map dragged after the hero.
-    { DEV_AUTOTEST_ACTION_TOUCH_TAP_TILE, 1, -2, 24323, 8, "pt13_tap" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_TILE, 1, -2, 19293, 8, "pt13_tap" },
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_NEAR_MARKER, 0, 0, 0, 10, "pt14_run" },
     { DEV_AUTOTEST_ACTION_LOG_MOVEMENT, 0, 0, 0, 1, "pt14b_running" },
-    { DEV_AUTOTEST_ACTION_TOUCH_DRAG, 0, 0, 60, 60, "pt15_drag_after", "marker" },
+    { DEV_AUTOTEST_ACTION_TOUCH_DRAG, 0, 0, 60, 90, "pt15_drag_after", "marker" },
     { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(Highlight), 0, 0, 60, "pt16_highlight" },
+    // A long press on the locker, its skill button, Lockpick: picked; a tap
+    // opens it.
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_NEAR_ITEM, 0, 0, 2, 8, "pt16b_hold_locker" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_RADIAL, GAME_MOUSE_ACTION_MENU_ITEM_USE_SKILL, 0, 0, 15, "pt16c_skill" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 90, "pt16d_lockpick", "skills.1" },
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_NEAR_ITEM, 0, 0, 1, 1, "pt17_open_locker" },
-    { DEV_AUTOTEST_ACTION_WAIT_WIDGET, 400, 0, 0, 40, "pt17b_opened", "loot.take_all" },
+    { DEV_AUTOTEST_ACTION_WAIT_WIDGET, 600, 0, 0, 40, "pt17b_opened", "loot.take_all" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 50, "pt18_take_armor", "loot.right.pid.349", "loot.left" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 50, "pt19_take_all", "loot.take_all" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "pt20_loot_closed", "loot.back" },
@@ -1205,12 +1222,7 @@ static const DevAutotestStep kDevAutotestPromoTownSteps[] = {
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 70, "pt31_power_armor_on", "inventory.pid.349", "inventory.slot.armor" },
     { DEV_AUTOTEST_ACTION_MUI_DRAG, 0, 0, 0, 60, "pt32_launcher_in_hand", "inventory.pid.13", "inventory.slot.right" },
     { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "pt33_inventory_closed", "inventory.back" },
-    // A run back in the armor, the map after him.
-    { DEV_AUTOTEST_ACTION_TOUCH_TAP_TILE, 1, -2, 21937, 8, "pt43_tap" },
-    { DEV_AUTOTEST_ACTION_TOUCH_TAP_NEAR_MARKER, 0, 0, 0, 10, "pt44_run" },
-    { DEV_AUTOTEST_ACTION_LOG_MOVEMENT, 0, 0, 0, 1, "pt44b_running" },
-    { DEV_AUTOTEST_ACTION_TOUCH_DRAG, 0, 0, 60, 80, "pt45_drag_after", "marker" },
-    { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 1, "pt46_log" },
+    { DEV_AUTOTEST_ACTION_LOG_INVENTORY, 0, 0, 0, 60, "pt46_log" },
 };
 
 // The other scenes: Advanced Power Armor on, a rocket launcher in the right
@@ -3509,7 +3521,7 @@ static const DevAutotestStep kDevAutotestHighlightAllSteps[] = {
 static const DevAutotestStep kDevAutotestHighlightLookSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "hk00_map" },
     { DEV_AUTOTEST_ACTION_HUD_TAP, HUD_ELEMENT(Highlight), 0, 0, 30, "hk01_highlight" },
-    { DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT, 60, 0, 0, 1, "hk02_outlines" },
+    { DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT, 120, 0, 0, 1, "hk02_outlines" },
     { DEV_AUTOTEST_ACTION_LOG_CRITTERS, 0, 0, 0, 1, "hk03_critters" },
 };
 
@@ -4142,22 +4154,22 @@ void devAutotestSetScenario(const char* name)
         gDevAutotestStepCount = sizeof(kDevAutotestPromoSteps) / sizeof(kDevAutotestPromoSteps[0]);
         gDevAutotestPinchFrames = 70;
     } else if (strcmp(name, "promotown") == 0) {
-        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoTownArriveSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoTownSteps);
+        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoTownArriveSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoTownSteps);
         gDevAutotestPinchFrames = 70;
         gDevAutotestDragFrames = 30;
         gDevAutotestDragNatural = true;
     } else if (strcmp(name, "promotrade") == 0) {
-        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoTradeArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoTradeSteps);
+        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoTradeArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoTradeSteps);
         gDevAutotestPinchFrames = 70;
         gDevAutotestDragFrames = 30;
         gDevAutotestDragNatural = true;
     } else if (strcmp(name, "promofight") == 0) {
-        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoFightArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoMarcusSteps, kDevAutotestPromoFightSteps);
+        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoFightArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoMarcusSteps, kDevAutotestPromoFightSteps);
         gDevAutotestPinchFrames = 70;
         gDevAutotestDragFrames = 30;
         gDevAutotestDragNatural = true;
     } else if (strcmp(name, "promoscreens") == 0) {
-        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoScreensArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoScreensSteps);
+        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoScreensArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoScreensSteps);
         gDevAutotestPinchFrames = 70;
         gDevAutotestDragFrames = 30;
         gDevAutotestDragNatural = true;
@@ -4790,7 +4802,8 @@ void devAutotestTick()
             int rc = 0;
             int added = 0;
             for (; added < static_cast<int>(step->b); added++) {
-                rc = skillAdd(gDude, static_cast<Skill>(static_cast<int>(step->a)));
+                rc = step->c == 1 ? skillAddForce(gDude, static_cast<Skill>(static_cast<int>(step->a)))
+                                  : skillAdd(gDude, static_cast<Skill>(static_cast<int>(step->a)));
                 if (rc != 0) {
                     break;
                 }
@@ -4827,6 +4840,21 @@ void devAutotestTick()
             } else {
                 devAutotestLog("FAIL: no critter pid %d\n", 0x01000000 | static_cast<int>(step->a));
             }
+            break;
+        }
+        case DEV_AUTOTEST_ACTION_MOVE_ALONG_PATH: {
+            unsigned char rotations[800];
+            int length = _make_path(gDude, gDude->tile, static_cast<int>(step->b), rotations, 0);
+            int tile = gDude->tile;
+            for (int index = 0; index < length - static_cast<int>(step->a); index++) {
+                tile = tileGetTileInDirection(tile, static_cast<Rotation>(rotations[index]), 1);
+            }
+            if (length > 0) {
+                Rect rect;
+                objectSetLocation(gDude, tile, gDude->elevation, &rect);
+                tileSetCenter(gDude->tile, TILE_SET_CENTER_REFRESH_WINDOW);
+            }
+            devAutotestLog("  path of %d hexes to tile %d: dude at tile %d\n", length, static_cast<int>(step->b), gDude->tile);
             break;
         }
         case DEV_AUTOTEST_ACTION_SPAWN_ENEMY: {
@@ -5476,7 +5504,13 @@ void devAutotestTick()
             float y = static_cast<float>(screenGetVisibleHeight() / 2);
             float dx = step->a;
             float dy = step->b;
-            if (step->widget != nullptr && strcmp(step->widget, "marker") == 0) {
+            if (step->widget != nullptr && strcmp(step->widget, "placed") == 0 && gDevAutotestPlacedItem != nullptr) {
+                float itemX;
+                float itemY;
+                devAutotestGetTileScreenPosition(gDevAutotestPlacedItem->tile, &itemX, &itemY);
+                dx = x - itemX;
+                dy = y - itemY;
+            } else if (step->widget != nullptr && strcmp(step->widget, "marker") == 0) {
                 int marker = mapHintsGetDestination();
                 if (marker == -1) {
                     // Not a long press on the dude instead.
@@ -5508,8 +5542,10 @@ void devAutotestTick()
                         }
                     }
                 } else {
-                    int rotation = step->b < 0 ? tileGetRotationTo(from, gDude->tile) : static_cast<int>(step->b);
-                    gDevAutotestWalkTarget = tileGetTileInDirection(from, static_cast<Rotation>(rotation), static_cast<int>(step->a));
+                    int rotation = step->b == -3 ? tileGetRotationTo(gDude->tile, from)
+                        : step->b < 0            ? tileGetRotationTo(from, gDude->tile)
+                                                 : static_cast<int>(step->b);
+                    gDevAutotestWalkTarget = tileGetTileInDirection(step->b == -3 ? gDude->tile : from, static_cast<Rotation>(rotation), static_cast<int>(step->a));
                 }
                 float x;
                 float y;
@@ -7750,7 +7786,13 @@ void devAutotestTick()
         case DEV_AUTOTEST_ACTION_LOG_HIGHLIGHT: {
             int wanted = 0;
             int outlined = 0;
+            // Listed first: the walks below look through the map's objects
+            // too.
+            std::vector<Object*> objects;
             for (Object* obj = objectFindFirstAtElevation(gDude->elevation); obj != nullptr; obj = objectFindNextAtElevation()) {
+                objects.push_back(obj);
+            }
+            for (Object* obj : objects) {
                 if (obj == gDude || objectGetDistanceBetween(gDude, obj) > static_cast<int>(step->a)) {
                     continue;
                 }
@@ -7913,7 +7955,7 @@ void devAutotestTick()
             if (found != nullptr) {
                 gDevAutotestPlacedPrevious = gDevAutotestPlacedItem;
                 gDevAutotestPlacedItem = found;
-                devAutotestLog("  item pid %d at tile %d, %d items in it\n", found->pid, found->tile, found->data.inventory.length);
+                devAutotestLog("  item pid %d at tile %d, %d items in it, locked %d\n", found->pid, found->tile, found->data.inventory.length, objectIsLocked(found) ? 1 : 0);
             } else {
                 devAutotestLog("FAIL: no item at tile %d\n", static_cast<int>(step->a));
             }
@@ -7926,16 +7968,17 @@ void devAutotestTick()
             if (gDevAutotestPlacedItem != nullptr) {
                 Rect worldRect;
                 objectGetRect(gDevAutotestPlacedItem, &worldRect);
-                // c = 1 - from the box center, otherwise from bottom right.
+                // c = 1 - from the box center, 2 - a long press there,
+                // otherwise from bottom right.
                 int x;
                 int y;
-                if (step->c == 1) {
+                if (step->c == 1 || step->c == 2) {
                     worldViewWorldToScreen((worldRect.left + worldRect.right) / 2, (worldRect.top + worldRect.bottom) / 2, &x, &y);
                 } else {
                     worldViewWorldToScreen(worldRect.right, worldRect.bottom, &x, &y);
                 }
                 devAutotestLog("  tap near item at (%d, %d) + (%.0f, %.0f)\n", x, y, step->a, step->b);
-                devAutotestStartTouch(x + step->a, y + step->b, x + step->a, y + step->b, 1, 0);
+                devAutotestStartTouch(x + step->a, y + step->b, x + step->a, y + step->b, step->c == 2 ? 30 : 1, 0);
             }
             break;
         case DEV_AUTOTEST_ACTION_MUI_TAP_OUTSIDE_WINDOW: {
