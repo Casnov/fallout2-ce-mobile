@@ -1159,6 +1159,12 @@ static const DevAutotestStep kDevAutotestPromoGearSteps[] = {
     { DEV_AUTOTEST_ACTION_GIVE_ITEM, 106, 3, 0, 1, "pg02g_nuka_cola" },
 };
 
+// The camera closer to the hero for the footage (the game's own zoom).
+static const DevAutotestStep kDevAutotestPromoZoomSteps[] = {
+    { DEV_AUTOTEST_ACTION_CENTER_DUDE, 0, 0, 0, 1, "pz01_center" },
+    { DEV_AUTOTEST_ACTION_ZOOM, 1.25f, -1, -1, 10, "pz02_zoom" },
+};
+
 // Sulik (a spear).
 static const DevAutotestStep kDevAutotestPromoSulikSteps[] = {
     { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 3, ROTATION_SW, 10, "pk01_sulik", "Kcsulik.int" },
@@ -1200,7 +1206,7 @@ static const DevAutotestStep kDevAutotestPromoTownSteps[] = {
     { DEV_AUTOTEST_ACTION_MOVE_ALONG_PATH, 13, 19493, 0, 1, "pt04_by_the_storage" },
     { DEV_AUTOTEST_ACTION_CENTER_DUDE, 0, 0, 0, 60, "pt10_map" },
     { DEV_AUTOTEST_ACTION_PINCH, 0.42f, 0.24f, 0.0f, 40, "pt11_look_around", "dude" },
-    { DEV_AUTOTEST_ACTION_PINCH, 0.24f, 0.38f, 0.0f, 40, "pt12_back_closer", "dude" },
+    { DEV_AUTOTEST_ACTION_PINCH, 0.24f, 0.42f, 0.0f, 40, "pt12_back_closer", "dude" },
     // A run: the tile tapped twice; the map dragged after the hero.
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_TILE, 1, -2, 19293, 8, "pt13_tap" },
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_NEAR_MARKER, 0, 0, 0, 10, "pt14_run" },
@@ -1270,9 +1276,9 @@ static const DevAutotestStep kDevAutotestPromoFightArriveSteps[] = {
 
 static const DevAutotestStep kDevAutotestPromoFightSteps[] = {
     // Big ones (proto 7's art is the small deathclaw).
-    { DEV_AUTOTEST_ACTION_SPAWN_ENEMY, 245, 11, ROTATION_SW, 1, "pf10_deathclaw" },
-    { DEV_AUTOTEST_ACTION_SPAWN_ENEMY, 245, 13, ROTATION_SW, 1, "pf11_deathclaw" },
-    { DEV_AUTOTEST_ACTION_SPAWN_ENEMY, 8, 12, ROTATION_W, 1, "pf12_deathclaw" },
+    { DEV_AUTOTEST_ACTION_SPAWN_ENEMY, 245, 9, ROTATION_SW, 1, "pf10_deathclaw" },
+    { DEV_AUTOTEST_ACTION_SPAWN_ENEMY, 245, 11, ROTATION_SW, 1, "pf11_deathclaw" },
+    { DEV_AUTOTEST_ACTION_SPAWN_ENEMY, 8, 10, ROTATION_W, 1, "pf12_deathclaw" },
     { DEV_AUTOTEST_ACTION_CENTER_DUDE, 0, 0, 0, 60, "pf15_map" },
     { DEV_AUTOTEST_ACTION_TOUCH_DRAG, 60, -45, 50, 50, "pf16_look" },
     // Out of combat the HUD's first chip starts it.
@@ -4154,22 +4160,22 @@ void devAutotestSetScenario(const char* name)
         gDevAutotestStepCount = sizeof(kDevAutotestPromoSteps) / sizeof(kDevAutotestPromoSteps[0]);
         gDevAutotestPinchFrames = 70;
     } else if (strcmp(name, "promotown") == 0) {
-        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoTownArriveSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoTownSteps);
+        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoTownArriveSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoZoomSteps, kDevAutotestPromoTownSteps);
         gDevAutotestPinchFrames = 70;
         gDevAutotestDragFrames = 30;
         gDevAutotestDragNatural = true;
     } else if (strcmp(name, "promotrade") == 0) {
-        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoTradeArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoTradeSteps);
+        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoTradeArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoZoomSteps, kDevAutotestPromoTradeSteps);
         gDevAutotestPinchFrames = 70;
         gDevAutotestDragFrames = 30;
         gDevAutotestDragNatural = true;
     } else if (strcmp(name, "promofight") == 0) {
-        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoFightArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoMarcusSteps, kDevAutotestPromoFightSteps);
+        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoFightArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoMarcusSteps, kDevAutotestPromoZoomSteps, kDevAutotestPromoFightSteps);
         gDevAutotestPinchFrames = 70;
         gDevAutotestDragFrames = 30;
         gDevAutotestDragNatural = true;
     } else if (strcmp(name, "promoscreens") == 0) {
-        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoScreensArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoScreensSteps);
+        devAutotestJoinSteps(kDevAutotestPromoHeroSteps, kDevAutotestPromoScreensArriveSteps, kDevAutotestPromoPowerArmorSteps, kDevAutotestPromoGearSteps, kDevAutotestPromoSulikSteps, kDevAutotestPromoVicSteps, kDevAutotestPromoZoomSteps, kDevAutotestPromoScreensSteps);
         gDevAutotestPinchFrames = 70;
         gDevAutotestDragFrames = 30;
         gDevAutotestDragNatural = true;
