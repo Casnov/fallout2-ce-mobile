@@ -944,7 +944,8 @@ static const DevAutotestStep kDevAutotestIconsSteps[] = {
 static const DevAutotestStep kDevAutotestPhotosSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "p00_start" },
     // "Избранный" in the game's charset.
-    { DEV_AUTOTEST_ACTION_SET_NAME, 0, 0, 0, 1, "p01_name", "\xC8\xE7\xE1\xF0\xE0\xED\xED\xFB\xE9" },
+    // a = 1: "Chosen One" in an English game (promo videos).
+    { DEV_AUTOTEST_ACTION_SET_NAME, 1, 0, 0, 1, "p01_name", "\xC8\xE7\xE1\xF0\xE0\xED\xED\xFB\xE9" },
     { DEV_AUTOTEST_ACTION_SET_STAT, STAT_STRENGTH, 10, 0, 1, "p01a_st" },
     { DEV_AUTOTEST_ACTION_SET_STAT, STAT_PERCEPTION, 8, 0, 1, "p01b_pe" },
     { DEV_AUTOTEST_ACTION_SET_STAT, STAT_ENDURANCE, 8, 0, 1, "p01c_en" },
@@ -5425,7 +5426,8 @@ void devAutotestTick()
             break;
         case DEV_AUTOTEST_ACTION_SET_NAME:
             if (step->widget != nullptr) {
-                dudeSetName(step->widget);
+                bool english = step->a == 1 && compat_stricmp(settings.system.language.c_str(), ENGLISH) == 0;
+                dudeSetName(english ? "Chosen One" : step->widget);
             }
             break;
         case DEV_AUTOTEST_ACTION_MARK:
