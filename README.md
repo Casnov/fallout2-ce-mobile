@@ -1,8 +1,8 @@
-# F2 Touch (unofficial)
+# Fallout 2 CE Mobile (F2 Touch, unofficial)
 
 [Русская версия](README.ru.md)
 
-F2 Touch is a touch port for Fallout 2: a fork of [Fallout 2: Community Engine](https://github.com/fallout2-ce/fallout2-ce) made for Android phones: every screen of the game rebuilt for a touch screen, in landscape. **Early beta.**
+A fork of [Fallout 2: Community Engine](https://github.com/fallout2-ce/fallout2-ce) made for Android phones: every screen of the game rebuilt for a touch screen, in landscape. **Early beta.**
 
 This is an **unofficial, fan-made, modified version** of Fallout 2 CE. It is not affiliated with or endorsed by Microsoft, Bethesda Softworks, ZeniMax Media or Interplay. Fallout is a trademark of its owners. The app contains **no game data**: you need your own copy of Fallout 2 ([GOG](https://www.gog.com/game/fallout_2), [Steam](https://store.steampowered.com/app/38410), [Epic Games](https://store.epicgames.com/p/fallout-2)).
 
