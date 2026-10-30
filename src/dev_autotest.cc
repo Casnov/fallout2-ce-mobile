@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include <algorithm>
+#include <chrono>
 #include <set>
 #include <string>
 #include <vector>
@@ -756,6 +757,23 @@ static const DevAutotestStep kDevAutotestSteps[] = {
 // town map (Back returns), a finger moves the map, the towns' list opens
 // over "Enter" and closes, the game menu (continue, settings, exit) opens
 // and continues, a tap on the terrain sends the party there.
+// Promo video footage: the world map with a few towns known, dragged by a
+// finger, a town's map opened and closed, at a watchable pace.
+static const DevAutotestStep kDevAutotestPromoWorldSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "pw00_map" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_AREA, CITY_KLAMATH, 0, 0, 1, "pw01_klamath" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_AREA, CITY_MODOC, 0, 0, 1, "pw02_modoc" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_AREA, CITY_VAULT_CITY, 0, 0, 1, "pw03_vault_city" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_AREA, CITY_GECKO, 0, 0, 1, "pw04_gecko" },
+    { DEV_AUTOTEST_ACTION_WORLDMAP_AREA, CITY_DEN, 0, 0, 1, "pw05_den" },
+    { DEV_AUTOTEST_ACTION_OPEN_WORLDMAP, 0, 0, 0, 1, "pw10_open" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "pw11_worldmap" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, -0.2f, 0.12f, 0, 50, "pw12_dragged", "worldmap.map" },
+    { DEV_AUTOTEST_ACTION_MUI_DRAG_BY, 0.15f, -0.1f, 0, 50, "pw13_dragged_back", "worldmap.map" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 80, "pw14_town_map", "worldmap.enter" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 60, "pw15_back_to_world", "townmap.back" },
+};
+
 static const DevAutotestStep kDevAutotestWorldmapSteps[] = {
     { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "w00_map" },
     { DEV_AUTOTEST_ACTION_WORLDMAP_AREA, CITY_KLAMATH, 0, 0, 1, "w00b_at_klamath" },
@@ -997,6 +1015,87 @@ static const DevAutotestStep kDevAutotestPhotosSteps[] = {
     { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 60, "p30_combat_started" },
     { DEV_AUTOTEST_ACTION_CENTER_DUDE, 0, 0, 0, 30, "p31_combat" },
     { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 1, 0, 40, "p32_enemy_picked" },
+};
+
+// Promo video footage (docs-private/video): the photos' late-game hero and
+// party in Navarro, then the touch interactions at a watchable pace while
+// the window is recorded (tools/wincap); every finger goes to touches.txt.
+static const DevAutotestStep kDevAutotestPromoSteps[] = {
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 30, "p00_start" },
+    // "Избранный" in the game's charset.
+    // a = 1: "Chosen One" in an English game (promo videos).
+    { DEV_AUTOTEST_ACTION_SET_NAME, 1, 0, 0, 1, "p01_name", "\xC8\xE7\xE1\xF0\xE0\xED\xED\xFB\xE9" },
+    { DEV_AUTOTEST_ACTION_SET_STAT, STAT_STRENGTH, 10, 0, 1, "p01a_st" },
+    { DEV_AUTOTEST_ACTION_SET_STAT, STAT_PERCEPTION, 8, 0, 1, "p01b_pe" },
+    { DEV_AUTOTEST_ACTION_SET_STAT, STAT_ENDURANCE, 8, 0, 1, "p01c_en" },
+    { DEV_AUTOTEST_ACTION_SET_STAT, STAT_CHARISMA, 4, 0, 1, "p01d_ch" },
+    { DEV_AUTOTEST_ACTION_SET_STAT, STAT_INTELLIGENCE, 8, 0, 1, "p01e_in" },
+    { DEV_AUTOTEST_ACTION_SET_STAT, STAT_AGILITY, 9, 0, 1, "p01f_ag" },
+    { DEV_AUTOTEST_ACTION_SET_STAT, STAT_LUCK, 6, 0, 1, "p01g_lk" },
+    { DEV_AUTOTEST_ACTION_ADD_EXPERIENCE, 250000, 0, 0, 30, "p02_levels" },
+    // The character screen takes the levels (their skill points; the perks
+    // owed are offered first - later).
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Character), 0, 0, 40, "p03_perks" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 20, "p03a_later", "character.perkpanel.later" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "p03b_closed", "character.nav.back" },
+    { DEV_AUTOTEST_ACTION_ADD_SKILL, SKILL_SMALL_GUNS, 40, 0, 1, "p04a_small_guns" },
+    { DEV_AUTOTEST_ACTION_ADD_SKILL, SKILL_ENERGY_WEAPONS, 30, 0, 1, "p04b_energy" },
+    { DEV_AUTOTEST_ACTION_ADD_SKILL, SKILL_SPEECH, 15, 0, 1, "p04c_speech" },
+    { DEV_AUTOTEST_ACTION_ADD_SKILL, SKILL_REPAIR, 15, 0, 1, "p04d_repair" },
+    // Navarro's yard, by the drill sergeant (elevation 2, tile 25481): a
+    // civilian there gets his famous welcome.
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 2, 25881, 0, 150, "p10_navarro", "navarro.map" },
+    { DEV_AUTOTEST_ACTION_TALK_TO_PID, 250, 0, 0, 150, "p11_sergeant" },
+    { DEV_AUTOTEST_ACTION_NONE, 0, 0, 0, 60, "p12_sergeant_shouts" },
+    { DEV_AUTOTEST_ACTION_CHOOSE_OPTION, 0, 0, 0, 120, "p13_after" },
+    // Back in the yard as a soldier: Advanced Power Armor, late weapons,
+    // Marcus (a minigun) and Sulik (a spear).
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 2, 25895, 0, 150, "p20_navarro_again", "navarro.map" },
+    { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 349, 0, 0, 10, "p21_armor" },
+    { DEV_AUTOTEST_ACTION_EQUIP_ITEM, 392, HAND_LEFT, 0, 10, "p22_gauss" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 358, 20, 0, 1, "p23a_ammo" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 233, 0, 0, 1, "p23b_plasma" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 39, 20, 0, 1, "p23c_cells" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 350, 0, 0, 1, "p23d_bozar" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 144, 4, 0, 1, "p23e_super_stimpaks" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 40, 8, 0, 1, "p23f_stimpaks" },
+    { DEV_AUTOTEST_ACTION_GIVE_ITEM, 110, 2, 0, 1, "p23g_psycho" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 161, 3, ROTATION_W, 10, "p24a_marcus", "HCMARCUS.int" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 12, 0, 0, 1, "p24b_minigun" },
+    { DEV_AUTOTEST_ACTION_WIELD_PARTY_ITEM, 12, 0, 0, 1, "p24c_marcus_wields" },
+    { DEV_AUTOTEST_ACTION_ADD_PARTY_MEMBER, 97, 3, ROTATION_SW, 10, "p24d_sulik", "Kcsulik.int" },
+    { DEV_AUTOTEST_ACTION_GIVE_PARTY_ITEM, 7, 0, 0, 1, "p24e_spear" },
+    { DEV_AUTOTEST_ACTION_WIELD_PARTY_ITEM, 7, 0, 0, 30, "p24f_sulik_wields" },
+    // The peaceful shots in NCR (Navarro's guards raise the alarm when the
+    // hero walks around their base).
+    // The vault suit movie gives the Pip-Boy (a new game has none yet).
+    { DEV_AUTOTEST_ACTION_PLAY_MOVIE, static_cast<int>(MOVIE_VSUIT), 0, 0, 10, "pr04_vault_suit" },
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 0, -1, 0, 150, "pr05_ncr", "ncr1.map" },
+    // Pinch: in, then back out.
+    { DEV_AUTOTEST_ACTION_CENTER_DUDE, 0, 0, 0, 45, "pr10_map" },
+    { DEV_AUTOTEST_ACTION_PINCH, 0.2f, 0.42f, 0.0f, 50, "pr11_pinch_in" },
+    { DEV_AUTOTEST_ACTION_PINCH, 0.42f, 0.18f, 0.0f, 50, "pr12_pinch_out" },
+    // A tap on the ground: the hero walks there.
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_TILE, 6, ROTATION_SE, 0, 100, "pr13_walk" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_TILE, 5, ROTATION_NE, 0, 100, "pr14_walk_back" },
+    // A long press on an item: its actions.
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Inventory), 0, 0, 50, "pr20_inventory" },
+    { DEV_AUTOTEST_ACTION_MUI_LONG_PRESS, 45, 0, 0, 50, "pr21_item_menu", "inventory.pid.233" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "pr22_menu_closed", "inventory.info" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "pr23_inventory_closed", "inventory.back" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Character), 0, 0, 50, "pr30_character" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 30, "pr31_later", "character.perkpanel.later" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 40, "pr32_closed", "character.nav.back" },
+    { DEV_AUTOTEST_ACTION_COMMAND, static_cast<int>(GameCommandType::Pipboy), 0, 0, 50, "pr40_pipboy" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 45, "pr41_quests", "pipboy.section.quests" },
+    { DEV_AUTOTEST_ACTION_MUI_TAP, 0, 0, 0, 45, "pr42_maps", "pipboy.section.maps" },
+    { DEV_AUTOTEST_ACTION_BACK, 0, 0, 0, 40, "pr43_closed" },
+    // Combat in Navarro: pick the enemy (the hit chance), then fire.
+    { DEV_AUTOTEST_ACTION_MAP_TRANSITION, 2, 25895, 0, 150, "pr49_navarro", "navarro.map" },
+    { DEV_AUTOTEST_ACTION_START_COMBAT, 0, 0, 0, 60, "pr50_combat" },
+    { DEV_AUTOTEST_ACTION_CENTER_DUDE, 0, 0, 0, 30, "pr51_center" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 1, 0, 50, "pr52_enemy_picked" },
+    { DEV_AUTOTEST_ACTION_TOUCH_TAP_CRITTER, 0, 1, 0, 150, "pr53_fire" },
 };
 
 static const DevAutotestStep kDevAutotestBehindCritterSteps[] = {
@@ -1370,6 +1469,18 @@ static void devAutotestPushFinger(Uint32 type, SDL_FingerID finger, float x, flo
     event.tfinger.y = y;
     event.tfinger.pressure = 1.0f;
     SDL_PushEvent(&event);
+
+    // Every finger with the wall clock: promo videos draw the touches over
+    // a recording of the window, lined up by time.
+    if (!gDevAutotestOutputPath.empty()) {
+        std::string path = gDevAutotestOutputPath + "/touches.txt";
+        if (FILE* stream = fopen(path.c_str(), "a")) {
+            long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            const char* name = type == SDL_FINGERDOWN ? "down" : type == SDL_FINGERUP ? "up" : "move";
+            fprintf(stream, "%lld %s %d %.4f %.4f\n", ms, name, static_cast<int>(finger), x, y);
+            fclose(stream);
+        }
+    }
 }
 
 // Moves two synthetic fingers symmetrically around a centroid. Returns true
@@ -3751,6 +3862,12 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "icons") == 0) {
         gDevAutotestSteps = kDevAutotestIconsSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestIconsSteps) / sizeof(kDevAutotestIconsSteps[0]);
+    } else if (strcmp(name, "promoworld") == 0) {
+        gDevAutotestSteps = kDevAutotestPromoWorldSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestPromoWorldSteps) / sizeof(kDevAutotestPromoWorldSteps[0]);
+    } else if (strcmp(name, "promo") == 0) {
+        gDevAutotestSteps = kDevAutotestPromoSteps;
+        gDevAutotestStepCount = sizeof(kDevAutotestPromoSteps) / sizeof(kDevAutotestPromoSteps[0]);
     } else if (strcmp(name, "photos") == 0) {
         gDevAutotestSteps = kDevAutotestPhotosSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPhotosSteps) / sizeof(kDevAutotestPhotosSteps[0]);
