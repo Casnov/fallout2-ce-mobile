@@ -1416,7 +1416,8 @@ static bool gDevAutotestTappedOutside = false;
 static int gDevAutotestWalkTarget = -1;
 static int gDevAutotestTouchStartTile = -1;
 
-static constexpr int kDevAutotestPinchFrames = 20;
+// Frames a pinch takes; promo footage makes it slower to watch.
+static int gDevAutotestPinchFrames = 20;
 
 static bool gDevAutotestEnabled = false;
 static std::string gDevAutotestOutputPath;
@@ -1489,13 +1490,13 @@ static bool devAutotestPinchTick(const DevAutotestStep* step)
 {
     gDevAutotestPinchFrame++;
 
-    float progress = static_cast<float>(gDevAutotestPinchFrame) / kDevAutotestPinchFrames;
+    float progress = static_cast<float>(gDevAutotestPinchFrame) / gDevAutotestPinchFrames;
     float span = step->a + (step->b - step->a) * std::min(progress, 1.0f);
     float centerX = 0.5f + step->c * std::min(progress, 1.0f);
     float centerY = 0.4f;
 
     Uint32 type = gDevAutotestPinchFrame == 0 ? SDL_FINGERDOWN : SDL_FINGERMOTION;
-    if (gDevAutotestPinchFrame > kDevAutotestPinchFrames) {
+    if (gDevAutotestPinchFrame > gDevAutotestPinchFrames) {
         type = SDL_FINGERUP;
     }
 
@@ -3868,6 +3869,7 @@ void devAutotestSetScenario(const char* name)
     } else if (strcmp(name, "promo") == 0) {
         gDevAutotestSteps = kDevAutotestPromoSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPromoSteps) / sizeof(kDevAutotestPromoSteps[0]);
+        gDevAutotestPinchFrames = 70;
     } else if (strcmp(name, "photos") == 0) {
         gDevAutotestSteps = kDevAutotestPhotosSteps;
         gDevAutotestStepCount = sizeof(kDevAutotestPhotosSteps) / sizeof(kDevAutotestPhotosSteps[0]);
@@ -4157,7 +4159,7 @@ void devAutotestTick()
 
     const DevAutotestStep* step = &(gDevAutotestSteps[gDevAutotestStep]);
 
-    if (step->action == DEV_AUTOTEST_ACTION_PINCH && gDevAutotestPinchFrame < kDevAutotestPinchFrames + 1) {
+    if (step->action == DEV_AUTOTEST_ACTION_PINCH && gDevAutotestPinchFrame < gDevAutotestPinchFrames + 1) {
         if (gDevAutotestPinchFrame == -1) {
             int mouseX;
             int mouseY;
