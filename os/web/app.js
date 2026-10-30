@@ -31,6 +31,7 @@ $('play').textContent = t('play');
 $('retry').textContent = t('try_again');
 $('rotate').textContent = t('rotate');
 $('notice').textContent = t('unofficial');
+$('tagline').textContent = t('tagline');
 let source = null;
 let starting = false;
 let running = false;

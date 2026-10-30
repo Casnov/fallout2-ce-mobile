@@ -1077,7 +1077,7 @@ namespace {
         float offset = ui.scroll("prefs.about", rect, height);
         muiPushClip(rect);
         float y = rect.y - offset;
-        muiDrawTextAligned(U"Fallout 2 CE Mobile", { rect.x + ui.dp(4.0f), y, rect.w, titleHeight }, ui.dp(16.0f), theme.text, MuiAlign::Start, MuiAlign::Center);
+        muiDrawTextAligned(U"F2 Touch", { rect.x + ui.dp(4.0f), y, rect.w, titleHeight }, ui.dp(16.0f), theme.text, MuiAlign::Start, MuiAlign::Center);
         y += titleHeight;
         char version[160];
         snprintf(version, sizeof(version), muiText(kTextAboutVersion, "Version %s, build %s"), FALLOUT_APP_VERSION, _BUILD_HASH);

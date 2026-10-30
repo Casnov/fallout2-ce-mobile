@@ -1,9 +1,10 @@
 <resources>
-    <string name="app_name">Fallout 2 CE</string>
+    <string name="app_name">F2 Touch</string>
 
     <!-- ImportActivity: the game's files from the player's own copy. -->
     <string name="import_title">Files of the game</string>
-    <string name="import_welcome">Fallout 2 CE needs the files of your own copy of Fallout 2 (GOG, Steam or the disc).\n\nCopy the game\'s folder from your computer to the phone — by cable, through a cloud drive or a messenger (as one archive: .zip, .7z or .rar) — and choose it here. Installed mods (RPU and others) and saves come along.</string>
+    <string name="import_welcome">F2 Touch needs the files of your own copy of Fallout 2 (GOG, Steam or the disc).\n\nCopy the game\'s folder from your computer to the phone — by cable, through a cloud drive or a messenger (as one archive: .zip, .7z or .rar) — and choose it here. Installed mods (RPU and others) and saves come along.</string>
+    <string name="import_unofficial">An unofficial touch port of Fallout 2 Community Edition. Not affiliated with or endorsed by Microsoft, Bethesda Softworks, ZeniMax or Interplay.</string>
     <string name="import_choose_folder">Choose the folder</string>
     <string name="import_choose_archive">Choose an archive</string>
     <string name="import_checking">Looking for the game…</string>

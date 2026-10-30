@@ -242,6 +242,10 @@ namespace {
             muiDrawIcon(link.icon, rect.centerX(), rect.centerY(), size * 0.5f, theme.accent);
             x += size + gap;
         }
+        // Whose pages they are: the port's author, not Fallout's.
+        float right = safe.right() - margin;
+        MuiRect caption = { right - size * 3.0f - gap * 2.0f - ui.dp(60.0f), safe.y + margin + size + ui.dp(4.0f), size * 3.0f + gap * 2.0f + ui.dp(60.0f), ui.dp(16.0f) };
+        muiDrawTextAligned(muiDecodeGameText(muiText(463, "Port by imbaner")), caption, ui.dp(11.0f), theme.textDim, MuiAlign::End, MuiAlign::Center);
     }
 
     // The game's copyright and version, as its menu shows them.

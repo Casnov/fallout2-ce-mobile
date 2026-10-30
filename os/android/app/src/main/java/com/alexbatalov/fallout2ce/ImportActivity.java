@@ -156,7 +156,9 @@ public class ImportActivity extends Activity {
         onBack = null;
         int text = MODE_SAVES_IMPORT.equals(mode) ? R.string.saves_import_welcome
             : replacing ? R.string.import_replace_welcome : R.string.import_welcome;
-        show(getString(text), null,
+        // The first import says whose app this is (not Fallout 2's own).
+        String details = text == R.string.import_welcome ? getString(R.string.import_unofficial) : null;
+        show(getString(text), details,
             getString(R.string.import_choose_folder), v -> chooseFolder(),
             getString(R.string.import_choose_archive), v -> chooseArchive());
     }

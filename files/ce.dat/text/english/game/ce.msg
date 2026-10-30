@@ -325,6 +325,7 @@
 {460}{}{Project}
 {461}{}{This build doesn't update itself: new versions are installed by hand.}
 {462}{}{The browser version updates itself when you open it.}
+{463}{}{Port by imbaner}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

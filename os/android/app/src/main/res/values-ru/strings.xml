@@ -1,6 +1,7 @@
 <resources>
     <string name="import_title">Файлы игры</string>
-    <string name="import_welcome">Для Fallout 2 CE нужны файлы вашей копии Fallout 2 (GOG, Steam или диск).\n\nСкопируйте папку с игрой с компьютера на телефон — по кабелю, через облачный диск или мессенджер (одним архивом: .zip, .7z или .rar) — и укажите её здесь. Установленные моды (RPU и другие) и сохранения перенесутся вместе с игрой.</string>
+    <string name="import_unofficial">Неофициальный сенсорный порт Fallout 2 Community Edition. Не связан с Microsoft, Bethesda Softworks, ZeniMax и Interplay и не одобрен ими.</string>
+    <string name="import_welcome">Для F2 Touch нужны файлы вашей копии Fallout 2 (GOG, Steam или диск).\n\nСкопируйте папку с игрой с компьютера на телефон — по кабелю, через облачный диск или мессенджер (одним архивом: .zip, .7z или .rar) — и укажите её здесь. Установленные моды (RPU и другие) и сохранения перенесутся вместе с игрой.</string>
     <string name="import_choose_folder">Выбрать папку</string>
     <string name="import_choose_archive">Выбрать архив</string>
     <string name="import_checking">Ищу игру…</string>
