@@ -158,7 +158,7 @@ bool gameConfigInit(bool isMapper, int argc, char** argv)
 
     if (!isMapper && gameConfigMigrateFromF2Res(gGameConfigFilePath, &gGameConfig)) {
         debugPrint("Migrated settings from f2_res.ini.\n");
-        configWriteEx(&gGameConfig, gGameConfigFilePath, CONFIG_RETAIN_ALL);
+        configWriteEx(&gGameConfig, gGameConfigFilePath, ConfigFlags::RetainAll);
     }
 
     // Add key-values from command line, which overrides both defaults and
@@ -201,7 +201,7 @@ bool gameConfigSave()
         }
     }
 
-    if (!configWriteEx(savedConfig.get(), gGameConfigFilePath, CONFIG_RETAIN_ALL)) {
+    if (!configWriteEx(savedConfig.get(), gGameConfigFilePath, ConfigFlags::RetainAll)) {
 #ifdef __EMSCRIPTEN__
         lsgWebCommitUserChanges(false);
 #endif

@@ -2268,33 +2268,59 @@ static int scriptWrite(Script* scr, File* stream)
 // 0x4A5768
 int scriptSaveAll(File* stream)
 {
-    // Serialize savable scripts without modifying the live lists. Runtime-only
-    // scripts can occupy whole trailing extents, so live extent lengths cannot
-    // be used as the lengths of the filtered on-disk extents.
-    for (ScriptType type = SCRIPT_TYPE_FIRST; type < SCRIPT_TYPE_COUNT; type++) {
-        std::vector<Script*> persistent;
-        for (ScriptListExtent* extent = gScriptLists[type].head; extent != nullptr; extent = extent->next) {
-            for (int index = 0; index < extent->length; index++) {
-                Script* script = &extent->scripts[index];
+    for (ScriptType scriptType = SCRIPT_TYPE_FIRST; scriptType < SCRIPT_TYPE_COUNT; scriptType++) {
+        ScriptList* scriptList = &(gScriptLists[scriptType]);
+
+        std::vector<Script*> savableScripts;
+
+        ScriptListExtent* scriptExtent = scriptList->head;
+        while (scriptExtent != nullptr) {
+            for (int index = 0; index < scriptExtent->length; index++) {
+                Script* script = &(scriptExtent->scripts[index]);
                 if (scriptIsSavable(script)) {
-                    persistent.push_back(script);
+                    savableScripts.push_back(script);
                 }
             }
+            scriptExtent = scriptExtent->next;
         }
-        int count = static_cast<int>(persistent.size());
-        if (fileWriteInt32(stream, count) == -1) return -1;
-        Script padding = {};
-        padding.sid = -1;
-        for (int first = 0; first < count; first += SCRIPT_LIST_EXTENT_SIZE) {
-            int length = std::min(SCRIPT_LIST_EXTENT_SIZE, count - first);
-            for (int index = 0; index < SCRIPT_LIST_EXTENT_SIZE; index++) {
-                Script* script = index < length ? persistent[first + index] : &padding;
-                if (scriptWrite(script, stream) == -1) return -1;
+
+        int scriptCount = static_cast<int>(savableScripts.size());
+        if (fileWriteInt32(stream, scriptCount) == -1) {
+            return -1;
+        }
+
+        int totalSaved = 0;
+        while (totalSaved < scriptCount) {
+            int remaining = scriptCount - totalSaved;
+            int currentExtentLength = (remaining > SCRIPT_LIST_EXTENT_SIZE) ? SCRIPT_LIST_EXTENT_SIZE : remaining;
+
+            // Write 16 scripts (SCRIPT_LIST_EXTENT_SIZE).
+            // If we ran out of valid scripts, we pad it with the last valid one
+            // (original code behavior when writing an incomplete tail extent).
+            for (int i = 0; i < SCRIPT_LIST_EXTENT_SIZE; i++) {
+                int scriptIndex = totalSaved + i;
+
+                if (scriptIndex >= scriptCount) {
+                    scriptIndex = scriptCount - 1;
+                }
+
+                if (scriptWrite(savableScripts[scriptIndex], stream) == -1) {
+                    return -1;
+                }
             }
-            if (fileWriteInt32(stream, length) == -1) return -1;
-            if (fileWriteInt32(stream, 0) == -1) return -1;
+
+            if (fileWriteInt32(stream, currentExtentLength) == -1) {
+                return -1;
+            }
+
+            if (fileWriteInt32(stream, 0) == -1) {
+                return -1;
+            }
+
+            totalSaved += currentExtentLength;
         }
     }
+
     return 0;
 }
 

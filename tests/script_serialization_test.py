@@ -44,9 +44,17 @@ ScriptType operator++(ScriptType& e, int)
     return old;
 }
 constexpr int SCRIPT_FLAG_NO_SAVE = 8, SCRIPT_FLAG_NONE = 0;
+struct Object {
+    bool savable = true;
+};
+bool objectIsSavable(Object* object)
+{
+    return object != nullptr && object->savable;
+}
 struct Script {
     int sid = 0;
     int flags = 0;
+    Object* owner = nullptr;
 };
 struct ScriptListExtent {
     Script scripts[16];
@@ -74,13 +82,6 @@ int scriptWrite(Script* s, File* f)
     return 0;
 }
 
-int scriptListExtentWrite(ScriptListExtent* e, File* f)
-{
-    for (int i = 0; i < 16; i++)
-        if (scriptWrite(&e->scripts[i], f)) return -1;
-    if (fileWriteInt32(f, e->length)) return -1;
-    return fileWriteInt32(f, 0);
-}
 '''
 
 WRITER_CHECKS = r'''
@@ -88,7 +89,10 @@ int main()
 {
     int cases = 0;
     for (int n = 0; n <= 96; n++)
-        for (int pattern = 0; pattern < 8; pattern++) {
+        for (int pattern = 0; pattern < 8; pattern++)
+          for (int owners = 0; owners < 3; owners++) {
+            Object savableOwner;
+            Object temporaryOwner { false };
             std::vector<ScriptListExtent> ext((n + 15) / 16);
             std::vector<int> expected;
             for (int i = 0; i < n; i++) {
@@ -99,9 +103,12 @@ int main()
                     : pattern == 6                                   ? i < 20
                     : pattern == 7                                   ? i % 3 == 1
                                                                      : false;
-                ext[i / 16].scripts[i % 16] = { i, skip ? 8 : 0 };
+                Object* owner = owners == 0 ? nullptr
+                    : owners == 1 ? &savableOwner
+                    : i % 3 == 0 ? &temporaryOwner : nullptr;
+                ext[i / 16].scripts[i % 16] = { i, skip ? 8 : 0, owner };
                 ext[i / 16].length++;
-                if (!skip) expected.push_back(i);
+                if (!skip && !(owners == 2 && i % 3 == 0)) expected.push_back(i);
             }
             for (size_t i = 0; i + 1 < ext.size(); i++)
                 ext[i].next = &ext[i + 1];
@@ -124,7 +131,7 @@ int main()
                             assert(sid == expected[consumed++]);
                             assert(!(flags & 8));
                         } else
-                            assert(sid == -1);
+                            assert(sid == expected.back() && !(flags & 8));
                     }
                     assert(f.words[pos++] == len);
                     assert(f.words[pos++] == 0);
@@ -135,7 +142,7 @@ int main()
                 assert(std::memcmp(&ext[i], &before[i], sizeof(ScriptListExtent)) == 0);
             cases++;
         }
-    std::printf("PASS: %d save/parse cases; partial extents, full runtime-only tails, mixed flags, empty lists; live state unchanged.\n", cases);
+    std::printf("PASS: %d save/parse cases; partial extents, full runtime-only tails, mixed flags, ownerless/savable/temporary owners, empty lists; live state unchanged.\n", cases);
 }
 '''
 
@@ -201,7 +208,9 @@ int main()
 def main():
     source = SOURCE.read_text()
     checks = [
-        ("writer", WRITER_PREAMBLE, "int scriptSaveAll(File* stream)", WRITER_CHECKS),
+        ("writer", WRITER_PREAMBLE
+         + function_body(source, "bool scriptIsSavable(const Script* script)"),
+         "int scriptSaveAll(File* stream)", WRITER_CHECKS),
         ("reader", READER_PREAMBLE,
          "static int scriptListExtentRead(ScriptListExtent* scriptExtent, int expectedLength, File* stream)",
          READER_CHECKS),
