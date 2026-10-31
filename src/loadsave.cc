@@ -82,8 +82,8 @@
 #include "world_view.h"
 #include "worldmap.h"
 #if defined(__EMSCRIPTEN__)
-#include <emscripten.h>
 #include "platform/web/storage.h"
+#include <emscripten.h>
 #endif
 
 namespace fallout {
