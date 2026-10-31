@@ -275,7 +275,8 @@ namespace {
 
             // Town names hidden by a mod: the place the party is at keeps
             // its title, as sfall shows it over the party.
-            std::u32string name = !city.label.empty() ? gameText(city.label) : city.area == state.currentArea ? partyPlace() : std::u32string();
+            std::u32string name = !city.label.empty() ? gameText(city.label) : city.area == state.currentArea ? partyPlace()
+                                                                                                              : std::u32string();
             if (!name.empty()) {
                 float size = ui.dp(12.0f);
                 float width = muiTextWidth(name, size) + ui.dp(10.0f);

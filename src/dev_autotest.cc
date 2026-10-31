@@ -1746,7 +1746,8 @@ static void devAutotestPushFinger(Uint32 type, SDL_FingerID finger, float x, flo
         std::string path = gDevAutotestOutputPath + "/touches.txt";
         if (FILE* stream = fopen(path.c_str(), "a")) {
             long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-            const char* name = type == SDL_FINGERDOWN ? "down" : type == SDL_FINGERUP ? "up" : "move";
+            const char* name = type == SDL_FINGERDOWN ? "down" : type == SDL_FINGERUP ? "up"
+                                                                                      : "move";
             fprintf(stream, "%lld %s %d %.4f %.4f\n", ms, name, static_cast<int>(finger), x, y);
             fclose(stream);
         }
@@ -5565,8 +5566,8 @@ void devAutotestTick()
             // `b` - 1: the nearest enemy in the line of fire; `c` - the
             // critter of that pid.
             Object* critter = step->c > 0 ? devAutotestFindCritterOfPid(0x01000000 | static_cast<int>(step->c))
-                : step->b == 1                ? devAutotestFindNearestEnemyInSight()
-                                              : devAutotestFindNearestCritter();
+                : step->b == 1            ? devAutotestFindNearestEnemyInSight()
+                                          : devAutotestFindNearestCritter();
             if (critter != nullptr) {
                 float x;
                 float y;
@@ -7818,7 +7819,8 @@ void devAutotestTick()
                         walk = length;
                     }
                 }
-                devAutotestLog("  %s %08x at tile %d: items %d, no highlight %d, outline %d, walk %d\n", corpse ? "corpse" : container ? "container" : "item",
+                devAutotestLog("  %s %08x at tile %d: items %d, no highlight %d, outline %d, walk %d\n", corpse ? "corpse" : container ? "container"
+                                                                                                                                       : "item",
                     ProtoId(obj).pid(), obj->tile, (corpse || container) ? obj->data.inventory.length : 0, (obj->flags & OBJECT_NO_HIGHLIGHT) != 0 ? 1 : 0, obj->outline, walk);
                 if (full || hidden) {
                     wanted++;

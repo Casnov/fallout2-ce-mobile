@@ -600,7 +600,8 @@ namespace {
             }
 
             const std::string& kind = attributes["class"];
-            Paint paint = kind == "f" ? Paint::Fill : kind == "h" ? Paint::Hole : Paint::Stroke;
+            Paint paint = kind == "f" ? Paint::Fill : kind == "h" ? Paint::Hole
+                                                                  : Paint::Stroke;
             auto number = [&](const char* name) {
                 return static_cast<float>(atof(attributes[name].c_str()));
             };
