@@ -10,23 +10,7 @@
 
 ## В игре
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/tap-to-go.gif" alt="Двойное касание — герой бежит, палец ведёт карту за ним" width="400"><br><sub>Касание — идти, двойное — бежать</sub></td>
-    <td align="center"><img src="docs/screenshots/hold-for-more.gif" alt="Долгое нажатие на запертый шкафчик, кнопка навыков, Взлом" width="400"><br><sub>Удержание — все остальные действия</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/drag-to-wear.gif" alt="Силовая броня перетаскивается на героя, гранатомёт — в пустую руку" width="400"><br><sub>Перетащить — надеть</sub></td>
-    <td align="center"><img src="docs/screenshots/drag-to-trade.gif" alt="Вещи перетаскиваются на стол обмена" width="400"><br><sub>Перетащить — продать</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/combat.gif" alt="Бой: ракета по когтям смерти, обе руки на панели" width="400"><br><sub>Бой: обе руки на панели</sub></td>
-    <td align="center"><img src="docs/screenshots/pipboy.gif" alt="Pip-Boy: задания, затем карта города" width="400"><br><sub>Pip-Boy под пальцы</sub></td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2"><img src="docs/screenshots/tablet.gif" alt="Торговля на планшете: экран окном поверх мира" width="400"><br><sub>Планшеты: экраны игры окнами поверх мира</sub></td>
-  </tr>
-</table>
+<p align="center"><img src="docs/screenshots/touch-play.gif" alt="Касание — бежать, удержание — Взлом, перетащить — надеть и продать, ракета по когтям смерти: без курсора" width="720"></p>
 
 ## Что изменено (уведомление об изменении ПО)
 

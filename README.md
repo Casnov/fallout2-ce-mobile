@@ -10,23 +10,7 @@ This is an **unofficial, fan-made, modified version** of Fallout 2 CE. It is not
 
 ## In play
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/tap-to-go.gif" alt="A double tap runs the hero there, a finger drags the map after him" width="400"><br><sub>Tap to go, a double tap to run</sub></td>
-    <td align="center"><img src="docs/screenshots/hold-for-more.gif" alt="A long press on a locked locker, its skill button, Lockpick" width="400"><br><sub>Hold for every other action</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/drag-to-wear.gif" alt="Power armor dragged onto the hero, a launcher into the empty hand" width="400"><br><sub>Drag to wear</sub></td>
-    <td align="center"><img src="docs/screenshots/drag-to-trade.gif" alt="Items dragged onto the barter table" width="400"><br><sub>Drag to trade</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/combat.gif" alt="Combat: a rocket at the deathclaws, both hands on the HUD" width="400"><br><sub>Combat: both hands on the HUD</sub></td>
-    <td align="center"><img src="docs/screenshots/pipboy.gif" alt="Pip-Boy: quests, then the town map" width="400"><br><sub>Pip-Boy, made for fingers</sub></td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2"><img src="docs/screenshots/tablet.gif" alt="Barter on a tablet: the screen as a window over the world" width="400"><br><sub>Tablets: game screens as windows over the world</sub></td>
-  </tr>
-</table>
+<p align="center"><img src="docs/screenshots/touch-play.gif" alt="Tap to run, a long press for Lockpick, drag to wear and to trade, a rocket at deathclaws: no cursor" width="720"></p>
 
 ## What is changed (modified software notice)
 
