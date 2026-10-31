@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -32,12 +33,86 @@ final class GameFiles {
     static final String JOURNAL = ".import-commit";
     private static final String JOURNAL_TEMP = ".import-commit.tmp";
     static final String CONFIG = "fallout2.cfg";
+    static final String SFALL_CONFIG = "ddraw.ini";
 
     private GameFiles() {
     }
 
+    // The game's config as the engine finds it: sfall's [Misc] ConfigFile of
+    // ddraw.ini (a mod's own, as Fallout 1.5: Resurrection's fores.cfg), else
+    // fallout2.cfg. [ddrawText]: ddraw.ini's text, null without it.
+    static String configName(String ddrawText) {
+        String value = ddrawText != null ? GameSaves.configValue(ddrawText, "Misc", "ConfigFile") : null;
+        if (value == null) {
+            return CONFIG;
+        }
+        String path = value.replace('\\', '/');
+        if (path.isEmpty() || path.contains(":") || path.startsWith("/") || ("/" + path + "/").contains("/../")) {
+            return CONFIG;
+        }
+        return path;
+    }
+
+    // `configName` of [game]'s ddraw.ini.
+    static String configName(File game) {
+        File ddraw = findIgnoreCase(game, SFALL_CONFIG);
+        try {
+            return configName(ddraw != null ? readText(ddraw) : null);
+        } catch (IOException e) {
+            return CONFIG;
+        }
+    }
+
+    // [game]'s config file (`configName` of its ddraw.ini), in the case its
+    // folder has it.
+    static File configFile(File game) {
+        String name = configName(game);
+        File found = findIgnoreCase(game, name);
+        return found != null ? found : new File(game, name);
+    }
+
+    // [path] (may have folders) in [folder] by its name in any case, null
+    // without it.
+    static File findIgnoreCase(File folder, String path) {
+        File current = folder;
+        for (String part : path.split("/")) {
+            File exact = new File(current, part);
+            if (exact.exists()) {
+                current = exact;
+                continue;
+            }
+            File[] children = current.listFiles();
+            File match = null;
+            if (children != null) {
+                for (File child : children) {
+                    if (child.getName().equalsIgnoreCase(part)) {
+                        match = child;
+                        break;
+                    }
+                }
+            }
+            if (match == null) {
+                return null;
+            }
+            current = match;
+        }
+        return current;
+    }
+
+    // The app's own logs in the game's folder (the engine's debug.log,
+    // perf.log, hud.log; the journal and the touch log with their old copies).
+    // A game's own .log files (Resurrection's fores_change.log) are its files.
+    private static final Set<String> APP_LOGS = new HashSet<>(Arrays.asList(
+        "actions.log", "actions.log.old", "touch.log", "touch.log.old", "debug.log", "perf.log", "hud.log"));
+
+    // [path] (from the game's folder) is one of the app's logs: a computer's
+    // copy (CE's debug.log, our port's on a Mac) isn't brought over them.
+    static boolean isAppLog(String path) {
+        return APP_LOGS.contains(path.toLowerCase(Locale.ROOT));
+    }
+
     // The game's files (replaced and removed by "Replace game"): all but the
-    // saves, the app's own (ce.dat, logs, the import's own files) and
+    // saves, the app's own (ce.dat, its logs, the import's own files) and
     // screenshots. [path]: from the game's folder, "/" between folders.
     static boolean isGameFile(String path) {
         String lower = path.toLowerCase(Locale.ROOT);
@@ -45,19 +120,21 @@ final class GameFiles {
             return false;
         }
         if (lower.indexOf('/') == -1) {
-            return !(lower.endsWith(".log")
-                || lower.endsWith(".log.old")
+            return !(isAppLog(lower)
                 || (lower.startsWith("scr") && (lower.endsWith(".bmp") || lower.endsWith(".png"))));
         }
         return true;
     }
 
     // Fallout 2's own files (not mods'): kept when the source has no
-    // master.dat and critter.dat (only the mods are replaced).
+    // master.dat and critter.dat (only the mods are replaced). Both may be
+    // folders too (CE opens them so).
     static boolean isOriginalFile(String path) {
         String lower = path.toLowerCase(Locale.ROOT);
         return lower.equals("master.dat")
             || lower.equals("critter.dat")
+            || lower.startsWith("master.dat/")
+            || lower.startsWith("critter.dat/")
             || lower.equals("patch000.dat")
             || lower.startsWith("sound/music/")
             || lower.startsWith("data/sound/music/");
@@ -107,8 +184,11 @@ final class GameFiles {
 
     // [paths] / [sizes]: the source's files; [installed]: `installedGameFiles`
     // of [target]. [modsOnly]: the original files stay (the source has no
-    // master.dat).
-    static Plan plan(List<String> paths, List<Long> sizes, File target, Map<String, String> installed, boolean modsOnly) {
+    // master.dat). [config]: the new game's config's name (`configName`):
+    // the installed one of that name stays (the player's settings, also
+    // when the source has none); another game's (Resurrection's fores.cfg)
+    // goes, its settings carried into the new one (`commit`).
+    static Plan plan(List<String> paths, List<Long> sizes, File target, Map<String, String> installed, boolean modsOnly, String config) {
         Plan plan = new Plan();
         Set<String> source = new HashSet<>();
         for (int index = 0; index < paths.size(); index++) {
@@ -135,9 +215,10 @@ final class GameFiles {
             }
         }
 
+        String keptConfig = config.toLowerCase(Locale.ROOT);
         for (Map.Entry<String, String> file : installed.entrySet()) {
             String lower = file.getKey();
-            if (source.contains(lower) || (modsOnly && isOriginalFile(lower)) || lower.equals(CONFIG)) {
+            if (source.contains(lower) || (modsOnly && isOriginalFile(lower)) || lower.equals(keptConfig)) {
                 continue;
             }
             plan.removed.add(file.getValue());
@@ -324,16 +405,28 @@ final class GameFiles {
     }
 
     // Moves [staged] (in the staging folder) in and removes [removed]: the
-    // journal first, then `finish`. fallout2.cfg gets the player's settings
-    // of the one it replaces (`mergeSettings`).
+    // journal first, then `finish`. The game's config (`configName`) gets the
+    // player's settings of the one it replaces (`mergeSettings`).
     static void commit(File target, List<String> staged, List<String> removed, Map<String, String> installed) throws IOException {
         File staging = new File(target, STAGING);
 
-        // The new config: a computer's paths fixed, the player's settings of
-        // the current one.
-        File currentConfig = new File(target, CONFIG);
+        // The new config (named by the new ddraw.ini, else the installed
+        // one's): a computer's paths fixed, the player's settings of the
+        // current one.
+        File currentConfig = configFile(target);
+        String newConfigName = configName(target).toLowerCase(Locale.ROOT);
+        for (String path : removed) {
+            if (path.equalsIgnoreCase(SFALL_CONFIG)) {
+                newConfigName = CONFIG;
+            }
+        }
         for (String path : staged) {
-            if (path.equalsIgnoreCase(CONFIG)) {
+            if (path.equalsIgnoreCase(SFALL_CONFIG)) {
+                newConfigName = configName(readText(new File(staging, path))).toLowerCase(Locale.ROOT);
+            }
+        }
+        for (String path : staged) {
+            if (path.toLowerCase(Locale.ROOT).equals(newConfigName)) {
                 File newConfig = new File(staging, path);
                 GameImport.fixConfig(newConfig);
                 if (currentConfig.isFile()) {
@@ -365,20 +458,36 @@ final class GameFiles {
 
     // Carries out the journal if there is one (again after a crash: each
     // step can be repeated), then removes the staging folder - also one left
-    // by an import that didn't get to its journal.
+    // by an import that didn't get to its journal. The removed files go
+    // first: one may stand where the new game has a folder (master.dat, a
+    // file, before Fallout: Nevada's master.dat folder) or the other way.
     static void finish(File target) throws IOException {
         File journalFile = new File(target, JOURNAL);
         File staging = new File(target, STAGING);
         if (journalFile.isFile()) {
-            String journal = readText(journalFile);
-            for (String line : journal.split("\n")) {
+            // Written in UTF-8 (`commit`): the paths may be any (Fallout:
+            // Nevada's "!docs/Библия Невады.pdf").
+            String[] lines = new String(readBytes(journalFile), StandardCharsets.UTF_8).split("\n");
+            for (String line : lines) {
+                String[] parts = line.split("\t");
+                if (parts.length == 2 && parts[0].equals("D")) {
+                    File file = GameImport.targetFile(target, parts[1]);
+                    //noinspection ResultOfMethodCallIgnored
+                    file.delete();
+                    removeEmptyFolders(target, file.getParentFile());
+                }
+            }
+            for (String line : lines) {
                 String[] parts = line.split("\t");
                 if (parts.length == 3 && parts[0].equals("M")) {
                     File from = new File(staging, parts[1]);
                     File to = GameImport.targetFile(target, parts[2]);
                     if (!from.isFile()) {
-                        // Moved already.
-                        continue;
+                        if (to.isFile()) {
+                            // Moved already.
+                            continue;
+                        }
+                        throw new IOException("can't find " + parts[1]);
                     }
                     File folder = to.getParentFile();
                     if (folder != null && !folder.isDirectory() && !folder.mkdirs()) {
@@ -391,11 +500,6 @@ final class GameFiles {
                             throw new IOException("can't move " + parts[1]);
                         }
                     }
-                } else if (parts.length == 2 && parts[0].equals("D")) {
-                    File file = GameImport.targetFile(target, parts[1]);
-                    //noinspection ResultOfMethodCallIgnored
-                    file.delete();
-                    removeEmptyFolders(target, file.getParentFile());
                 }
             }
             if (!journalFile.delete()) {
@@ -434,9 +538,9 @@ final class GameFiles {
     }
 
     // The new game's config with the player's settings of the old one:
-    // every section's values but [system] (the language and the game's
-    // files) and the music folders (the new game's). Keys and sections the
-    // new one lacks are added; its lines, comments and order stay.
+    // every section's values but the new game's own (`isPlayerSetting`).
+    // Keys and sections the new one lacks are added; its lines, comments and
+    // order stay.
     static String mergeSettings(String newText, String oldText) {
         Map<String, LinkedHashMap<String, String>> old = parseConfig(oldText);
         String newline = newText.contains("\r\n") ? "\r\n" : "\n";
@@ -510,11 +614,30 @@ final class GameFiles {
         merged.insert(end, missing);
     }
 
+    // The game's own settings, not carried over: [system] (the language and
+    // the game's files), the music folders, [screen] (the device's, svga.cc)
+    // and what CE takes from the game's f2_res.ini (game_config_migration.cc):
+    // it does that at the game's first start, for the keys its config lacks,
+    // and only while it has no [screen] resolution_x. Fallout 1.5:
+    // Resurrection's own fores.dat is its f2_res.ini's f2_res_dat. Not the
+    // scroll limit around the player: on the phone it's the player's.
+    private static final Set<String> F2_RES_UI_KEYS = new HashSet<>(Arrays.asList(
+        "iface_bar_mode", "iface_bar_width", "iface_bar_side_art", "iface_bar_sides_ori",
+        "alternate_ammo_meter", "ignore_map_edges", "splash_screen_size",
+        "death_screen_size", "end_slide_size", "movie_aspect_fit", "main_menu_scale_mode"));
+
     private static boolean isPlayerSetting(String section, String key) {
-        if (section.equals("system")) {
-            return false;
+        switch (section) {
+            case "system":
+            case "screen":
+                return false;
+            case "sound":
+                return !key.equals("music_path1") && !key.equals("music_path2");
+            case "ui":
+                return !F2_RES_UI_KEYS.contains(key);
+            default:
+                return true;
         }
-        return !(section.equals("sound") && (key.equals("music_path1") || key.equals("music_path2")));
     }
 
     // Sections (lower case) -> keys (lower case) -> values.
@@ -542,6 +665,10 @@ final class GameFiles {
     }
 
     static String readText(File file) throws IOException {
+        return new String(readBytes(file), StandardCharsets.ISO_8859_1);
+    }
+
+    private static byte[] readBytes(File file) throws IOException {
         try (InputStream in = new FileInputStream(file)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buffer = new byte[16384];
@@ -549,7 +676,7 @@ final class GameFiles {
             while ((read = in.read(buffer)) > 0) {
                 out.write(buffer, 0, read);
             }
-            return new String(out.toByteArray(), StandardCharsets.ISO_8859_1);
+            return out.toByteArray();
         }
     }
 

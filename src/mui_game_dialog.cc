@@ -719,16 +719,20 @@ namespace {
             }
         }
 
+        // The settings are the custom disposition's: none without it.
+        bool customizable = view.dispositionSupported[0];
+
         muiPushClip(area);
         for (int setting = 0; setting < kPartyControlSettingCount; setting++) {
             MuiRect row = { area.x, area.y - offset + setting * (rowHeight + rowGap), area.w, rowHeight };
 
             bool pressed;
-            bool tapped = ui.touchable("talk.party.setting." + std::to_string(setting), row, &pressed);
+            bool tapped = ui.touchable("talk.party.setting." + std::to_string(setting), row, &pressed) && customizable;
+            pressed = pressed && customizable;
             muiFillRoundRect(row, ui.dp(8.0f), pressed ? theme.buttonPressed : theme.button);
             muiStrokeRoundRect(row, ui.dp(8.0f), ui.dp(1.0f), pressed ? theme.accent : theme.buttonBorder);
 
-            muiDrawIcon(kPartySettingIcons[setting], row.x + padding + iconSize / 2.0f, row.centerY(), iconSize, theme.accent);
+            muiDrawIcon(kPartySettingIcons[setting], row.x + padding + iconSize / 2.0f, row.centerY(), iconSize, customizable ? theme.accent : theme.textDim);
 
             MuiRect text = { textX, row.y, textWidth, row.h };
             std::u32string name = muiDecodeGameText(gameDialogPartyControlSettingName(setting));
@@ -742,7 +746,7 @@ namespace {
             float ty = row.centerY() - blockHeight / 2.0f;
             muiDrawTextAligned(name, { text.x, ty, text.w, nameHeight }, muiFitTextSize(name, text.w, nameSize, ui.dp(9.0f)), theme.textDim, MuiAlign::Start, MuiAlign::Center);
             ty += nameHeight + ui.dp(2.0f);
-            MuiColor valueColor = view.settings[setting] != -1 ? theme.accent : theme.textDim;
+            MuiColor valueColor = view.settings[setting] != -1 && customizable ? theme.accent : theme.textDim;
             for (const std::u32string& line : lines) {
                 muiDrawTextAligned(line, { text.x, ty, text.w, valueLine }, valueSize, valueColor, MuiAlign::Start, MuiAlign::Center);
                 ty += valueLine;

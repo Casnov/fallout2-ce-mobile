@@ -43,6 +43,7 @@ void SaveRecords::configure(const std::string& path)
 void SaveRecords::reload()
 {
     records.clear();
+    writesSucceeded_ = true;
     fileIsNew = false;
     if (filePath.empty()) {
         return;
@@ -99,7 +100,9 @@ bool SaveRecords::put(int slot, const std::string& identity, const SaveRecord& r
         return false;
     }
     records[slot] = { identity, record };
-    return write();
+    bool written = write();
+    writesSucceeded_ = writesSucceeded_ && written;
+    return written;
 }
 
 bool SaveRecords::remove(int slot)
@@ -107,7 +110,9 @@ bool SaveRecords::remove(int slot)
     if (records.erase(slot) == 0) {
         return true;
     }
-    return write();
+    bool written = write();
+    writesSucceeded_ = writesSucceeded_ && written;
+    return written;
 }
 
 bool SaveRecords::write()

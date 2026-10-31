@@ -338,6 +338,19 @@ bool touchControlsWantsGameMouseObjects()
     return !touchControlsIsEnabled();
 }
 
+// The map's view may be moved and zoomed: while the game lets the map
+// scroll, and also while it waits for its own animation over the map (its
+// watch cursor: the dude changing weapons, a combat starting; on a
+// computer the map doesn't scroll then). Not while a script holds the
+// game's UI: a scene is seen as its authors meant it.
+static bool touchControlsViewMayMove()
+{
+    if (isoIsDisabled() || gameUiIsDisabledByScript()) {
+        return false;
+    }
+    return gameMouseIsMapScrollingEnabled() || gameMouseGetCursor() == MOUSE_CURSOR_WAIT_WATCH;
+}
+
 // Two fingers over the map move and zoom its view.
 static bool touchControlsHandlePinch(const Gesture* gesture)
 {
@@ -348,7 +361,7 @@ static bool touchControlsHandlePinch(const Gesture* gesture)
 
     if (gesture->state == kBegan) {
         // As one finger moving the view: over the map while it may scroll.
-        active = worldViewIsWorldAt(gesture->startX, gesture->startY) && gameMouseIsMapScrollingEnabled();
+        active = worldViewIsWorldAt(gesture->startX, gesture->startY) && touchControlsViewMayMove();
         if (active) {
             worldViewBeginGesture();
         }
@@ -407,7 +420,7 @@ bool touchControlsHandleGesture(const Gesture* gesture)
         }
 
         if (gesture->state == kBegan) {
-            gPanActive = worldViewIsWorldAt(gesture->startX, gesture->startY) && gameMouseIsMapScrollingEnabled();
+            gPanActive = worldViewIsWorldAt(gesture->startX, gesture->startY) && touchControlsViewMayMove();
             if (!gPanActive) {
                 return false;
             }

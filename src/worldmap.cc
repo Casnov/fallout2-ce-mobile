@@ -3781,13 +3781,13 @@ static int wmWorldMapFunc(int a1)
             break;
         }
 
-        int mouseEvent = mouseGetEvent();
+        MouseButtonEvent mouseEvent = mouseGetEvent();
 
         if (wmTravelUpdate(now, worldX, worldY, &partyHealTime)) {
             break;
         }
 
-        if ((mouseEvent & MOUSE_EVENT_LEFT_BUTTON_DOWN) != 0 && (mouseEvent & MOUSE_EVENT_LEFT_BUTTON_REPEAT) == 0) {
+        if ((mouseEvent & MouseButtonEvent::LeftButtonDown) != MouseButtonEvent::None && (mouseEvent & MouseButtonEvent::LeftButtonRepeat) == MouseButtonEvent::None) {
             if (mouseHitTestInWindow(wmBkWin, WM_VIEW_X, WM_VIEW_Y, WM_VIEW_WIDTH + WM_VIEW_X, WM_VIEW_HEIGHT + WM_VIEW_Y)) {
                 if (!wmGenData.isWalking && !mousePressed && abs(wmGenData.worldPosX - worldX) < wmPartyClickRadius() && abs(wmGenData.worldPosY - worldY) < wmPartyClickRadius()) {
                     mousePressed = true;
@@ -3800,7 +3800,7 @@ static int wmWorldMapFunc(int a1)
             }
         }
 
-        if ((mouseEvent & MOUSE_EVENT_LEFT_BUTTON_UP) != 0) {
+        if ((mouseEvent & MouseButtonEvent::LeftButtonUp) != MouseButtonEvent::None) {
             if (mousePressed) {
                 mousePressed = false;
                 wmInterfaceRefresh();
@@ -3889,7 +3889,7 @@ static int wmWorldMapFunc(int a1)
             }
         }
 
-        if ((mouseEvent & MOUSE_EVENT_WHEEL) != 0) {
+        if ((mouseEvent & MouseButtonEvent::Wheel) != MouseButtonEvent::None) {
             int wheelX;
             int wheelY;
             mouseGetWheel(&wheelX, &wheelY);
@@ -5213,7 +5213,7 @@ static int wmInterfaceInit()
     const char* backgroundSoundFileName = gameSoundGetMusicOverride(
         wmGenData.isInCar ? "worldmap_car_music" : "worldmap_music",
         wmGenData.isInCar ? "20car" : "23world");
-    _gsound_background_play_level_music(backgroundSoundFileName, GSOUND_LIMIT_AFTER);
+    _gsound_background_play_level_music(backgroundSoundFileName, GameSoundReadLimitMode::LimitAfter);
 
     // CE: Hide entire interface, not just indicator bar, and disable tile
     // engine.
@@ -7698,24 +7698,31 @@ static int wmAreaFindFirstValidMap(Map* mapIdxPtr, MapElevation* elevationPtr, i
         return -1;
     }
 
+    EntranceInfo* entrance = nullptr;
     for (int index = 0; index < city->entrancesLength; index++) {
-        EntranceInfo* entrance = &(city->entrances[index]);
-        if (entrance->state != 0) {
-            *mapIdxPtr = entrance->map;
-            *elevationPtr = entrance->elevation;
-            *tilePtr = entrance->tile;
-            *rotationPtr = entrance->rotation;
-            return 0;
+        if (city->entrances[index].state != 0) {
+            entrance = &(city->entrances[index]);
+            break;
         }
     }
 
-    EntranceInfo* entrance = &(city->entrances[0]);
-    entrance->state = 1;
+    if (entrance == nullptr) {
+        entrance = &(city->entrances[0]);
+        entrance->state = 1;
+    }
 
     *mapIdxPtr = entrance->map;
-    *elevationPtr = entrance->elevation;
-    *tilePtr = entrance->tile;
-    *rotationPtr = entrance->rotation;
+
+    // CE: An entrance without a tile enters at the map's own start, as the
+    // original did (it only took the map here). Golgotha and the whale
+    // encounter in city.txt have elevation 0 with tile -1, and the map
+    // failed to load with it (an empty map).
+    if (entrance->tile != -1) {
+        *elevationPtr = entrance->elevation;
+        *tilePtr = entrance->tile;
+        *rotationPtr = entrance->rotation;
+    }
+
     return 0;
 }
 
@@ -7733,7 +7740,7 @@ int wmMapMusicStart()
             break;
         }
 
-        if (_gsound_background_play_level_music(map->music, GSOUND_LIMIT_AFTER) == -1) {
+        if (_gsound_background_play_level_music(map->music, GameSoundReadLimitMode::LimitAfter) == -1) {
             break;
         }
 
@@ -7941,16 +7948,21 @@ void wmMobileGetState(WorldmapMobileState* state)
         item.radius = circleWidth / 2.0f;
         item.visited = city->visitedState == VisitedState::Visited;
 
+        char name[40];
+        if (wmAreaIsKnown(city->areaId)) {
+            wmGetAreaName(city, name);
+        } else {
+            MessageListItem messageListItem;
+            strncpy(name, getmsg(&wmMsgFile, &messageListItem, 1004), sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+        }
+        item.name = name;
         if (!wmTownNamesHidden) {
-            char name[40];
-            if (wmAreaIsKnown(city->areaId)) {
-                wmGetAreaName(city, name);
-            } else {
-                MessageListItem messageListItem;
-                strncpy(name, getmsg(&wmMsgFile, &messageListItem, 1004), sizeof(name) - 1);
-                name[sizeof(name) - 1] = '\0';
-            }
-            item.name = name;
+            item.label = name;
+        }
+        const char* title = wmGetTownTitle(static_cast<City>(index));
+        if (title != nullptr) {
+            item.title = title;
         }
 
         if (wmGenData.isWalking

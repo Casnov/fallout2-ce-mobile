@@ -53,6 +53,7 @@
 #include "text_object.h"
 #include "tile.h"
 #include "touch.h"
+#include "window.h"
 #include "window_manager.h"
 #include "world_view.h"
 
@@ -758,6 +759,7 @@ static int gameDialogDrawText(unsigned char* buffer, Rect* rect, const char* str
 static int gameDialogCreateBarterWindow();
 static void gameDialogDestroyBarterWindow();
 static void gameDialogBarterCleanupTables();
+static bool partyMemberHasDisposition(Object* critter, Disposition disposition);
 static int partyMemberControlWindowInit();
 static void partyMemberControlWindowFree();
 static void partyMemberControlWindowUpdate();
@@ -1212,7 +1214,7 @@ int _gdialogExitFromScript()
     }
 
     if (gameDialogOldMusicVolume == -1) {
-        backgroundSoundRestart(GSOUND_LIMIT_BEFORE);
+        backgroundSoundRestart(GameSoundReadLimitMode::LimitBefore);
     } else {
         backgroundSoundSetVolume(gameDialogOldMusicVolume);
     }
@@ -2013,7 +2015,7 @@ int _gdProcessInit()
     }
 
     // Top part of the reply window - scroll up.
-    upBtn = buttonCreate(gameDialogReplyWindow, 1, 1, 377, 28, -1, -1, KEY_ARROW_UP, -1, nullptr, nullptr, nullptr, 32);
+    upBtn = buttonCreate(gameDialogReplyWindow, 1, 1, 377, 28, -1, -1, KEY_ARROW_UP, -1, nullptr, nullptr, nullptr, BUTTON_FLAG_TRANSPARENT);
     if (upBtn == -1) {
         goto err_1;
     }
@@ -2022,7 +2024,7 @@ int _gdProcessInit()
     buttonSetMouseCallbacks(upBtn, _reply_arrow_up, _reply_arrow_restore, nullptr, nullptr);
 
     // Bottom part of the reply window - scroll down.
-    downBtn = buttonCreate(gameDialogReplyWindow, 1, 29, 377, 28, -1, -1, KEY_ARROW_DOWN, -1, nullptr, nullptr, nullptr, 32);
+    downBtn = buttonCreate(gameDialogReplyWindow, 1, 29, 377, 28, -1, -1, KEY_ARROW_DOWN, -1, nullptr, nullptr, nullptr, BUTTON_FLAG_TRANSPARENT);
     if (downBtn == -1) {
         goto err_1;
     }
@@ -2776,7 +2778,7 @@ void _gdProcessUpdate()
             dialogOptionEntry->bottom = _optionRect.top;
             _optionRect.top += 2;
 
-            dialogOptionEntry->btn = buttonCreate(gameDialogOptionsWindow, 2, y, width, _optionRect.top - y - 4, 1200 + index, 1300 + index, -1, 49 + index, nullptr, nullptr, nullptr, 0);
+            dialogOptionEntry->btn = buttonCreate(gameDialogOptionsWindow, 2, y, width, _optionRect.top - y - 4, 1200 + index, 1300 + index, -1, 49 + index, nullptr, nullptr, nullptr, BUTTON_FLAG_NONE);
             if (dialogOptionEntry->btn != -1) {
                 buttonSetCallbacks(dialogOptionEntry->btn, _gsound_red_butt_press, _gsound_red_butt_release);
             } else {
@@ -3946,6 +3948,13 @@ void gameDialogBarterCleanupTables()
     }
 }
 
+// CE: A disposition the combat control offers: party.txt lists it, and the
+// critter has a packet of it (see `aiSetDisposition`).
+static bool partyMemberHasDisposition(Object* critter, Disposition disposition)
+{
+    return partyMemberSupportsDisposition(critter, disposition) && aiCanSetDisposition(critter, disposition);
+}
+
 // 0x448740
 int partyMemberControlWindowInit()
 {
@@ -4066,15 +4075,19 @@ int partyMemberControlWindowInit()
         _win_register_button_disable(_gdialog_buttons[dispositionButtonIndex], disabledButtonFrmData, disabledButtonFrmData, disabledButtonFrmData);
         buttonSetCallbacks(_gdialog_buttons[dispositionButtonIndex], _gsound_med_butt_press, _gsound_med_butt_release);
 
-        if (!partyMemberSupportsDisposition(gGameDialogSpeaker, static_cast<Disposition>(buttonData->value))) {
+        if (!partyMemberHasDisposition(gGameDialogSpeaker, static_cast<Disposition>(buttonData->value))) {
             buttonDisable(_gdialog_buttons[dispositionButtonIndex]);
         }
     }
 
     _win_group_radio_buttons(5, &(_gdialog_buttons[_control_buttons_start]));
 
+    // CE: No button is down for a critter on a packet of no disposition (the
+    // original took the one past the last).
     Disposition disposition = aiGetDisposition(gGameDialogSpeaker);
-    _win_set_button_rest_state(_gdialog_buttons[_control_buttons_start + 4 - disposition], 1, 0);
+    if (disposition >= DISPOSITION_FIRST && disposition < DISPOSITION_COUNT - 1) {
+        _win_set_button_rest_state(_gdialog_buttons[_control_buttons_start + 4 - disposition], 1, 0);
+    }
 
     partyMemberControlWindowUpdate();
 
@@ -4344,10 +4357,13 @@ void partyMemberControlWindowHandleEvents()
             } else if (keyCode == 2098) {
                 aiSetDisposition(gGameDialogSpeaker, DISPOSITION_AGGRESSIVE);
             } else if (keyCode == 2099) {
-                aiSetDisposition(gGameDialogSpeaker, DISPOSITION_NONE);
-                dialogMode = GAME_DIALOG_MODE_PARTY_CUSTOMIZATION;
-                dialogSwitchMode = GAME_DIALOG_MODE_SWITCH_TO_PARTY_CUSTOMIZATION;
-                done = true;
+                // CE: The custom settings change the critter's packet, so
+                // only its own custom one.
+                if (aiSetDisposition(gGameDialogSpeaker, DISPOSITION_NONE) == 0) {
+                    dialogMode = GAME_DIALOG_MODE_PARTY_CUSTOMIZATION;
+                    dialogSwitchMode = GAME_DIALOG_MODE_SWITCH_TO_PARTY_CUSTOMIZATION;
+                    done = true;
+                }
             } else if (keyCode == 2102) {
                 aiSetDisposition(gGameDialogSpeaker, DISPOSITION_COWARD);
             } else if (keyCode == 2103) {
@@ -4375,9 +4391,11 @@ void partyMemberControlWindowHandleEvents()
                 // CE: Minor improvement - handle on mouse up (just like other
                 // buttons). Also fixed active button area (in original code
                 // it's slightly smaller than the button itself).
-                if ((mouseGetEvent() & MOUSE_EVENT_LEFT_BUTTON_UP) != 0) {
-                    if (mouseHitTestInWindow(gameDialogWindow, 438, 156, 438 + 109, 156 + 28)) {
-                        aiSetDisposition(gGameDialogSpeaker, DISPOSITION_NONE);
+                if ((mouseGetEvent() & MouseButtonEvent::LeftButtonUp) != MouseButtonEvent::None) {
+                    // CE: As the custom button (2099), which can be disabled.
+                    if (mouseHitTestInWindow(gameDialogWindow, 438, 156, 438 + 109, 156 + 28)
+                        && partyMemberHasDisposition(gGameDialogSpeaker, DISPOSITION_NONE)
+                        && aiSetDisposition(gGameDialogSpeaker, DISPOSITION_NONE) == 0) {
                         dialogMode = GAME_DIALOG_MODE_PARTY_CUSTOMIZATION;
                         dialogSwitchMode = GAME_DIALOG_MODE_SWITCH_TO_PARTY_CUSTOMIZATION;
                         done = true;
@@ -4807,7 +4825,7 @@ int _gdCustomSelect(int option)
             } else if (keyCode == KEY_ESCAPE) {
                 done = true;
             } else if (keyCode == -2) {
-                if ((mouseGetEvent() & MOUSE_EVENT_LEFT_BUTTON_UP) != 0) {
+                if ((mouseGetEvent() & MouseButtonEvent::LeftButtonUp) != MouseButtonEvent::None) {
                     // No need to use mouseHitTestInWindow as these values are already
                     // in screen coordinates.
                     if (_mouse_click_in(minX, minY, maxX, maxY)) {
@@ -5511,7 +5529,7 @@ bool gameDialogGetPartyControlView(PartyControlView* view)
 
     view->disposition = aiGetDisposition(critter);
     for (int disposition = 0; disposition < kPartyControlDispositionCount; disposition++) {
-        view->dispositionSupported[disposition] = partyMemberSupportsDisposition(critter, static_cast<Disposition>(disposition));
+        view->dispositionSupported[disposition] = partyMemberHasDisposition(critter, static_cast<Disposition>(disposition));
     }
 
     view->settings[PARTY_MEMBER_CUSTOMIZATION_OPTION_AREA_ATTACK_MODE] = aiGetAreaAttackMode(critter);
@@ -5559,7 +5577,13 @@ bool gameDialogPartyControlValueSupported(int setting, int value)
         return false;
     }
 
+    // CE: They are the custom packet's, which the game's panel only reaches
+    // through the custom button.
     Object* critter = gGameDialogSpeaker;
+    if (!partyMemberHasDisposition(critter, DISPOSITION_NONE)) {
+        return false;
+    }
+
     const PartyMemberOptionSetting& option = _custom_settings[setting][value];
     switch (setting) {
     case PARTY_MEMBER_CUSTOMIZATION_OPTION_AREA_ATTACK_MODE:
@@ -5615,15 +5639,13 @@ static void gameDialogPerformPartyControlActions()
             break;
         case PartyControlAction::SetDisposition:
             if (queued.a >= 0 && queued.a < kPartyControlDispositionCount
-                && partyMemberSupportsDisposition(critter, static_cast<Disposition>(queued.a))) {
+                && partyMemberHasDisposition(critter, static_cast<Disposition>(queued.a))) {
                 aiSetDisposition(critter, static_cast<Disposition>(queued.a));
             }
             break;
         case PartyControlAction::SetSetting:
-            if (gameDialogPartyControlValueSupported(queued.a, queued.b)) {
-                if (aiGetDisposition(critter) != DISPOSITION_NONE) {
-                    aiSetDisposition(critter, DISPOSITION_NONE);
-                }
+            if (gameDialogPartyControlValueSupported(queued.a, queued.b)
+                && aiSetDisposition(critter, DISPOSITION_NONE) == 0) {
                 // Enum values of every setting share the union.
                 _gdCustomUpdateSetting(queued.a, static_cast<int>(_custom_settings[queued.a][queued.b].areaAttackMode));
             }

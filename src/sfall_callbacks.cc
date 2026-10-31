@@ -5,6 +5,7 @@
 #include "display_monitor.h"
 #include "game.h"
 #include "game_dialog.h"
+#include "hero_appearance.h"
 #include "interface.h"
 #include "inventory.h"
 #include "reaction.h"
@@ -79,7 +80,7 @@ void sfallOnAfterGameStarted()
 
 void sfallOnAfterNewGame()
 {
-    return;
+    heroAppearanceOnNewGame();
 }
 
 void sfallOnGameModeChange(int exit, GameMode::Flags previousGameMode)

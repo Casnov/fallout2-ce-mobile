@@ -47,7 +47,7 @@ PreferenceValues preferencesGetDefaults();
 void preferencesPreview(const PreferenceValues& values);
 // Takes [values] as the window's Done does: applied, written to
 // fallout2.cfg (with the rest of the settings).
-void preferencesApply(const PreferenceValues& values);
+bool preferencesApply(const PreferenceValues& values);
 // The window's samples while a volume changes: an effect, the narrator.
 void preferencesPlaySoundEffectSample();
 void preferencesPlaySpeechSample();

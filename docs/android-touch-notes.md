@@ -1,5 +1,72 @@
 # Android touch adaptation — working notes
 
+## Updates
+
+Android's `UpdateManager` checks the latest stable GitHub release of
+`imbaner/fallout2-ce-mobile` in a worker on the first main-menu entry of a
+new process, at most once per hour (manual checks always work). The last
+request time is stored in SharedPreferences; there is no background timer.
+Resuming the activity or returning to the menu does not check again.
+`[touch] update_check=0` disables automatic requests.
+The installed package must be the public release package; debug packages
+are disabled unless `[debug] update_repo=owner/test-repo` explicitly selects
+a separate repository of APKs signed with that debug package's key. Never
+publish test APKs in the public release repository. Release assets must
+keep the `fallout2-ce-mobile-<version>-<abi>.apk` naming convention: each
+release carries `-arm64.apk` and `-armv7.apk` (for 32-bit phones), built
+one after the other with `assembleRelease -PabiFilters=arm64-v8a` and
+`-PabiFilters=armeabi-v7a` (both write `app-release.apk`, so copy each
+before the next). The update check takes the first of `Build.SUPPORTED_ABIS`
+that has an asset, so a 64-bit phone keeps getting the arm64 one.
+
+The main menu centers its visible actions and adds a quiet update row only
+when a release is available. The
+update dialog's single action downloads and opens Android's installer only
+while that dialog stays open and the game is foregrounded at the main
+menu. Closing it leaves the download running but revokes installation
+intent. Ready files and release metadata live in `cache/update/`; on a new
+process they are rechecked, never installed automatically. Interrupted
+downloads can be retried from the start. Cancel removes the partial file;
+Delete in About removes a complete download; a successful update clears old files
+at the next start. Saves and game files are not touched.
+
+The initial APK URL must point to this repository and tag under
+`github.com/.../releases/download/`. HTTPS redirects are followed at most
+five times and restricted to `api.github.com`, `github.com`,
+`release-assets.githubusercontent.com` and `objects.githubusercontent.com`.
+Size, GitHub's required SHA-256 digest, APK package, exact version name,
+strictly newer version code and all current signing certificates are checked
+after downloading, on cache restoration and before installation. A public
+release APK must not be debuggable. A changed digest invalidates a cached APK
+even when the tag, URL and size did not change. Key rotation is deliberately
+not accepted automatically; it needs an explicit migration.
+APK size is limited to 128 MiB, metadata to 1 MiB and notes to 32768 UTF-16
+code units. Metadata and APK transfers have overall read budgets of 30
+seconds and 10 minutes, in addition to 10-second socket timeouts. A conservative
+space check reserves room for both the APK and the installer's staged copy.
+Notes are displayed as plain text without remote images or executable links;
+their wrapped layout is cached rather than recomputed every frame.
+`PackageInstaller` sessions use a package-scoped mutable PendingIntent and
+a signature-permission-protected receiver on every supported Android version,
+with `RECEIVER_NOT_EXPORTED` on Android 13+. The per-process action and session
+ID reject unrelated results; a terminal result cancels its PendingIntent and
+invalidates the ID to reject replays. Mutability is necessary for the system's
+status extras, and a session needs both pending-user-action and terminal results.
+Unknown-source permission is requested through the system settings only
+after the player asks to update. Install cancellation retains the APK.
+
+About contains status/actions, the immediately saved auto-check switch,
+source and an offline license dialog. Its orange dot reflects update
+availability, independently of unsaved settings, and uses the same selected
+color as other section markers. The update action has its own orange dot.
+A ready APK can be deleted below that action using the shared danger button
+style, without a divider inside the update group. Update and license
+screens use the common Back rail (at the screen edge on phones, beside the
+window in windowed mode). During gameplay About allows
+checking only, with a note to install from the main menu. Release notes
+are UTF-8, unlike the game's localized texts. Desktop builds have no updater
+except the offline `update` / `updateingame` dev autotest scenarios.
+
 **2026-09-29, GPT-6 Astra:** исправлен вылет перед новым главным меню
 после изменения HR-фона в работе Claude Opus 5.5. Причина — именованный
 FRM передавался в загрузчик только для числовых FID; исправлены загрузка
@@ -516,18 +583,25 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
 - HUD "Highlight" button (`touch_hud.cc`) follows all options of sfall's
   highlighting mod (`[Highlighting]` in mods\sfall-mods.ini,
   gl_highlighting.ssl - that script works only while its key is held, the
-  phone has none): items, Containers, Corpses (not "no steal"), Critters
+  phone has none): items, containers and corpses (not "no steal") by the
+  port's `[enhancements] highlight_containers` / `highlight_corpses` (on by
+  default, Display rows; the mod's Containers / Corpses aren't read: Fallout
+  Et Tu turns them off, and on the phone the button is how things are found,
+  2026-10-29, the user's wish; autotest `highlightall`), Critters
   (combat colors, not in combat), CheckLOS, colors, MotionScanner (1 - a
   motion sensor carried, 2 - a charge per switching on; messages
-  `game\ce.msg` 170-171). Own keys in the same section: IncludeNoHighlight=1
-  (also objects with the game's "no highlight" flag - 118 of 124 container
-  protos have it: all furniture, graves, bones, vents, wall safes; the mod
-  lets only containers through), ExcludePids= (protos never outlined).
+  `game\ce.msg` 170-171). Things with the game's "no highlight" flag (its
+  protos': mods' hidden stashes, Fallout: Nevada's road sign out of the
+  vault): containers as the mod has them (118 of 124 container protos have
+  the flag: furniture, graves, bones, vents, wall safes), the rest that can
+  be picked up (`_proto_action_can_pickup`) by the port's
+  `[enhancements] highlight_hidden_items` (on by default, Display row,
+  2026-10-29, the user's wish: a setting, not a per-game ini, so every game
+  has it); ones a script hides (`OBJECT_HIDDEN`) never. Own key in the same
+  section: ExcludePids= (protos never outlined).
   Line of sight uses sight blocking (walls, opaque objects), not the mod's
   line of fire, where critters standing between hid things. Refreshed every
-  250 ms; outlines of others (combat, interaction) are left alone. Phone:
-  Containers=1, Corpses=1, IncludeNoHighlight=1, ExcludePids empty (the user
-  wants everything: the button is an opt-in simplification).
+  250 ms; outlines of others (combat, interaction) are left alone.
 - Interaction outline: an object dude is sent to (tap, skill / item on it,
   any radial action except look / rotate) or selected for use in combat is
   outlined green with the game's outline (`OUTLINE_TYPE_FRIENDLY`, set
@@ -535,6 +609,38 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
   outlined too) until dude is done or another command is given; its own
   outline comes back then, the refresh covers the outline border
   (`mapHintsSetInteraction`). Move cost is drawn inside the selected tile.
+- Tile markers: the tile dude walks to and the one he'd move to in combat
+  lie on the ground as the tactical view's lines (`addTileMarker`,
+  ground_lines.h: one mitered stroke, a faint fill, both dimmed behind
+  scenery and critters, hidden under the dude), in any mode: what covers
+  the ground is kept whenever the map is drawn (`objectSetCoverRecorded`,
+  from `mapHintsInit`; no frame time measured on perfmap), not only while
+  the tactical view draws see-through. The edge is thinner zoomed out, down
+  to 60%. Drawn in one batch with the tactical view; the move cost and the
+  "can't" icon stay over everything. (They were separate MUI segments with
+  round caps: a translucent edge showed bright corners.) Autotest
+  `groundcover`.
+- The map's view (one finger, pinch) moves while the game lets the map
+  scroll and also while it waits for its own animation over the map (its
+  watch cursor: changing weapons, a combat starting; on a computer the map
+  doesn't scroll then), not while a script holds the game's UI
+  (`game_ui_disable`, `gameUiIsDisabledByScript`: a scene seen as its
+  authors meant it). A finger the map follows stays the map's while the
+  mobile UI holds another (a HUD button pressed while the view moves:
+  `muiHandleFingerEvent`, only a modal screen keeps other fingers from the
+  game; before, the view stood still for the press, ~90 ms on the phone).
+  Autotest `weaponpan` (real SDL fingers for the press).
+- Frame timing log (`[debug] perf_log=1`, below) also writes a line for
+  every frame of 40 ms or more: its time, as actions.log's, and its parts.
+- Scroll limit around the dude (the original's, `tile.cc` 480 x 400, the
+  hi-res patch's IGNORE_PLAYER_SCROLL_LIMITS, CE's `[ui]
+  ignore_scroll_limit`): on the phone and the web the player's setting,
+  off by default (settings.h), the Display row "View limited around the
+  hero" (game\ce.msg 455-456); a game's f2_res.ini doesn't set it there
+  (game_config_migration.cc, as the screen is the device's) and it's
+  carried from game to game. Map edges and scroll blockers stay. Autotest
+  `scrolllimit --dev-map=arvillag.map` (the start map's edges come before
+  the limit).
 - Frame timing log: `[debug] perf_log=1` in fallout2.cfg appends to
   `perf.log` next to the data once a second: game modes, fps, longest frame,
   ms per frame for the game's loop, screen upload + map, mobile UI, present,
@@ -593,6 +699,13 @@ on a 360 dp phone is a 600 dp screen; `hudIsTabletScreen` decides by it too).
 - Texts come from `game\ce.msg` (files/ce.dat, English and Russian): button
   names 100-113, quick load question 116, attack mode names 124-145 (the
   Russian ones as on RPU's item button art); English fallbacks in code.
+  The attack modes' names cover every label art the engine picks
+  (`interfaceGetItemActionFrmId`: the weapon's animations and the unarmed
+  hit modes, a fixed set any mod's weapons choose from). A fallback only:
+  a mode chip whose label kActionNames doesn't know shows the game's own
+  label art (`touch_hud.cc`, "Fallback: the game's label art", 2026-10-29),
+  so a label a future engine adds isn't nameless; remove it with
+  `Chip::fallbackArt` when not wanted.
 - Autotest: `--dev-autotest-scenario=hud`.
 - Next in block 1: hide HUD / adapt full screens (inventory overlaps HUD
   corners), dialogs, barter, Pip-Boy, character, options, save/load, UI size
@@ -906,6 +1019,18 @@ every screen on the new scalable UI, visual style/textures later via theme).
     `muiHandleTextInput`, game charset via `muiEncodeGameText`, 11 chars),
     age -/+, gender, character points, SPECIAL -/+, tag skills, traits tab.
     The game's option window (save/load/print a character file) isn't there.
+  - Creation with sfall's Hero Appearance sets (`hero_appearance.h`, races
+    or styles to choose from): an appearance tab, gender (out of the header),
+    race and the race's styles in columns, rows as the traits'; names from
+    the sets' AppRace/AppStyle.msg (the part in parentheses). The card shows
+    the hero turning (`muiArtTexture`, one turn per 0.3 s) with the set's
+    title and description; art textures follow `artCacheGeneration`, so a
+    new choice shows at once. No tab without the sets.
+  - sfall's `hero_select_win(0|1)` (scripts): a card over the dimmed map
+    (`muiHeroSelectRun`, mui_hero_select.cc) with the hero turning, the
+    races or the race's styles as rows, the chosen one's description; a row
+    shows it at once, Done keeps it, Back or a tap outside brings the look
+    back (sfall's Esc). Autotest `heroselect`.
   - Card: skilldex picture (`muiLineArtTexture`: the drawing's dark ink from
     the game's color table becomes the interface color, the paper
     transparent; all 174 pictures work), title, subtitle, description
@@ -916,10 +1041,12 @@ every screen on the new scalable UI, visual style/textures later via theme).
   - Overlays inside one screen (perk panel, name field) switch the rest of
     the screen off (`ui.isInteractive`): the first widget under the finger
     gets the touch, so rows with buttons limit their own touch area.
-  - Texts `game\ce.msg` 190-198, the rest from `game\editor.msg`.
+  - Texts `game\ce.msg` 190-198 and 445-448 (appearance), the rest from
+    `game\editor.msg`.
   - Autotests: `character` (test save, +7000 xp, perk, skills, tabs, reset,
     inventory tab), `creation` (SPECIAL, tag, trait, typed name, age,
-    gender, done checks, cancel).
+    gender, done checks, cancel), `creationappearance` (the appearance tab
+    on the RPU copy: races, a style, a woman with her own styles).
 - Notifications (`mui_notify.cc`, `muiNotify`), one queue for everything the
   player should see right away (audit 2026-09-27):
   - Sources where the game shows them, its logic unchanged: the message log
@@ -1079,8 +1206,10 @@ every screen on the new scalable UI, visual style/textures later via theme).
     `world_view.filter`) and CE's (`[qol]`, `[ui]`) settings with badges
     "порт" / "CE"; value labels from OPTIONS.MSG, names from ce.msg
     245-289;
-  - kit widgets: `toggle`, `segmented` (cells as wide as their labels, one
-    text size), `slider` (finger drags it smoothly, reports `dragging`);
+  - kit widgets: `toggle`, `segmented` (laid out as every row of tabs,
+    `muiLayoutTabRow`: equal cells when all labels fit, else cells as wide
+    as their labels, one text size), `slider` (finger drags it smoothly,
+    reports `dragging`);
   - a change marks its row and section with a dot, Apply is highlighted
     while something changed; volumes and brightness are heard / seen at
     once (`preferencesPreview`, sample sounds when the finger lets go,
@@ -1185,6 +1314,13 @@ every screen on the new scalable UI, visual style/textures later via theme).
     subtile, smoothly scaled (unknown black, known dimmed); the party a dot,
     dots to the destination's cross; the encounter icon blinking red
     (special amber);
+  - town names as the game's world map has them: the towns' list always
+    by map.msg (as its tabs); the labels under the rings unless a mod hides
+    them (sfall's `remove_wm_town_names`: Fallout Et Tu's classic world map,
+    as Fallout 1 had none), then only the party's town keeps its label -
+    the title sfall shows over the party (`set_town_title`), else its name;
+    the place's title also on "Enter <town>" and in the menu's header.
+    Autotest `worldmapnames` (2026-10-29: Et Tu had no names at all);
   - a tap on the terrain walks there, on a town goes to its center, on the
     party (not walking) enters; "Enter <town>" / "Enter the wasteland" at the
     bottom center when standing; the menu button and the date / time chip
@@ -1352,3 +1488,44 @@ with "Start combat" (the A key), see the weapon group above.
   options; a new package asks on the phone once), `adb shell input` needs a
   SIM card ("USB debugging (security settings)"), so touch testing on the
   device is manual.
+
+## Game layouts the import understands (Android and web)
+
+On a computer CE reads a game where its installer left it. The phone and
+the browser copy it into the app's own storage, so the import lays the
+files out as CE would find them there (`GameImport` / `GameFiles` on
+Android, `zip-import.js` / `game-config.js` / `working-files.js` on the
+web, the same rules, tests on both):
+
+- The game's config is the one sfall's `[Misc] ConfigFile` of ddraw.ini
+  names (Fallout 1.5: Resurrection's `fores.cfg`), else `fallout2.cfg`
+  (`GameFiles.configName`, `configName`). Paths are fixed, the player's
+  settings carried over and saves read in that file.
+- The settings carried over are the player's, not the game's own:
+  `[system]`, the music folders, `[screen]` (the device decides it) and what
+  CE takes from the game's `f2_res.ini` stay the new game's. CE migrates
+  `f2_res.ini` at the game's first start, per key its config lacks, and only
+  while it has no `[screen] resolution_x`: Resurrection's own `fores.dat`
+  (its main menu, its art) is its `f2_res.ini`'s `f2_res_dat`, so a carried
+  `[screen]` left it out.
+- master.dat and critter.dat may be folders (Fallout: Nevada 1.00).
+- A mod in Fallout 2's subfolder whose config names master.dat and
+  critter.dat outside it (`..\master.dat`: Fallout Et Tu, Resurrection) is a
+  game of its own; with Fallout 2 around it the player chooses which.
+  The mod gets those files and the music folders its config names outside
+  (Resurrection keeps its own in Fallout 2's `sound\music`) at the paths
+  the config fix gives them; the mod's own files win. Fallout 2 chosen
+  leaves the mod's folder out.
+- Checked 2026-10-29 on the real releases: Nevada 1.00, Resurrection 1.5
+  installed onto Fallout 2, Fallout 2 with Et Tu, RPU.
+- Real games' check (`out/dev/realgames.sh`, local: the games' list in
+  `out/dev/realgames.txt`, archives or folders, a mod's chosen root): each
+  game installed from scratch by Android's import (`RealGamesTest`, skipped
+  without `FALLOUT_REAL_GAMES`), every game replaced by every other (the
+  plans: the result is the other game's first install), a chain of real
+  replacements (files, the player's save and setting); the web's files of
+  the same archives are Android's (`test_real_games.mjs`); the engine starts
+  each installed game to its first map (autotest `firstmap`). Ten games
+  (Fallout 2 plain, GOG, RPU, Et Tu and Fallout 2 of the same archive,
+  Resurrection 1.5 and its rebuild, Nevada 1.00 and its rebuild, Sonora) in
+  about 3.5 minutes; a game more is a line in the list.

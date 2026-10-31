@@ -27,6 +27,7 @@
 #include "svga.h"
 #include "text_font.h"
 #include "version.h"
+#include "window.h"
 #include "window_manager.h"
 
 #include "platform/git_version.h"
@@ -748,7 +749,7 @@ void mainMenuBeginSubscreen()
 
     if (mainMenuSubscreenBackdrop == -1) {
         // Palette index 0 in the root window is grey, so cover it around 640x480 dialogs.
-        mainMenuSubscreenBackdrop = windowCreate(0, 0, screenGetWidth(), screenGetHeight(), COLOR_BLACK, 0);
+        mainMenuSubscreenBackdrop = windowCreate(0, 0, screenGetWidth(), screenGetHeight(), COLOR_BLACK, WINDOW_NONE);
         if (mainMenuSubscreenBackdrop != -1) {
             windowRefresh(mainMenuSubscreenBackdrop);
         }
@@ -778,7 +779,7 @@ void mainMenuFinishSubscreen()
     mainMenuWindowFree();
 }
 
-int mainMenuSubscreenWindowFlags(int defaultFlags, int overlayFlags)
+WindowFlags mainMenuSubscreenWindowFlags(WindowFlags defaultFlags, WindowFlags overlayFlags)
 {
     return mainMenuWindowIsOverlayActive() ? overlayFlags : defaultFlags;
 }
@@ -880,7 +881,7 @@ int mainMenuWindowHandleEvents()
                 rc = MAIN_MENU_SCREENSAVER;
                 continue;
             } else if (keyCode == 1111) {
-                if (!(mouseGetEvent() & MOUSE_EVENT_LEFT_BUTTON_REPEAT)) {
+                if ((mouseGetEvent() & MouseButtonEvent::LeftButtonRepeat) == MouseButtonEvent::None) {
                     // NOTE: Uninline.
                     main_menu_play_sound("nmselec0");
                 }

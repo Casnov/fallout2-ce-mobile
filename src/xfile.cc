@@ -161,6 +161,36 @@ XFile* xfileOpen(const char* filePath, const char* mode)
     return stream;
 }
 
+XFile* xfileOpenIn(DBase* dbase, const char* directory, const char* filePath, const char* mode)
+{
+    XFile* stream = (XFile*)malloc(sizeof(*stream));
+    if (stream == nullptr) {
+        return nullptr;
+    }
+
+    memset(stream, 0, sizeof(*stream));
+
+    if (dbase != nullptr) {
+        stream->dfile = dfileOpen(dbase, filePath, mode);
+        if (stream->dfile == nullptr) {
+            free(stream);
+            return nullptr;
+        }
+        stream->type = XFILE_TYPE_DFILE;
+        return stream;
+    }
+
+    char path[COMPAT_MAX_PATH];
+    snprintf(path, sizeof(path), "%s\\%s", directory, filePath);
+    stream->file = compat_fopen(path, mode);
+    if (stream->file == nullptr) {
+        free(stream);
+        return nullptr;
+    }
+    stream->type = XFILE_TYPE_FILE;
+    return stream;
+}
+
 // 0x4DF11C xfprintf
 int xfilePrintFormatted(XFile* stream, const char* format, ...)
 {

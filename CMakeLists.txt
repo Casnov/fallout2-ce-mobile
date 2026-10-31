@@ -62,6 +62,8 @@ include("cmake/gitver.cmake")
 # Shared engine sources — used by both game and mapper targets.
 # Excludes main.cc/main.h (game-only entry logic).
 set(FALLOUT_ENGINE_SOURCES
+    "src/app_update.cc"
+    "src/app_update.h"
     "src/actions.cc"
     "src/actions.h"
     "src/animation_defs.h"
@@ -161,6 +163,8 @@ set(FALLOUT_ENGINE_SOURCES
     "src/graph_lib.h"
     "src/heap.cc"
     "src/heap.h"
+    "src/hero_appearance.cc"
+    "src/hero_appearance.h"
     "src/input.cc"
     "src/input.h"
     "src/interface.cc"
@@ -390,7 +394,11 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/mui_movie.cc"
     "src/mui_character_selector.cc"
     "src/mui_elevator.cc"
+    "src/mui_hero_select.cc"
     "src/mui_main_menu.cc"
+    "src/mui_update.cc"
+    "src/mui_update.h"
+    "src/mui_licenses.cc"
     "src/mui_options.cc"
     "src/mui_scenes.cc"
     "src/mui_worldmap.cc"
@@ -583,49 +591,7 @@ if((NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten"))
         find_package(SDL2)
     endif()
 else()
-    set( CMAKE_C_FLAGS                      "${CMAKE_C_FLAGS} \
-                                            --use-port=sdl2 \
-                                            --use-port=sdl2_mixer \
-                                            --use-port=zlib" )
-    set( CMAKE_CXX_FLAGS                    "${CMAKE_CXX_FLAGS} \
-                                            --use-port=sdl2 \
-                                            --use-port=sdl2_mixer \
-                                            --use-port=zlib \
-                                            -std=c++17" )
-
-
-    set( CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
-    set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
-
-    set( CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O1")
-    set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O1")
-
-    if(OPTION_WASM_64)
-        target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sMEMORY64" )
-        set( CMAKE_C_FLAGS                      "${CMAKE_C_FLAGS} -sMEMORY64" )
-        set( CMAKE_CXX_FLAGS                    "${CMAKE_CXX_FLAGS} -sMEMORY64" )
-        add_compile_options( -sMEMORY64 )
-    endif()
-
-    if(OPTION_WASM_JSPI)
-        target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sJSPI" )
-    else()
-        target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sASYNCIFY" )
-        target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sASYNCIFY_STACK_SIZE=20480" )
-    endif()
-
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sENVIRONMENT=web" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sALLOW_MEMORY_GROWTH" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-MEMORY_GROWTH_LINEAR_STEP=32mb" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sNO_DISABLE_EXCEPTION_CATCHING" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-lidbfs.js" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sCASE_INSENSITIVE_FS" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sMODULARIZE" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sEXPORTED_RUNTIME_METHODS=callMain,addRunDependency,removeRunDependency" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sEXPORT_ALL" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sEXPORT_NAME=fallout2ce" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "-sEXIT_RUNTIME" )
-    target_link_options( ${EXECUTABLE_NAME} PRIVATE "$<$<CONFIG:DEBUG>:-g>" )
+    include("os/web/web.cmake")
 endif()
 
 

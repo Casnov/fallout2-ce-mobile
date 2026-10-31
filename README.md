@@ -1,50 +1,94 @@
-# Fallout 2 CE Mobile (unofficial)
+# Fallout 2 CE Mobile (F2 Touch, unofficial)
 
 [Русская версия](README.ru.md)
 
-A fork of [Fallout 2: Community Engine](https://github.com/fallout2-ce/fallout2-ce) made for Android phones: every screen of the game rebuilt for a touch screen, in landscape. **Early beta.**
+**A touch port for your own copy of Fallout 2.** Every screen of the game is rebuilt for fingers: no cursor, nothing to switch. An Android app, and a web app for iPhone and iPad that installs to the Home Screen and plays offline. Phones and tablets, in landscape. Built on [Fallout 2: Community Engine](https://github.com/fallout2-ce/fallout2-ce). Free. **Beta.**
 
-This is an **unofficial, fan-made, modified version** of Fallout 2 CE. It is not affiliated with or endorsed by Bethesda Softworks, ZeniMax Media or Interplay. Fallout is a trademark of its owners. The app contains **no game data**: you need your own copy of Fallout 2 ([GOG](https://www.gog.com/game/fallout_2), [Steam](https://store.steampowered.com/app/38410), [Epic Games](https://store.epicgames.com/p/fallout-2)).
+**[Android: download the APK](https://github.com/imbaner/fallout2-ce-mobile/releases/latest)** · **[iPhone and iPad: play.f2touch.com](https://play.f2touch.com)** · [Telegram](https://t.me/imbaner) · [YouTube](https://www.youtube.com/@imbaner_dev) · [Report a problem](https://github.com/imbaner/fallout2-ce-mobile/issues)
 
-## Screenshots
+This is an **unofficial, fan-made, modified version** of Fallout 2 CE. It is not affiliated with or endorsed by Microsoft, Bethesda Softworks, ZeniMax Media or Interplay. Fallout is a trademark of its owners. The app contains **no game data**: you need your own copy of Fallout 2 ([GOG](https://www.gog.com/game/fallout_2), [Steam](https://store.steampowered.com/app/38410), [Epic Games](https://store.epicgames.com/p/fallout-2)).
 
-<p><img src="docs/screenshots/combat.jpg" alt="Combat: an enemy picked, its hit chance" width="49%"> <img src="docs/screenshots/dialogue.jpg" alt="Dialogue: the drill sergeant at Navarro" width="49%"></p>
+## In play
 
-<p><img src="docs/screenshots/inventory.jpg" alt="Inventory: an item's action menu" width="49%"> <img src="docs/screenshots/character.jpg" alt="Character" width="49%"></p>
+<p align="center"><img src="docs/screenshots/touch-play.gif" alt="Tap to run, a long press for Lockpick, drag to wear and to trade, a rocket at deathclaws: no cursor" width="720"></p>
 
 ## What is changed (modified software notice)
 
 On top of CE (its engine, fixes and sfall compatibility are kept and updated from upstream):
 
 - **Touch UI.** The game's screens are replaced with screens made for fingers and the phone's resolution: dialogue, barter, inventory, loot, character and level-up, character creation, Pip-Boy (quests, holodisks with their voice, maps, videos, rest), automap, world map and town maps, skills, game menu, settings, save/load, main menu, dialog boxes, called shots. No cursor: tap to act, long press for the action menu, drag to move items, two fingers to zoom the map.
-- **HUD.** Buttons anchored to the screen's edges (sized in dp), the attack modes with reload, the message log, end turn/combat.
+- **Tablets.** Game screens open as windows over the world, laid out for tablet screens (4:3 too); the UI size follows the screen and is a setting.
+- **HUD.** Buttons anchored to the screen's edges (sized in dp), both hands with their attack modes and AP, reload, start and end combat, end turn, the message log. The highlight button also shows containers and bodies with loot (settings).
 - **Tactical view in combat** (a button, can be turned off in the settings): figures turn see-through, the hexes you can reach and everyone's hex are drawn on the ground, so a tile behind an enemy can be picked and an enemy chosen by its hex.
-- **Mod features built in** where the mods can't run on CE: Inventory Filter's filters and party tabs in loot and barter.
+- **Mod features built in** where the mods can't run on CE: Inventory Filter's filters and party tabs in loot and barter; sfall's Hero Appearance (race and hairstyle, with RPU) as a tab of character creation.
 - **Saves.** A save list sorted by when saves were made, quick saves that never overwrite manual ones (their number is a setting), "Continue" in the main menu, saves interrupted midway are restored, optional marks for saves made with other game files or mods.
-- **Android app.** The game's files are imported from a folder or any archive (.zip, .7z, .rar, .tar...) copied from a computer, with RPU and other mods and the saves; "Replace game" for new builds and mod updates; export and import of saves.
+- **Android app.** The game's files are imported from a folder or any archive (.zip, .7z, .rar, .tar...) copied from a computer, with RPU and other mods and the saves; "Replace game" for new builds and mod updates; export and import of saves; verified updates from GitHub Releases.
+- **Web app** (iPhone, iPad, Android browsers): the same engine and touch UI in the browser. Installs to the Home Screen, plays offline, keeps the game and saves in the browser's storage, updates from the site.
 - **The port's own improvements** are settings (`[enhancements]` in `fallout2.cfg`).
 
 The full list of changes is the git history over upstream.
 
 ## Install on Android
 
-1. Download the APK from [Releases](https://github.com/imbaner/fallout2-ce-mobile/releases) and install it.
+1. Download the APK from [Releases](https://github.com/imbaner/fallout2-ce-mobile/releases/latest) and install it: `-arm64.apk`, or `-armv7.apk` for older 32-bit phones. Android 7.0 or newer.
 2. Copy your Fallout 2 folder from a computer to the phone: as is, or as one archive (cable, cloud drive, messenger). Mods installed there (for example [RPU](https://github.com/BGforgeNet/Fallout2_Restoration_Project)) and saves come along.
 3. Start the app and choose that folder or archive.
 
-Tested on a Redmi 15C (Android 16); players also run it on tablets (Alldocube). Android 7.0 or newer, arm64.
+Tested on a Redmi 15C (Android 16); players also run it on tablets (Alldocube). Later versions install over earlier ones; the game and saves stay.
 
-Plain Fallout 2 from GOG, Steam or Epic works too, with or without mods. The game's language is taken from its own files, older translations included; if your copy doesn't work, please open an [issue](https://github.com/imbaner/fallout2-ce-mobile/issues).
+## Play on iPhone and iPad (web app)
 
-**Recommended setup: Fallout 2 + [Restoration Project (RPU)](https://github.com/BGforgeNet/Fallout2_Restoration_Project) 2.4.34.** The port is played and tested with it. RPU relies on sfall, which this engine reimplements: Fallout 2: Community Engine, the continuation of the original Fallout 2 Community Edition. Install RPU into the game folder on a computer, then copy the folder to the phone.
+1. Open **[play.f2touch.com](https://play.f2touch.com)** in Safari.
+2. Share → **Add to Home Screen**, then start the game from its Home Screen icon. Do this first: game files chosen in a Safari tab don't carry over to the Home Screen app.
+3. On a computer, pack your Fallout 2 folder (with RPU or another mod installed, if you play with one) into one **.zip**. Send it to the iPhone (AirDrop, iCloud Drive, a messenger) and choose it in the app.
+
+After that the game starts without the internet. New versions come from the site by themselves; the game and saves stay. Removing the Home Screen app or clearing the site's data in Safari deletes the game and its saves, so back the saves up now and then (Export saves). The web app takes a .zip only (an RPU Windows installer is run on a computer first).
+
+On Android the web app runs in Chrome too (⋮ → Install app). Desktop browsers work, but the web app is made and tested for phones and tablets.
+
+## Which game
+
+Plain Fallout 2 from GOG, Steam or Epic works, with or without mods. The game's language is taken from its own files, older translations included; if your copy doesn't work, please open an [issue](https://github.com/imbaner/fallout2-ce-mobile/issues).
+
+**Recommended setup: Fallout 2 + [Restoration Project (RPU)](https://github.com/BGforgeNet/Fallout2_Restoration_Project) 2.4.34.** The port is played and tested with it. RPU relies on sfall, which this engine reimplements: Fallout 2: Community Engine, the continuation of the original Fallout 2 Community Edition. Install RPU into the game folder on a computer, then copy the folder (Android) or its .zip (web).
+
+**Big mods, early support:** [Fallout Et Tu](https://github.com/rotators/Fo1in2) (Fallout 1 in the Fallout 2 engine), [Fallout: Sonora](https://github.com/NovaRain/Fallout-Sonora-English), Fallout of Nevada and Fallout: Resurrection start and play, but they are not tested end to end. Install the mod on a computer as its authors describe, then copy the whole folder. When the folder holds both Fallout 2 and a mod that uses its files (Et Tu), the app asks which one to install. Tell us what breaks.
+
+## App updates
+
+**Android.** Settings → About lets you check for updates and turn off automatic checks
+(on a full launch, at most once an hour by default). A new release appears
+quietly on the main menu.
+Update downloads its APK and opens Android's installation confirmation;
+installation is available only from the main menu. Closing the update
+window never launches an installer later. A completed download survives
+restarts and can be installed later or deleted from Settings → About.
+
+The app contacts GitHub (`api.github.com`, `github.com` and download servers
+under `*.githubusercontent.com`) to check for and download updates. Game
+files, saves and player actions are not sent. With automatic checks off,
+network requests happen only at your request. Before installation, the
+APK's SHA-256 is checked against GitHub's release metadata; its package,
+version and signing certificate are checked against the installed app.
+Full licenses are available separately, offline, in About.
+
+**Web.** A new version is downloaded and checked whole in the background and applied only while no game is running; an interrupted download keeps the previous version. The game files and saves are kept apart from the app's files and stay.
 
 ## Known limitations
 
 - Landscape only; portrait is planned.
-- Android only: no iOS or browser version yet.
-- Laid out for phones: on tablets, 4:3 screens especially, the same layout is scaled up.
-- Made for phones and tested on Android; the desktop builds keep CE's original windows (`[touch] mobile_ui=0`) and are not the focus of this fork.
+- iPhone and iPad: the web app only (no App Store app); it takes a .zip of the game.
+- Big mods: early support, not guaranteed.
+- No gamepad controls yet.
+- Made for phones and tablets; the desktop builds keep CE's original windows (`[touch] mobile_ui=0`) and are not the focus of this fork.
 - Mods with their own script windows are not covered by the touch UI (none of the popular ones use them).
+
+## News and support
+
+- [Telegram](https://t.me/imbaner): developer news.
+- [YouTube](https://www.youtube.com/@imbaner_dev): videos and install guides.
+- [Issues](https://github.com/imbaner/fallout2-ce-mobile/issues): bugs and requests. Please write your device, the app version and the game or mod.
+- [Boosty](https://boosty.to/imbaner): an optional thank-you. Everything stays free; a thank-you gives no early builds, features or priority.
 
 ## Building
 
@@ -57,9 +101,11 @@ cd os/android
 
 A release build is signed with your own key: point the Gradle property `fallout2ce.releaseKeystoreProperties` to a properties file with `storeFile`, `storePassword`, `keyAlias`, `keyPassword` (never commit it). Desktop builds are as upstream's (CMake).
 
+Web: see [the web build instructions](os/web/README.md) for the complete static app build and local RPU testing.
+
 ## License
 
-The engine is under the [Sustainable Use License](LICENSE.md), as upstream: free, non-commercial distribution only, with the license and notices kept. Third-party components: SDL 2, zlib, LodePNG (zlib license), libarchive (BSD), liblzma from XZ Utils (0BSD), stb (MIT / public domain), fpattern, Fallout Classic Dialog font (MIT), PT Mono font (SIL OFL 1.1). The app shows all of them in Settings → About.
+The engine is under the [Sustainable Use License](LICENSE.md), as upstream: free, non-commercial distribution only, with the license and notices kept. Third-party components: SDL 2, zlib, LodePNG (zlib license), libarchive (BSD), liblzma from XZ Utils (0BSD), stb (MIT / public domain), fpattern, Fallout Classic Dialog font (MIT), PT Mono font (SIL OFL 1.1); the web app also uses zip.js (BSD-3-Clause). The app shows all of them in Settings → About.
 
 Credits: Alexander Batalov and the Fallout 2 CE contributors for the engine; the sfall, RPU and Inventory Filter authors, whose features are reimplemented here by their behavior (no code taken).
 
@@ -257,11 +303,10 @@ $ mv fallout2 /Applications/Fallout2
 
 ### Browser
 
-> **NOTE**: WebAssembly build with emscripten
-```
-docker run --rm -v $(pwd):/src emscripten/emsdk:3.1.74 sh -c 'git config --global --add safe.directory "*" && mkdir -p build && cd build && emcmake cmake ../ -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain/Emscripten.cmake && emmake make'
-```
-- Demo available at https://github.com/ololoken/fallout2-ce-ems.git
+The mobile browser target builds with Emscripten 4.0.4. Follow the
+[web build instructions](os/web/README.md) to package the current engine,
+mobile UI and `ce.dat`. It installs your own game from a ZIP, keeps saves in
+the browser and starts offline; players get it at [play.f2touch.com](https://play.f2touch.com).
 
 
 ## Contributing

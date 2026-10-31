@@ -282,6 +282,10 @@ static std::vector<unsigned char> gSeeThroughCover;
 // standing objects to the roofs of the part being redrawn.
 static bool gSeeThroughMarking = false;
 
+// `objectSetCoverRecorded`: [gSeeThroughCover] is kept while not
+// see-through too.
+static bool gObjectsCoverRecorded = false;
+
 // The dude as last drawn while see-through (`objectRenderPreRoof`): its
 // pixels' colors in [gSeeThroughDudeRect], -1 - not the dude's. Kept over
 // the tactical view's tiles and the outlines.
@@ -917,8 +921,9 @@ void _obj_render_pre_roof(Rect* rect, MapElevation elevation)
         }
     }
 
-    // CE: The tactical view: what stands on the ground covers it from now.
-    if (gObjectsSeeThrough) {
+    // CE: The tactical view, the tile markers: what stands on the ground
+    // covers it from now.
+    if (gObjectsSeeThrough || gObjectsCoverRecorded) {
         objectSeeThroughCoverStart(updatedRect);
     }
 
@@ -1732,7 +1737,7 @@ int _obj_reset_roof()
 // Sets object fid.
 //
 // 0x48AA3C obj_change_fid
-int objectSetFrmId(Object* obj, const FrmId& frmId, Rect* dirtyRect)
+int objectSetFrmId(Object* obj, const FrmId& requestedFrmId, Rect* dirtyRect)
 {
     Rect new_rect;
 
@@ -1740,9 +1745,12 @@ int objectSetFrmId(Object* obj, const FrmId& frmId, Rect* dirtyRect)
         return -1;
     }
 
-    if (frmId.valid()) {
-        assert(frmId.hasFid() && "objectSetFrmId(Object* obj, const FrmId& frmId, Rect* dirtyRect) called with path based FrmId which is not supported!");
+    if (requestedFrmId.valid()) {
+        assert(requestedFrmId.hasFid() && "objectSetFrmId(Object* obj, const FrmId& frmId, Rect* dirtyRect) called with path based FrmId which is not supported!");
     }
+
+    // SFALL: Hero Appearance: the dude wears the hero's own art.
+    const FrmId frmId = obj == gDude ? artHeroFrmId(requestedFrmId) : requestedFrmId;
 
     // CE: Who changes the dude's look (`[debug] action_log`).
     if (obj == gDude && FrmId(obj).frameId<CritterFrameId>() != frmId.frameId<CritterFrameId>()) {
@@ -3101,7 +3109,7 @@ void _intensity_mask_buf_to_buf(unsigned char* src, int srcWidth, int srcHeight,
 
 const unsigned char* objectSeeThroughCover(int* width, int* height, int* pitch)
 {
-    if (!gObjectsSeeThrough || gSeeThroughCover.empty()) {
+    if ((!gObjectsSeeThrough && !gObjectsCoverRecorded) || gSeeThroughCover.empty()) {
         return nullptr;
     }
 
@@ -3222,11 +3230,27 @@ void objectSetSeeThrough(bool seeThrough)
     }
 
     gObjectsSeeThrough = seeThrough;
-    if (!seeThrough) {
+    if (!seeThrough && !gObjectsCoverRecorded) {
         gSeeThroughCover.clear();
         gSeeThroughCover.shrink_to_fit();
         gSeeThroughMarking = false;
     }
+    tileWindowRefresh();
+}
+
+void objectSetCoverRecorded(bool recorded)
+{
+    if (recorded == gObjectsCoverRecorded) {
+        return;
+    }
+
+    gObjectsCoverRecorded = recorded;
+    if (!recorded && !gObjectsSeeThrough) {
+        gSeeThroughCover.clear();
+        gSeeThroughCover.shrink_to_fit();
+        gSeeThroughMarking = false;
+    }
+    // What is shown now gets its cover.
     tileWindowRefresh();
 }
 
@@ -4067,8 +4091,14 @@ int _obj_save_dude(File* stream)
     gDude->flags &= ~OBJECT_NO_SAVE;
     gDude->sid = -1;
 
+    // SFALL: Hero Appearance: saved with the critter's art id (the hero's
+    // own is set again after loading).
+    int fid = gDude->fid;
+    gDude->fid = artNormalFrmId(FrmId(gDude)).fid();
+
     int rc = _obj_save_obj(stream, gDude);
 
+    gDude->fid = fid;
     gDude->sid = field_78;
     gDude->flags |= OBJECT_NO_SAVE;
 

@@ -94,21 +94,33 @@ public class ImportActivity extends Activity {
         return MODE_SAVES_IMPORT.equals(mode) || MODE_SAVES_EXPORT.equals(mode);
     }
 
-    // The mobile UI's font (PT Mono, in ce.dat which comes with the app).
+    // Match TouchSettings: Classic by default, PT Mono when the player chose it.
     private void applyFont(View view) {
+        boolean mono = false;
+        try {
+            File config = GameFiles.configFile(getExternalFilesDir(null));
+            if (config.isFile()) {
+                mono = "1".equals(GameSaves.configValue(GameFiles.readText(config), "touch", "font"));
+            }
+        } catch (IOException ignored) {
+            // An absent/unreadable first-run config uses the game's default.
+        }
         Typeface font;
         try {
-            font = Typeface.createFromAsset(getAssets(), "ce.dat/fonts/PTM55FT.ttf");
+            font = Typeface.createFromAsset(getAssets(), "ce.dat/fonts/" + (mono ? "PTM55FT.ttf" : "FalloutClassicDialog.ttf"));
         } catch (RuntimeException e) {
             font = Typeface.MONOSPACE;
         }
+        applyFont(view, font);
+    }
 
+    private void applyFont(View view, Typeface font) {
         if (view instanceof TextView) {
             ((TextView) view).setTypeface(font);
         } else if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int index = 0; index < group.getChildCount(); index++) {
-                applyFont(group.getChildAt(index));
+                applyFont(group.getChildAt(index), font);
             }
         }
     }
@@ -144,7 +156,9 @@ public class ImportActivity extends Activity {
         onBack = null;
         int text = MODE_SAVES_IMPORT.equals(mode) ? R.string.saves_import_welcome
             : replacing ? R.string.import_replace_welcome : R.string.import_welcome;
-        show(getString(text), null,
+        // The first import says whose app this is (not Fallout 2's own).
+        String details = text == R.string.import_welcome ? getString(R.string.import_unofficial) : null;
+        show(getString(text), details,
             getString(R.string.import_choose_folder), v -> chooseFolder(),
             getString(R.string.import_choose_archive), v -> chooseArchive());
     }
@@ -241,6 +255,10 @@ public class ImportActivity extends Activity {
                 closeQuietly(source);
                 runOnUiThread(this::showWelcome);
                 return;
+            } catch (GameImport.ChooseGameException e) {
+                GameImport.Source chosen = source;
+                runOnUiThread(() -> showChoice(chosen, e.roots));
+                return;
             } catch (IOException | RuntimeException e) {
                 closeQuietly(source);
                 Log.w(TAG, "can't use " + uri, e);
@@ -259,6 +277,63 @@ public class ImportActivity extends Activity {
             GameFiles.Plan chosenPlan = plan;
             runOnUiThread(() -> showFound(chosen, found, chosenPlan));
         }).start();
+    }
+
+    // Fallout 2 and a mod in its subfolder that uses its files ([roots]:
+    // Fallout 2's first): which one to install. More mods than one: the
+    // folder or archive with one of them.
+    private void showChoice(GameImport.Source source, List<String> roots) {
+        busy = false;
+        progress.setIndeterminate(false);
+        if (roots.size() != 2) {
+            closeQuietly(source);
+            showError(problemText(new GameImport.SeveralGamesException(roots), null));
+            return;
+        }
+
+        String mod = baseName(folderName(roots.get(1)));
+        onBack = () -> {
+            closeQuietly(source);
+            showWelcome();
+        };
+        show(getString(R.string.import_choose_game, mod), null,
+            mod, v -> lookChosen(source, roots.get(1)),
+            getString(R.string.import_fallout2), v -> lookChosen(source, roots.get(0)));
+    }
+
+    // The game the player chose of showChoice.
+    private void lookChosen(GameImport.Source source, String root) {
+        busy = true;
+        onBack = null;
+        show(getString(R.string.import_checking), null, null, null, null, null);
+        progress.setVisibility(View.VISIBLE);
+        progress.setIndeterminate(true);
+
+        new Thread(() -> {
+            GameImport.Found found;
+            GameFiles.Plan plan;
+            try {
+                found = GameImport.find(source, replacing, root);
+                plan = found != null ? GameImport.plan(found, getExternalFilesDir(null), !replacing) : null;
+            } catch (IOException | RuntimeException e) {
+                closeQuietly(source);
+                Log.w(TAG, "can't use " + root, e);
+                String text = problemText(e, null);
+                runOnUiThread(() -> showError(text));
+                return;
+            }
+            if (found == null) {
+                closeQuietly(source);
+                runOnUiThread(() -> showError(getString(R.string.import_not_found)));
+                return;
+            }
+            runOnUiThread(() -> showFound(source, found, plan));
+        }).start();
+    }
+
+    private static String baseName(String path) {
+        int slash = path.lastIndexOf('/');
+        return slash == -1 ? path : path.substring(slash + 1);
     }
 
     private void showFound(GameImport.Source source, GameImport.Found found, GameFiles.Plan plan) {

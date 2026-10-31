@@ -188,6 +188,15 @@ bool gameConfigMigrateFromF2Res(const char* gameConfigFilePath, Config* gameConf
 
     bool migrated = false;
     for (const auto& entry : kF2ResMigrationEntries) {
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
+        // CE: On the phone and in the browser the scroll limit around the
+        // player is the player's setting (settings.h), as the screen is the
+        // device's (svga.cc): a game's f2_res.ini sets it for a computer's
+        // screen.
+        if (strcmp(entry.targetKey, GAME_CONFIG_IGNORE_SCROLL_LIMIT_KEY) == 0) {
+            continue;
+        }
+#endif
         if (gameConfigMigrateStringKey(legacyConfig.get(), gameConfig, entry)) {
             migrated = true;
         }
@@ -239,6 +248,8 @@ namespace {
         { kSfallMisc, "KarmaPoints", CONTENT_CONFIG_KARMA_SECTION, "points" },
         // [items]
         { kSfallMisc, "CanSellUsedGeiger", CONTENT_CONFIG_ITEMS_SECTION, "can_sell_used_geiger", "1" },
+        // [misc]
+        { kSfallMisc, "EnableHeroAppearanceMod", CONTENT_CONFIG_MISC_SECTION, "hero_appearance", "0" },
         // [dialog]
         { kSfallMisc, "DialogueFix", CONTENT_CONFIG_DIALOG_SECTION, "no_exit_hotkey", "1" },
         { kSfallMisc, "DialogGenderWords", CONTENT_CONFIG_DIALOG_SECTION, "gender_words", "0" },
@@ -310,7 +321,7 @@ namespace {
         assert(sfallConfig != nullptr && migratedConfig != nullptr);
 
         bool migrated = false;
-        for (int index = 0; index < GAME_MOVIE_MAX_COUNT; index++) {
+        for (GameMovie index = MOVIE_FIRST; index < GAME_MOVIE_MAX_COUNT; index++) {
             char sfallKey[16];
             snprintf(sfallKey, sizeof(sfallKey), "Movie%d", index + 1);
 
@@ -484,7 +495,7 @@ static bool contentConfigMigrateFromF2Res(Config* legacyConfig, const char* cont
 
     if (migrated) {
         if (contentConfigEnsureDirectory(contentConfigFilePath)) {
-            if (!configWriteEx(&migratedConfig, contentConfigFilePath, CONFIG_RETAIN_ALL)) {
+            if (!configWriteEx(&migratedConfig, contentConfigFilePath, ConfigFlags::RetainAll)) {
                 debugPrint("Failed to write migrated settings to %s!\n", contentConfigFilePath);
             }
         } else {

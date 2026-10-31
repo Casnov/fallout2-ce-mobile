@@ -92,8 +92,50 @@ static const CompatDirectoryCacheEntry* compatDirectoryEntryCacheGet(const std::
 
     return &cacheEntry;
 }
+
+// CE: A file or directory created or removed through these functions is
+// added to or removed from its directory's cached listing, and a failed remove
+// changes nothing. Loading a save tries to remove every proto the game lists,
+// mostly ones that exist only in the archives: clearing the whole cache each
+// time made the next path re-list every directory from the root.
+static void compatDirectoryEntryCacheUpdate(const char* nativePath, bool exists)
+{
+    std::string path(nativePath);
+    while (path.size() > 1 && path.back() == '/') {
+        path.pop_back();
+    }
+
+    size_t separator = path.find_last_of('/');
+    std::string parent = separator == std::string::npos ? "." : path.substr(0, separator);
+    while (parent.size() > 1 && parent.back() == '/') {
+        parent.pop_back();
+    }
+    if (parent.empty()) {
+        parent = "/";
+    }
+    std::string name = separator == std::string::npos ? path : path.substr(separator + 1);
+
+    if (!exists) {
+        compatDirectoryEntryCache.erase(path);
+    }
+
+    auto directory = compatDirectoryEntryCache.find(parent);
+    if (directory == compatDirectoryEntryCache.end()) {
+        return;
+    }
+
+    if (exists) {
+        directory->second.entries.emplace(compatLowercase(name), name);
+    } else {
+        directory->second.entries.erase(compatLowercase(name));
+    }
+}
 #else
 void compatDirectoryEntryCacheClear()
+{
+}
+
+static void compatDirectoryEntryCacheUpdate(const char*, bool)
 {
 }
 #endif
@@ -283,8 +325,6 @@ long compat_filelength(int fd)
 
 int compat_mkdir(const char* path)
 {
-    compatDirectoryEntryCacheClear();
-
     char nativePath[COMPAT_MAX_PATH];
     compat_prepare_native_path(nativePath, path);
 
@@ -294,7 +334,7 @@ int compat_mkdir(const char* path)
     int rc = mkdir(nativePath, 0755);
 #endif
     if (rc == 0) {
-        compatDirectoryEntryCacheClear();
+        compatDirectoryEntryCacheUpdate(nativePath, true);
     }
     return rc;
 }
@@ -376,34 +416,24 @@ unsigned int compat_timeGetTime()
 
 FILE* compat_fopen(const char* path, const char* mode)
 {
-    bool mayWrite = compatFileModeMayWrite(mode);
-    if (mayWrite) {
-        compatDirectoryEntryCacheClear();
-    }
-
     char nativePath[COMPAT_MAX_PATH];
     compat_prepare_native_path(nativePath, path);
 
     FILE* stream = fopen(nativePath, mode);
-    if (mayWrite && stream != nullptr) {
-        compatDirectoryEntryCacheClear();
+    if (compatFileModeMayWrite(mode) && stream != nullptr) {
+        compatDirectoryEntryCacheUpdate(nativePath, true);
     }
     return stream;
 }
 
 gzFile compat_gzopen(const char* path, const char* mode)
 {
-    bool mayWrite = compatFileModeMayWrite(mode);
-    if (mayWrite) {
-        compatDirectoryEntryCacheClear();
-    }
-
     char nativePath[COMPAT_MAX_PATH];
     compat_prepare_native_path(nativePath, path);
 
     gzFile stream = gzopen(nativePath, mode);
-    if (mayWrite && stream != nullptr) {
-        compatDirectoryEntryCacheClear();
+    if (compatFileModeMayWrite(mode) && stream != nullptr) {
+        compatDirectoryEntryCacheUpdate(nativePath, true);
     }
     return stream;
 }
@@ -440,21 +470,17 @@ char* compat_gzgets(gzFile stream, char* buffer, int maxCount)
 
 int compat_remove(const char* path)
 {
-    compatDirectoryEntryCacheClear();
-
     char nativePath[COMPAT_MAX_PATH];
     compat_prepare_native_path(nativePath, path);
     int rc = remove(nativePath);
     if (rc == 0) {
-        compatDirectoryEntryCacheClear();
+        compatDirectoryEntryCacheUpdate(nativePath, false);
     }
     return rc;
 }
 
 int compat_rename(const char* oldFileName, const char* newFileName)
 {
-    compatDirectoryEntryCacheClear();
-
     char nativeOldFileName[COMPAT_MAX_PATH];
     compat_prepare_native_path(nativeOldFileName, oldFileName);
 
@@ -463,6 +489,7 @@ int compat_rename(const char* oldFileName, const char* newFileName)
 
     int rc = rename(nativeOldFileName, nativeNewFileName);
     if (rc == 0) {
+        // A renamed directory takes its subtree's listings with it.
         compatDirectoryEntryCacheClear();
     }
     return rc;

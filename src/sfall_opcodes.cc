@@ -18,6 +18,7 @@
 #include "game.h"
 #include "game_dialog.h"
 #include "game_movie.h"
+#include "hero_appearance.h"
 #include "input.h"
 #include "interface.h"
 #include "interpreter.h"
@@ -28,6 +29,7 @@
 #include "memory.h"
 #include "message.h"
 #include "mouse.h"
+#include "mui.h"
 #include "obj_types.h"
 #include "object.h"
 #include "party_member.h"
@@ -125,6 +127,25 @@ static void op_read_byte(Program* program)
     programStackPushInteger(program, value);
 }
 
+// write_int
+static void op_write_int(Program* program)
+{
+    int value = programStackPopInteger(program);
+    int addr = programStackPopInteger(program);
+
+    // Fallout: Sonora's gl_partyai NOPs `sub edx, ecx; sub eax, edx` of
+    // ai_set_disposition_, so that a disposition doesn't take a companion
+    // off its only packet. `aiSetDisposition` already only switches to a
+    // packet of the requested disposition: the script goes on (it puts each
+    // companion on its packet) instead of stopping here.
+    if (addr == 0x428389 && value == static_cast<int>(0x90909090)) {
+        return;
+    }
+
+    // As an undefined opcode: the script stops.
+    programFatalError("%s: 'write_int' at 0x%x is not supported", program->name, addr);
+}
+
 // set_pc_base_stat
 static void op_set_pc_base_stat(Program* program)
 {
@@ -172,6 +193,13 @@ static void op_set_critter_extra_stat(Program* program)
 static void op_set_skill_max(Program* program)
 {
     skillSetMaximum(programStackPopInteger(program));
+}
+
+// eax_available
+// NOTE: Deprecated in sfall (EAX is not supported); always returns 0.
+static void op_eax_available(Program* program)
+{
+    programStackPushInteger(program, 0);
 }
 
 static void op_set_stat_max(Program* program)
@@ -271,9 +299,9 @@ static void op_get_year(Program* program)
 
 static void op_set_movie_path(Program* program)
 {
-    int movie = programStackPopInteger(program);
+    GameMovie movie = programStackPopEnum<GameMovie>(program);
     const char* fileName = programStackPopString(program);
-    if (movie < 0 || movie >= GAME_MOVIE_MAX_COUNT || fileName == nullptr) {
+    if (!gameMovieExtendedIsValid(movie) || fileName == nullptr) {
         programPrintError("set_movie_path: invalid argument");
         return;
     }
@@ -290,7 +318,7 @@ static void op_set_movie_path(Program* program)
 
 static void op_mark_movie_played(Program* program)
 {
-    int movie = programStackPopInteger(program);
+    GameMovie movie = programStackPopEnum<GameMovie>(program);
     gameMovieMarkSeen(movie);
 }
 
@@ -1069,7 +1097,7 @@ static void op_set_self(Program* program)
 // list_begin
 static void op_list_begin(Program* program)
 {
-    int listType = programStackPopInteger(program);
+    ListType listType = programStackPopEnum<ListType>(program);
     int listId = sfallListsCreate(listType);
     programStackPushInteger(program, listId);
 }
@@ -1223,7 +1251,7 @@ static void op_get_mouse_buttons(Program* program)
 {
     // CE: Implementation is slightly different - it does not handle middle
     // mouse button.
-    programStackPushInteger(program, mouseGetPointerButtons());
+    programStackPushInteger(program, static_cast<int>(mouseGetPointerButtons()));
 }
 
 static void op_get_window_under_mouse(Program* program)
@@ -1249,7 +1277,7 @@ static void op_get_light_level(Program* program)
     programStackPushInteger(program, lightGetAmbientIntensity());
 }
 
-// note: might need to be updated when Hero Appearance is implemented
+// Hero Appearance's art comes with the dude's (`objectSetFrmId`).
 static void op_refresh_pc_art(Program* program)
 {
     if (gDude == nullptr) {
@@ -1351,7 +1379,17 @@ static void op_play_sfall_sound(Program* program)
 {
     int mode = programStackPopInteger(program);
     const char* path = programStackPopString(program);
-    programStackPushInteger(program, scriptSoundPlay(path, mode));
+
+    int soundId = 0;
+    if (mode >= 0) {
+        int volumeReduction = (mode & 0x7FFF0000) >> 16;
+        ScriptSoundMode soundMode = static_cast<ScriptSoundMode>(mode & 0xF);
+        soundId = scriptSoundPlay(path, soundMode, volumeReduction);
+    } else {
+        programPrintError("play_sfall_sound: invalid script sound mode %d.", mode);
+    }
+
+    programStackPushInteger(program, soundId);
 }
 
 static void op_stop_sfall_sound(Program* program)
@@ -1371,7 +1409,7 @@ static void op_force_encounter_with_flags(Program* program)
 // list_as_array
 static void op_list_as_array(Program* program)
 {
-    int type = programStackPopInteger(program);
+    ListType type = programStackPopEnum<ListType>(program);
     int arrayId = ListAsArray(type);
     programStackPushInteger(program, arrayId);
 }
@@ -2247,16 +2285,52 @@ static void op_fs_delete(Program* program)
     sfallFileSystemDelete(id);
 }
 
+// SFALL: Hero Appearance: the dude's art again, the look shown (as sfall's
+// DrawPC).
+static void heroAppearanceRedrawDude()
+{
+    if (gDude == nullptr) {
+        return;
+    }
+
+    Rect rect;
+    objectGetRect(gDude, &rect);
+    objectSetFrmId(gDude, FrmId(gDude), nullptr);
+    Rect newRect;
+    objectGetRect(gDude, &newRect);
+    rectUnion(&rect, &newRect, &rect);
+    tileWindowRefreshRect(&rect, gDude->elevation);
+}
+
+// hero_select_win: the races (0) or the hero's race's styles (1) to choose
+// from, in the mobile UI's window (sfall's AppHeroWin.frm window).
+static void op_hero_select_win(Program* program)
+{
+    int raceStyleFlag = programStackPopInteger(program);
+    if (heroAppearanceMode() != 0 && muiIsEnabled()) {
+        muiHeroSelectRun(raceStyleFlag != 0);
+        heroAppearanceRedrawDude();
+    }
+}
+
+// set_hero_style: a style of the hero's race; one that isn't there keeps the
+// current (as sfall).
 static void op_set_hero_style(Program* program)
 {
     int style = programStackPopInteger(program);
-    programPrintError("set_hero_style: not implemented!");
+    if (heroAppearanceMode() != 0 && style != heroAppearanceStyle() && heroAppearanceChoose(heroAppearanceRace(), style)) {
+        heroAppearanceRedrawDude();
+    }
 }
 
+// set_hero_race: a race with its style 0; one that isn't there keeps the
+// current (as sfall).
 static void op_set_hero_race(Program* program)
 {
     int race = programStackPopInteger(program);
-    programPrintError("set_hero_race: not implemented!");
+    if (heroAppearanceMode() != 0 && race != heroAppearanceRace() && heroAppearanceChoose(race, 0)) {
+        heroAppearanceRedrawDude();
+    }
 }
 
 // Note: opcodes should pop arguments off the stack in reverse order
@@ -2273,7 +2347,8 @@ void sfallOpcodesInit()
 
     // ^ 0x81cf - void  write_byte(int address, int value)
     // ^ 0x81d0 - void  write_short(int address, int value)
-    // ^ 0x81d1 - void  write_int(int address, int value)
+    // 0x81d1 - void  write_int(int address, int value)
+    interpreterRegisterOpcode(0x81D1, op_write_int);
     // ^ 0x821b - void  write_string(int address, string value)
 
     // ^ 0x81d2 - void  call_offset_v0(int address)
@@ -2506,8 +2581,11 @@ void sfallOpcodesInit()
     // 0x81c9 - void set_critter_pickpocket_mod(object, int max, int mod)
     // 0x81ca - void set_base_pickpocket_mod(int max, int mod)
 
-    // note: these are deprecated; do not implement
-    // 0x81a3 - int  eax_available()
+    // 0x81a3 - int eax_available()
+    // NOTE: Deprecated in sfall (EAX is not supported); always returns 0.
+    interpreterRegisterOpcode(0x81A3, op_eax_available);
+
+    // note: this is deprecated; do not implement
     // 0x81a4 - void set_eax_environment(int environment)
 
     // 0x81a5 - void inc_npc_level(int pid/string name)
@@ -2678,6 +2756,7 @@ void sfallOpcodesInit()
     interpreterRegisterOpcode(0x8212, op_get_version_patch);
 
     // 0x8213 - void hero_select_win(int)
+    interpreterRegisterOpcode(0x8213, op_hero_select_win);
     // 0x8214 - void set_hero_race(int style)
     interpreterRegisterOpcode(0x8214, op_set_hero_race);
     // 0x8215 - void set_hero_style(int style)

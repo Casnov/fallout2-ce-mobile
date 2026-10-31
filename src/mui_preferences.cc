@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "app_update.h"
 #include "db.h"
 #include "dbox.h"
 #include "debug.h"
@@ -20,15 +21,22 @@
 #include "kb.h"
 #include "loadsave.h"
 #include "message.h"
+#include "mui_notify.h"
+#include "mui_update.h"
 #include "platform/git_version.h"
 #include "platform_compat.h"
 #include "preferences.h"
 #include "settings.h"
 #include "svga.h"
+#include "tile.h"
 #include "world_view.h"
 #include "xfile.h"
 
 #include <SDL.h>
+
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
 
 #ifdef __ANDROID__
 #include <jni.h>
@@ -109,6 +117,14 @@ namespace {
     constexpr int kTextLayoutTablet = 389;
     constexpr int kTextBarterUnitPrice = 393;
     constexpr int kTextBarterUnitPriceNote = 394;
+    constexpr int kTextHighlightContainers = 449;
+    constexpr int kTextHighlightContainersNote = 450;
+    constexpr int kTextHighlightCorpses = 451;
+    constexpr int kTextHighlightCorpsesNote = 452;
+    constexpr int kTextHighlightHiddenItems = 453;
+    constexpr int kTextHighlightHiddenItemsNote = 454;
+    constexpr int kTextScrollLimit = 455;
+    constexpr int kTextScrollLimitNote = 456;
     constexpr int kTextGroupText = 395;
     constexpr int kTextGroupSaves = 396;
     constexpr int kTextGroupSpeed = 397;
@@ -155,31 +171,7 @@ namespace {
     constexpr int kTextSectionAbout = 367;
     constexpr int kTextAboutVersion = 368;
     constexpr int kTextAboutNotice = 369;
-    constexpr int kTextAboutSource = 370;
-    constexpr int kTextAboutOpen = 371;
     constexpr int kTextAboutLicenses = 372;
-
-    // Where the port's source is (the about section, README).
-    constexpr const char* kSourceUrl = "https://github.com/imbaner/fallout2-ce-mobile";
-
-    // The engine's and its components' licenses (ce.dat), shown in full: the
-    // engine's license asks every copy to come with it.
-    struct LicenseFile {
-        const char* title;
-        const char* path;
-    };
-    const LicenseFile kLicenseFiles[] = {
-        { "Fallout 2 Community Edition - Sustainable Use License 1.0", "licenses\\fallout2-ce.txt" },
-        { "SDL 2 - zlib License", "licenses\\sdl2.txt" },
-        { "zlib - zlib License", "licenses\\zlib.txt" },
-        { "libarchive - BSD License", "licenses\\libarchive.txt" },
-        { "XZ Utils (liblzma) - BSD Zero Clause License", "licenses\\xz.txt" },
-        { "LodePNG - zlib License", "licenses\\lodepng.txt" },
-        { "stb_truetype, stb_vorbis - MIT / Public Domain", "licenses\\stb.txt" },
-        { "fpattern", "licenses\\fpattern.txt" },
-        { "Fallout Classic Dialog - MIT License", "fonts\\FalloutClassicDialog-LICENSE.txt" },
-        { "PT Mono - SIL Open Font License 1.1", "fonts\\OFL.txt" },
-    };
 
 #ifndef FALLOUT_APP_VERSION
 #define FALLOUT_APP_VERSION "1.3.0"
@@ -188,10 +180,6 @@ namespace {
     // The port's number of quick saves (one page, the phone's config); CE's
     // own default is none.
     constexpr int kDefaultQuickSaves = 10;
-
-    const MuiColor kDanger = muiRgb(0xFF8E72);
-    const MuiColor kDangerFill = muiRgb(0x1B100E);
-    const MuiColor kDangerPressed = muiRgb(0x47211D);
 
     // Texts in OPTIONS.MSG (the game's window: values).
     constexpr int kMessageOn = 201;
@@ -223,6 +211,9 @@ namespace {
         bool tacticalView;
         bool saveCompatibility;
         bool barterUnitPrice;
+        bool highlightContainers;
+        bool highlightCorpses;
+        bool highlightHiddenItems;
         int interfaceSize;
         int windows;
         int layout;
@@ -236,6 +227,7 @@ namespace {
         bool partyLootAndBarter;
         bool partyMemberExtraInfo;
         bool karmaChanges;
+        bool scrollLimit;
         bool bonusDamage;
         // Tens, 0 - none (`lsgSetQuickSaveCount`).
         int quickSaves;
@@ -251,6 +243,9 @@ namespace {
         values.tacticalView = settings.enhancements.tactical_view;
         values.saveCompatibility = settings.enhancements.save_compatibility;
         values.barterUnitPrice = settings.enhancements.barter_unit_price;
+        values.highlightContainers = settings.enhancements.highlight_containers;
+        values.highlightCorpses = settings.enhancements.highlight_corpses;
+        values.highlightHiddenItems = settings.enhancements.highlight_hidden_items;
         values.interfaceSize = settings.touch.hud_scale;
         values.windows = settings.touch.windows;
         values.layout = settings.touch.layout;
@@ -264,6 +259,7 @@ namespace {
         values.partyLootAndBarter = settings.qol.party_loot_and_barter;
         values.partyMemberExtraInfo = settings.ui.party_member_extra_info;
         values.karmaChanges = settings.ui.display_karma_changes;
+        values.scrollLimit = !settings.ui.ignore_scroll_limit;
         values.bonusDamage = settings.ui.display_bonus_damage;
         values.quickSaves = lsgQuickSaveCount();
         return values;
@@ -280,6 +276,9 @@ namespace {
         values.tacticalView = EnhancementSettings().tactical_view;
         values.saveCompatibility = EnhancementSettings().save_compatibility;
         values.barterUnitPrice = EnhancementSettings().barter_unit_price;
+        values.highlightContainers = EnhancementSettings().highlight_containers;
+        values.highlightCorpses = EnhancementSettings().highlight_corpses;
+        values.highlightHiddenItems = EnhancementSettings().highlight_hidden_items;
         values.interfaceSize = TouchSettings().hud_scale;
         values.windows = TouchSettings().windows;
         values.layout = TouchSettings().layout;
@@ -295,6 +294,7 @@ namespace {
         UISettings ui;
         values.partyMemberExtraInfo = ui.party_member_extra_info;
         values.karmaChanges = ui.display_karma_changes;
+        values.scrollLimit = !ui.ignore_scroll_limit;
         values.bonusDamage = ui.display_bonus_damage;
         values.quickSaves = kDefaultQuickSaves;
         return values;
@@ -343,43 +343,75 @@ namespace {
     // Sets [values] as the game's window's Done does, then this port's and
     // CE's settings; all written to fallout2.cfg. Asked first
     // (`confirmApply`).
-    void applyValues(const Values& values)
+    bool applyValues(const Values& values)
     {
+        const Values previous = currentValues();
+#ifdef __EMSCRIPTEN__
+        const int previousSession = lsgSessionLoadSlot();
+        const bool persistQuickRange = false; // The final settings commit owns the whole Apply.
+#else
+        const bool persistQuickRange = true;
+#endif
         // The saves rearranged first: the setting is written only when they
         // are (`lsgSetQuickSaveCount`).
-        if (values.quickSaves != lsgQuickSaveCount() && !lsgSetQuickSaveCount(values.quickSaves)) {
+        if (values.quickSaves != lsgQuickSaveCount() && !lsgSetQuickSaveCount(values.quickSaves, persistQuickRange)) {
             soundPlayFile("iisxxxx1");
             const char* body[] = { muiText(kTextQuickSavesFailed, "Could not rearrange the quick saves, their number stays.") };
             showDialogBox(muiText(kTextQuickSaves, "Quick saves"), body, 1, 0, 0, COLOR_AMBER, nullptr, COLOR_AMBER, 0);
+#ifdef __EMSCRIPTEN__
+            return false;
+#endif
         }
 
-        settings.enhancements.combat_speed_all_animations = values.allAnimations;
-        settings.enhancements.main_menu_continue = values.mainMenuContinue;
-        settings.enhancements.worldmap_follow_party = values.worldmapFollow;
-        settings.enhancements.tactical_view = values.tacticalView;
-        settings.enhancements.save_compatibility = values.saveCompatibility;
-        settings.enhancements.barter_unit_price = values.barterUnitPrice;
-        settings.touch.hud_scale = values.interfaceSize;
-        settings.touch.windows = values.windows;
-        settings.touch.layout = values.layout;
-        settings.touch.windows_tap_outside = values.windowsTapOutside;
-        // The text is made again in it (`muiTextWidth`, `muiDrawText`).
-        settings.touch.font = values.font;
-        settings.world_view.filter = values.mapFilter;
-        worldViewSetFilter(values.mapFilter);
-        settings.qol.auto_open_doors = values.autoOpenDoors;
-        settings.qol.walk_when_sneaking = values.walkWhenSneaking;
-        settings.qol.fast_ammo_load = values.fastAmmoLoad;
-        settings.qol.party_trade_from_menu = values.partyTradeFromMenu;
-        settings.qol.party_loot_and_barter = values.partyLootAndBarter;
-        settings.ui.party_member_extra_info = values.partyMemberExtraInfo;
-        // Both read when shown (the karma message, the damage line), so they
-        // apply at once.
-        settings.ui.display_karma_changes = values.karmaChanges;
-        settings.ui.display_bonus_damage = values.bonusDamage;
+        const auto applyPort = [](const Values& values) {
+            settings.enhancements.combat_speed_all_animations = values.allAnimations;
+            settings.enhancements.main_menu_continue = values.mainMenuContinue;
+            settings.enhancements.worldmap_follow_party = values.worldmapFollow;
+            settings.enhancements.tactical_view = values.tacticalView;
+            settings.enhancements.save_compatibility = values.saveCompatibility;
+            settings.enhancements.barter_unit_price = values.barterUnitPrice;
+            settings.enhancements.highlight_containers = values.highlightContainers;
+            settings.enhancements.highlight_corpses = values.highlightCorpses;
+            settings.enhancements.highlight_hidden_items = values.highlightHiddenItems;
+            settings.touch.hud_scale = values.interfaceSize;
+            settings.touch.windows = values.windows;
+            settings.touch.layout = values.layout;
+            settings.touch.windows_tap_outside = values.windowsTapOutside;
+            // The text is made again in it (`muiTextWidth`, `muiDrawText`).
+            settings.touch.font = values.font;
+            settings.world_view.filter = values.mapFilter;
+            worldViewSetFilter(values.mapFilter);
+            settings.qol.auto_open_doors = values.autoOpenDoors;
+            settings.qol.walk_when_sneaking = values.walkWhenSneaking;
+            settings.qol.fast_ammo_load = values.fastAmmoLoad;
+            settings.qol.party_trade_from_menu = values.partyTradeFromMenu;
+            settings.qol.party_loot_and_barter = values.partyLootAndBarter;
+            settings.ui.party_member_extra_info = values.partyMemberExtraInfo;
+            // Both read when shown (the karma message, the damage line), so they
+            // apply at once.
+            settings.ui.display_karma_changes = values.karmaChanges;
+            settings.ui.display_bonus_damage = values.bonusDamage;
+            // At once, as the map's loading sets it (map.cc).
+            settings.ui.ignore_scroll_limit = !values.scrollLimit;
+            if (values.scrollLimit) {
+                tileScrollLimitingEnable();
+            } else {
+                tileScrollLimitingDisable();
+            }
+        };
+        applyPort(values);
 
         // Writes the settings file too.
-        preferencesApply(values.preferences);
+        if (!preferencesApply(values.preferences)) {
+            applyPort(previous);
+#ifdef __EMSCRIPTEN__
+            if (previous.quickSaves != values.quickSaves) lsgWebRestoreQuickRange(previous.quickSaves, previousSession);
+#endif
+            settingsWriteToConfig();
+            muiNotify(muiText(433, "Could not save this setting."), MuiNoticeKind::Warning);
+            return false;
+        }
+        return true;
     }
 
     enum class Section {
@@ -408,7 +440,7 @@ namespace {
     // work); elsewhere for automated tests only.
     bool gameFilesAvailable()
     {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
         return true;
 #else
         return devAutotestIsEnabled();
@@ -439,6 +471,9 @@ namespace {
         }
         env->DeleteLocalRef(activityClass);
         env->DeleteLocalRef(activity);
+#elif defined(__EMSCRIPTEN__)
+        webOpenGameFiles(mode);
+        _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
 #else
         debugPrint("game files: %s\n", mode != nullptr ? mode : "replace game");
 #endif
@@ -662,6 +697,30 @@ namespace {
         }
         preferenceToggle(Section::Display, kTextItemHighlight, "Item highlight", &PreferenceValues::itemHighlight);
         {
+            Row row { Section::Display, RowKind::Toggle, kTextHighlightContainers, "Highlight button: containers", Origin::Port, kTextHighlightContainersNote, "Chests, boxes and remains you can search" };
+            row.get = [](const Values& values) { return values.highlightContainers ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.highlightContainers = value != 0.0f; };
+            rows.push_back(row);
+        }
+        {
+            Row row { Section::Display, RowKind::Toggle, kTextHighlightCorpses, "Highlight button: corpses", Origin::Port, kTextHighlightCorpsesNote, "The dead you can search" };
+            row.get = [](const Values& values) { return values.highlightCorpses ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.highlightCorpses = value != 0.0f; };
+            rows.push_back(row);
+        }
+        {
+            Row row { Section::Display, RowKind::Toggle, kTextHighlightHiddenItems, "Highlight button: hidden things", Origin::Port, kTextHighlightHiddenItemsNote, "Things the game doesn't highlight but you can pick up" };
+            row.get = [](const Values& values) { return values.highlightHiddenItems ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.highlightHiddenItems = value != 0.0f; };
+            rows.push_back(row);
+        }
+        {
+            Row row { Section::Display, RowKind::Toggle, kTextScrollLimit, "View limited around the hero", Origin::Ce, kTextScrollLimitNote, "As in the original: the map can't be moved more than a screen away from the hero" };
+            row.get = [](const Values& values) { return values.scrollLimit ? 1.0f : 0.0f; };
+            row.set = [](Values& values, float value) { values.scrollLimit = value != 0.0f; };
+            rows.push_back(row);
+        }
+        {
             Row row { Section::Display, RowKind::Choice, kTextMapFilter, "Map smoothing", Origin::Port };
             row.options = { kTextFilterNearest, kTextFilterLinear, kTextFilterSharp };
             row.optionsFromCe = true;
@@ -759,14 +818,10 @@ namespace {
         bool tall = false;
         Section section = Section::Game;
         bool resetScroll = true;
-        // The about section's lines, wrapped for [aboutWidth].
-        struct AboutLine {
-            std::u32string text;
-            float size;
-            bool heading;
-        };
-        std::vector<AboutLine> aboutLines;
-        float aboutWidth = -1.0f;
+        bool pendingLicenses = false;
+        bool pendingUpdate = false;
+        bool pendingDeleteUpdate = false;
+        bool waitingUpdate = false;
 
         MessageList optionsMessages;
         bool optionsLoaded = false;
@@ -935,6 +990,13 @@ namespace {
                 marked[static_cast<size_t>(row.section)] = true;
             }
         }
+        // The same quiet marker as changed settings, with separate state:
+        // an update never makes settings dirty or asks to apply changes.
+        if (appUpdateHasRelease()) {
+            size_t index = std::find(shown.begin(), shown.end(), Section::About) - shown.begin();
+            marked[index] = true;
+            ui.mark("prefs.about.notice", list);
+        }
 
         muiFillRoundRect(list, ui.dp(7.0f), kPanel);
         int current = static_cast<int>(std::find(shown.begin(), shown.end(), section) - shown.begin());
@@ -986,89 +1048,158 @@ namespace {
     void PreferencesScreen::buildAbout(MuiContext& ui, const MuiRect& rect)
     {
         const MuiTheme& theme = muiTheme();
-
-        float buttonHeight = ui.dp(40.0f);
-        MuiRect button = { rect.x, rect.bottom() - buttonHeight, rect.w, buttonHeight };
-        MuiRect text = { rect.x, rect.y, rect.w, button.y - ui.dp(8.0f) - rect.y };
-        float textWidth = text.w - ui.dp(8.0f);
-
-        if (aboutWidth != textWidth) {
-            aboutWidth = textWidth;
-            aboutLines.clear();
-            auto add = [&](const std::u32string& value, float size, bool heading) {
-                for (const std::u32string& line : muiWrapText(value, textWidth, size)) {
-                    aboutLines.push_back({ line, size, heading });
-                }
-            };
-            auto gap = [&]() { aboutLines.push_back({ U"", ui.dp(6.0f), false }); };
-
-            char version[160];
-            snprintf(version, sizeof(version), muiText(kTextAboutVersion, "Version %s, build %s"), FALLOUT_APP_VERSION, _BUILD_HASH);
-            add(U"Fallout 2 CE", ui.dp(16.0f), true);
-            add(muiDecodeGameText(version), ui.dp(11.0f), false);
-            gap();
-            add(muiDecodeGameText(muiText(kTextAboutNotice, "An unofficial mobile version of Fallout 2 Community Edition: CE's engine changed for touch screens. Not affiliated with Bethesda Softworks, ZeniMax or Interplay. Needs your own copy of Fallout 2.")), ui.dp(12.0f), false);
-            gap();
-            add(muiDecodeGameText(muiText(kTextAboutSource, "Source and changes:")) + U" " + muiDecodeUtf8(kSourceUrl), ui.dp(12.0f), false);
-            gap();
-            add(muiDecodeGameText(muiText(kTextAboutLicenses, "Licenses")), ui.dp(14.0f), true);
-
-            // As written (their lines are short), long ones wrapped.
-            for (const LicenseFile& license : kLicenseFiles) {
-                gap();
-                add(muiDecodeUtf8(license.title), ui.dp(12.0f), true);
-                File* stream = fileOpen(license.path, "rb");
-                if (stream == nullptr) {
-                    continue;
-                }
-                std::string contents(std::max(fileGetSize(stream), 0), '\0');
-                contents.resize(fileRead(&contents[0], 1, contents.size(), stream));
-                fileClose(stream);
-
-                size_t start = 0;
-                while (start <= contents.size()) {
-                    size_t end = contents.find('\n', start);
-                    if (end == std::string::npos) {
-                        end = contents.size();
-                    }
-                    std::string line = contents.substr(start, end - start);
-                    if (!line.empty() && line.back() == '\r') {
-                        line.pop_back();
-                    }
-                    if (line.empty()) {
-                        aboutLines.push_back({ U"", ui.dp(10.0f), false });
-                    } else {
-                        add(muiDecodeUtf8(line.c_str()), ui.dp(10.0f), false);
-                    }
-                    start = end + 1;
-                }
-            }
-        }
-
-        float height = 0.0f;
-        for (const AboutLine& line : aboutLines) {
-            height += line.size * 1.35f;
-        }
-
+        auto label = [](int id, const char* fallback) { return muiDecodeGameText(muiText(id, fallback)); };
+        float gap = ui.dp(10.0f);
+        float size = ui.dp(12.0f);
+        float line = muiLineHeight(size);
+        float rowHeight = ui.dp(tall ? 56.0f : 48.0f);
+        bool updates = appUpdateState() != AppUpdateState::Unsupported;
+        bool deleting = updates && !inGame && appUpdateReady() && appUpdateState() != AppUpdateState::Checking && appUpdateState() != AppUpdateState::Installing;
+        auto notice = muiWrapText(label(kTextAboutNotice, "An unofficial mobile version of Fallout 2 Community Edition: CE's engine changed for touch screens. Not affiliated with or endorsed by Microsoft, Bethesda Softworks, ZeniMax or Interplay. Needs your own copy of Fallout 2."), rect.w - ui.dp(8.0f), size);
+        auto thanksNote = muiWrapText(label(444, "The app, its updates and all of its features are free. A thank-you goes to the port's author personally: it is not a payment for Fallout 2 or for the app, and it has nothing to do with Microsoft, Bethesda Softworks, ZeniMax, Interplay or any other owner of Fallout. It gives no access to builds or features, no priority for fixes and no commitment to development."), rect.w - ui.dp(8.0f), size);
+        // A build that can't update itself says so where the controls are.
+#ifdef __EMSCRIPTEN__
+        auto manual = muiWrapText(label(462, "The browser version updates itself when you open it."), rect.w - ui.dp(8.0f), size);
+#else
+        auto manual = muiWrapText(label(461, "This build doesn't update itself: new versions are installed by hand."), rect.w - ui.dp(8.0f), size);
+#endif
+        float titleHeight = ui.dp(24.0f);
+        float headerHeight = ui.dp(tall ? 44.0f : 36.0f);
+        float noticeHeight = notice.size() * line;
+        float updateNote = updates && inGame && appUpdateHasRelease() ? line * 2.0f : 0.0f;
+        float height = titleHeight + line + gap + noticeHeight + gap + headerHeight * 4.0f
+            + (updates ? rowHeight * (deleting ? 3.0f : 2.0f) + line + updateNote : manual.size() * line) + gap
+            + rowHeight * 6.0f + thanksNote.size() * line + gap;
         if (resetScroll) {
             ui.setScroll("prefs.about", 0.0f);
             resetScroll = false;
         }
-        float offset = ui.scroll("prefs.about", text, height);
-        muiPushClip(text);
-        float y = text.y - offset;
-        for (const AboutLine& line : aboutLines) {
-            float lineHeight = line.size * 1.35f;
-            if (y + lineHeight >= text.y && y <= text.bottom() && !line.text.empty()) {
-                muiDrawTextAligned(line.text, { text.x + ui.dp(4.0f), y, textWidth, lineHeight }, line.size, line.heading ? theme.text : theme.textDim, MuiAlign::Start, MuiAlign::Center);
-            }
-            y += lineHeight;
+        float offset = ui.scroll("prefs.about", rect, height);
+        muiPushClip(rect);
+        float y = rect.y - offset;
+        muiDrawTextAligned(U"F2 Touch", { rect.x + ui.dp(4.0f), y, rect.w, titleHeight }, ui.dp(16.0f), theme.text, MuiAlign::Start, MuiAlign::Center);
+        y += titleHeight;
+        char version[160];
+        snprintf(version, sizeof(version), muiText(kTextAboutVersion, "Version %s, build %s"), FALLOUT_APP_VERSION, _BUILD_HASH);
+        muiDrawTextAligned(muiDecodeGameText(version), { rect.x + ui.dp(4.0f), y, rect.w, line }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+        y += line + gap;
+        for (const auto& value : notice) {
+            muiDrawTextAligned(value, { rect.x + ui.dp(4.0f), y, rect.w - ui.dp(8.0f), line }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            y += line;
         }
-        muiPopClip();
+        y += gap;
 
-        if (ui.button("prefs.about.source", button, muiDecodeGameText(muiText(kTextAboutOpen, "Open the source page")))) {
-            SDL_OpenURL(kSourceUrl);
+        auto visible = [&](const MuiRect& row) { return row.bottom() > rect.y && row.y < rect.bottom(); };
+        auto separator = [&]() {
+            muiFillRect({ rect.x, y - ui.dp(1.0f), rect.w, ui.dp(1.0f) }, kRowLine);
+        };
+        auto actionRow = [&](const char* id, const std::u32string& title, const std::u32string& verb, MuiButtonStyle style = MuiButtonStyle::Normal, bool marked = false) {
+            MuiRect row = { rect.x, y, rect.w, rowHeight };
+            y += rowHeight;
+            if (!visible(row)) return false;
+            float buttonWidth = std::min(ui.dp(150.0f), row.w * 0.42f);
+            MuiRect button = { row.right() - buttonWidth, row.y + ui.dp(7.0f), buttonWidth, row.h - ui.dp(14.0f) };
+            MuiRect name = { row.x + ui.dp(4.0f), row.y, button.x - row.x - ui.dp(12.0f), row.h };
+            if (marked) {
+                float dot = ui.dp(4.0f);
+                muiFillCircle(name.x + dot, name.centerY(), dot, kChanged);
+                ui.mark("prefs.about.update.notice", { name.x, name.centerY() - dot, dot * 2.0f, dot * 2.0f });
+                float inset = dot * 2.0f + ui.dp(8.0f);
+                name.x += inset;
+                name.w -= inset;
+            }
+            auto lines = muiWrapText(title, name.w, size);
+            float top = name.centerY() - std::min(lines.size(), static_cast<size_t>(2)) * line / 2.0f;
+            for (size_t index = 0; index < std::min(lines.size(), static_cast<size_t>(2)); index++) {
+                muiDrawTextAligned(lines[index], { name.x, top + index * line, name.w, line }, size, theme.text, MuiAlign::Start, MuiAlign::Center);
+            }
+            return ui.button(id, button, verb, style);
+        };
+        // A group's name, as the other sections show theirs.
+        auto group = [&](int id, const char* fallback) {
+            MuiRect header = { rect.x + ui.dp(4.0f), y + ui.dp(10.0f), rect.w, headerHeight - ui.dp(10.0f) };
+            y += headerHeight;
+            if (visible(header)) muiDrawTextAligned(label(id, fallback), header, ui.dp(tall ? 15.0f : 13.0f), theme.accent, MuiAlign::Start, MuiAlign::Center);
+        };
+
+        // Updates, the author's pages, the thanks, then the project's
+        // source and licenses.
+        group(457, "Updates");
+        if (!updates) {
+            MuiRect hint = { rect.x + ui.dp(4.0f), y, rect.w - ui.dp(8.0f), manual.size() * line };
+            for (const auto& value : manual) {
+                muiDrawTextAligned(value, { hint.x, y, hint.w, line }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+                y += line;
+            }
+            y += gap;
+            if (visible(hint)) ui.mark("prefs.about.update.manual", hint);
+            separator();
+        } else {
+            bool available = appUpdateHasRelease();
+            bool busy = appUpdateState() == AppUpdateState::Checking || appUpdateState() == AppUpdateState::Installing;
+            std::u32string verb = !inGame && available ? (appUpdateReady() ? label(408, "Install") : label(407, "Update")) : label(411, "Check");
+            if (actionRow("prefs.about.update", muiUpdateStatus(), verb, available && !inGame ? MuiButtonStyle::Primary : MuiButtonStyle::Normal, available) && !busy) pendingUpdate = true;
+            if (deleting && actionRow("prefs.about.update.delete", label(426, "Delete downloaded update"), label(kTextDeleteButton, "Delete"), MuiButtonStyle::Danger)) pendingDeleteUpdate = true;
+            if (updateNote > 0.0f) {
+                MuiRect hint = { rect.x + ui.dp(4.0f), y, rect.w - ui.dp(8.0f), updateNote };
+                auto lines = muiWrapText(label(428, "Download and install updates from the main menu."), hint.w, size);
+                for (const auto& value : lines) {
+                    muiDrawTextAligned(value, { hint.x, y, hint.w, line }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+                    y += line;
+                }
+                y = hint.bottom();
+                ui.mark("prefs.about.update.ingame", hint);
+            }
+            separator();
+
+            MuiRect toggle = { rect.x, y, rect.w, rowHeight };
+            y += rowHeight;
+            if (visible(toggle)) {
+                MuiRect control = { toggle.right() - ui.dp(52.0f), toggle.y + ui.dp(10.0f), ui.dp(52.0f), toggle.h - ui.dp(20.0f) };
+                auto name = label(424, "Check for updates");
+                float badgeWidth = ui.dp(38.0f);
+                MuiRect nameRect = { toggle.x + ui.dp(4.0f), toggle.y, control.x - toggle.x - badgeWidth - ui.dp(16.0f), toggle.h };
+                float nameSize = muiFitTextSize(name, nameRect.w, ui.dp(14.0f), ui.dp(10.0f));
+                muiDrawTextAligned(name, nameRect, nameSize, theme.text, MuiAlign::Start, MuiAlign::Center);
+                MuiRect badge = { nameRect.x + muiTextWidth(name, nameSize) + ui.dp(6.0f), toggle.centerY() - ui.dp(9.0f), badgeWidth, ui.dp(18.0f) };
+                muiStrokeRoundRect(badge, ui.dp(4.0f), ui.dp(1.0f), kPortBadge);
+                muiDrawTextAligned(label(kTextPortBadge, "port"), badge, ui.dp(10.0f), kPortBadge, MuiAlign::Center, MuiAlign::Center);
+                bool enabled = settings.touch.update_check;
+                if (ui.toggle("prefs.about.update.auto", control, &enabled)) {
+                    bool previous = settings.touch.update_check;
+                    settings.touch.update_check = enabled;
+                    if (!settingsSave()) {
+                        settings.touch.update_check = previous;
+                        muiNotify(muiText(433, "Could not save this setting."), MuiNoticeKind::Warning);
+                    }
+                }
+            }
+            muiDrawTextAligned(label(425, "At startup, at most once an hour"), { rect.x + ui.dp(4.0f), y, rect.w, line }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            y += line + gap;
+            separator();
         }
+        group(458, "Contact");
+        if (actionRow("prefs.about.telegram", label(440, "Developer news on Telegram"), label(438, "Open"))) SDL_OpenURL(kPortTelegramUrl);
+        separator();
+        if (actionRow("prefs.about.youtube", label(441, "Videos and guides on YouTube"), label(438, "Open"))) SDL_OpenURL(kPortYouTubeUrl);
+        separator();
+        if (actionRow("prefs.about.issues", label(442, "Report a problem"), label(438, "Open"))) SDL_OpenURL(kPortIssuesUrl);
+        separator();
+        // The thanks with what it is not.
+        group(459, "Thanks");
+        if (actionRow("prefs.about.thanks", label(443, "Thank the port's author"), U"Boosty")) SDL_OpenURL(kPortThanksUrl);
+        for (const auto& value : thanksNote) {
+            muiDrawTextAligned(value, { rect.x + ui.dp(4.0f), y, rect.w - ui.dp(8.0f), line }, size, theme.textDim, MuiAlign::Start, MuiAlign::Center);
+            y += line;
+        }
+        y += gap;
+        separator();
+        group(460, "Project");
+        if (actionRow("prefs.about.source", label(437, "Source code"), label(438, "Open"))) SDL_OpenURL(kPortSourceUrl);
+        separator();
+        if (actionRow("prefs.about.licenses", label(kTextAboutLicenses, "Licenses"), label(435, "View"))) pendingLicenses = true;
+        separator();
+        muiPopClip();
     }
 
     void PreferencesScreen::buildFiles(MuiContext& ui, const MuiRect& rect)
@@ -1134,16 +1265,7 @@ namespace {
             muiDrawTextAligned(note, noteRect, muiFitTextSize(note, noteRect.w, ui.dp(11.0f), ui.dp(9.0f)), theme.textDim, MuiAlign::Start, MuiAlign::Center);
 
             std::u32string verb = muiDecodeGameText(muiText(action.buttonId, action.buttonFallback));
-            if (action.action == FilesAction::DeleteSaves) {
-                bool pressed = false;
-                if (ui.touchable(action.id, button, &pressed)) {
-                    pendingFiles = action.action;
-                }
-                // As the other buttons, in the danger colors.
-                muiFillRoundRect(button, ui.dp(theme.radius), pressed ? kDangerPressed : kDangerFill);
-                muiStrokeRoundRect(button, ui.dp(theme.radius), ui.dp(theme.borderWidth), kDanger);
-                muiDrawTextAligned(verb, button, muiFitTextSize(verb, button.w - ui.dp(theme.padding), ui.dp(theme.buttonTextSize), ui.dp(10.0f)), kDanger, MuiAlign::Center, MuiAlign::Center);
-            } else if (ui.button(action.id, button, verb)) {
+            if (ui.button(action.id, button, verb, action.action == FilesAction::DeleteSaves ? MuiButtonStyle::Danger : MuiButtonStyle::Normal)) {
                 pendingFiles = action.action;
             }
         }
@@ -1182,6 +1304,24 @@ namespace {
             return;
         }
 
+#ifdef __EMSCRIPTEN__
+        // Like Android's activity, the browser overlay waits over this live
+        // preferences screen. Asyncify pauses the engine until the user store
+        // has been handed back and all filesystem caches have been refreshed.
+        if (action == FilesAction::ImportSaves || action == FilesAction::ExportSaves) {
+            // Keep un-applied edits in this screen, just as Android does.
+            // Exchange operates on the committed library and actual settings.
+            webExchangeSaves(action == FilesAction::ImportSaves ? "saves_import" : "saves_export");
+            inputEventQueueReset();
+            // Rotation/browser chrome may have resized SDL behind the overlay.
+            // The input reset discarded those events too; apply the current
+            // output mapping before rendering this retained screen again.
+            handleWindowSizeChanged();
+            lsgMobileSavesMayHaveChanged();
+            return;
+        }
+#endif
+
         // The saves' import and export: the app's screen over the game (it
         // waits behind, paused; reads the saves again when back).
         if (action == FilesAction::ImportSaves) {
@@ -1195,14 +1335,20 @@ namespace {
 
         // Replacing the game: its files can't change under it - it closes
         // (said first) and starts again after.
-        const char* body[] = { inGame ? muiText(kTextCloseGameInGame, "The game closes for this and opens again after. Progress since the last save will be lost.")
-                                      : muiText(kTextCloseGameMenu, "The game closes for this and opens again after.") };
-        if (showDialogBox(muiText(kTextCloseGameTitle, "Close the game?"), body, 1, 0, 0, COLOR_AMBER, nullptr, COLOR_AMBER, DIALOG_BOX_YES_NO) == 0) {
-            return;
+        bool warnBeforeClosing = true;
+#ifdef __EMSCRIPTEN__
+        warnBeforeClosing = inGame;
+#endif
+        if (warnBeforeClosing) {
+            const char* body[] = { inGame ? muiText(kTextCloseGameInGame, "The game closes for this and opens again after. Progress since the last save will be lost.")
+                                          : muiText(kTextCloseGameMenu, "The game closes for this and opens again after.") };
+            if (showDialogBox(muiText(kTextCloseGameTitle, "Close the game?"), body, 1, 0, 0, COLOR_AMBER, nullptr, COLOR_AMBER, DIALOG_BOX_YES_NO) == 0) {
+                return;
+            }
         }
         // Settings changed here are kept.
         if (anyChanged() && confirmApply(edited, false)) {
-            applyValues(edited);
+            if (!applyValues(edited)) return;
         }
         openGameFiles(nullptr);
     }
@@ -1420,6 +1566,27 @@ namespace {
 
     void PreferencesScreen::runPending()
     {
+        if (pendingDeleteUpdate) {
+            pendingDeleteUpdate = false;
+            appUpdateDelete();
+        }
+        if (pendingLicenses) {
+            pendingLicenses = false;
+            muiLicensesShow();
+        }
+        if (pendingUpdate) {
+            pendingUpdate = false;
+            if (!inGame && appUpdateHasRelease()) {
+                muiUpdateShow();
+            } else {
+                appUpdateCheck(true);
+                waitingUpdate = true;
+            }
+        }
+        if (waitingUpdate && appUpdateState() != AppUpdateState::Checking) {
+            waitingUpdate = false;
+            if (!inGame && appUpdateHasRelease()) muiUpdateShow();
+        }
         if (pendingFiles != FilesAction::None) {
             FilesAction action = pendingFiles;
             pendingFiles = FilesAction::None;
@@ -1439,16 +1606,17 @@ namespace {
         if (pendingApply) {
             pendingApply = false;
             if (confirmApply(edited, false)) {
-                applyValues(edited);
-                applied = currentValues();
-                edited = applied;
+                if (applyValues(edited)) {
+                    applied = currentValues();
+                    edited = applied;
+                }
             }
         }
 
         if (pendingBack) {
             pendingBack = false;
             if (confirmApply(edited, true)) {
-                applyValues(edited);
+                if (!applyValues(edited)) return;
             } else {
                 // Volumes and brightness as they were.
                 preferencesPreview(applied.preferences);

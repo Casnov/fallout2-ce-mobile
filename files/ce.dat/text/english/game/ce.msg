@@ -277,7 +277,7 @@
 {366}{}{Could not rearrange the quick saves, their number stays.}
 {367}{}{About}
 {368}{}{Version %s, build %s}
-{369}{}{An unofficial mobile version of Fallout 2 Community Edition: CE's engine changed for touch screens. Not affiliated with Bethesda Softworks, ZeniMax or Interplay. Needs your own copy of Fallout 2.}
+{369}{}{An unofficial mobile version of Fallout 2 Community Edition: CE's engine changed for touch screens. Not affiliated with or endorsed by Microsoft, Bethesda Softworks, ZeniMax or Interplay. Needs your own copy of Fallout 2.}
 {370}{}{Source and changes:}
 {371}{}{Open the source page}
 {372}{}{Licenses}
@@ -303,6 +303,29 @@
 {392}{}{Use}
 {393}{}{Unit prices when trading}
 {394}{}{Top right of an item: the price of one in this deal}
+
+# Character creation's appearance tab (sfall's Hero Appearance mod); race
+# and style as sfall's translations ([AppearanceMod] RaceText, StyleText),
+# gender.
+{445}{}{Appearance}
+{446}{}{Race}
+{447}{}{Style}
+{448}{}{Gender}
+{449}{}{Highlight button: containers}
+{450}{}{Chests, boxes and remains you can search}
+{451}{}{Highlight button: corpses}
+{452}{}{The dead you can search}
+{453}{}{Highlight button: hidden things}
+{454}{}{Things the game doesn't highlight but you can pick up}
+{455}{}{View limited around the hero}
+{456}{}{As in the original: the map can't be moved more than a screen away from the hero}
+{457}{}{Updates}
+{458}{}{Contact}
+{459}{}{Thanks}
+{460}{}{Project}
+{461}{}{This build doesn't update itself: new versions are installed by hand.}
+{462}{}{The browser version updates itself when you open it.}
+{463}{}{Port by imbaner}
 
 # The message when a party member or another critter cannot pick up an item
 # (the player's message is 905 in proto.msg).

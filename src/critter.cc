@@ -15,6 +15,7 @@
 #include "endgame.h"
 #include "game.h"
 #include "geometry.h"
+#include "hero_appearance.h"
 #include "interface.h"
 #include "item.h"
 #include "map.h"
@@ -504,7 +505,7 @@ int critterCheckRadiationEvent(Object* obj)
     else
         radiationLevel = RADIATION_LEVEL_NONE;
 
-    if (statRoll(obj, STAT_ENDURANCE, gRadiationEnduranceModifiers[radiationLevel], nullptr) <= ROLL_FAILURE) {
+    if (rollIsFailure(statRoll(obj, STAT_ENDURANCE, gRadiationEnduranceModifiers[radiationLevel], nullptr))) {
         radiationLevel++;
     }
 
@@ -1069,6 +1070,9 @@ int gcdLoad(const char* path)
     proto->critter.data.experience = 0;
     proto->critter.data.killType = KILL_TYPE_MAN;
 
+    // SFALL: Hero Appearance's race and style.
+    heroAppearanceReadGcd(stream);
+
     fileClose(stream);
     return 0;
 }
@@ -1135,6 +1139,9 @@ int gcdSave(const char* path)
         fileClose(stream);
         return -1;
     }
+
+    // SFALL: Hero Appearance's race and style.
+    heroAppearanceWriteGcd(stream);
 
     fileClose(stream);
     return 0;
@@ -1274,7 +1281,7 @@ int sneakEventProcess(Object* obj, void* data)
     int time;
 
     int sneak = skillGetValue(gDude, SKILL_SNEAK);
-    if (skillRoll(gDude, SKILL_SNEAK, 0, nullptr) < ROLL_SUCCESS) {
+    if (rollIsFailure(skillRoll(gDude, SKILL_SNEAK, 0, nullptr))) {
         time = 600;
         _sneak_working = false;
 
@@ -1386,7 +1393,7 @@ int critterSetWhoHitMe(Object* critter, Object* hitMe)
     }
 
     if (ProtoId(critter).objectType() == OBJ_TYPE_CRITTER) {
-        if (hitMe == nullptr || critter->data.critter.combat.team != hitMe->data.critter.combat.team || (statRoll(critter, STAT_INTELLIGENCE, -1, nullptr) < 2 && (!objectIsPartyMember(critter) || !objectIsPartyMember(hitMe)))) {
+        if (hitMe == nullptr || critter->data.critter.combat.team != hitMe->data.critter.combat.team || (rollIsFailure(statRoll(critter, STAT_INTELLIGENCE, -1, nullptr)) && (!objectIsPartyMember(critter) || !objectIsPartyMember(hitMe)))) {
             critter->data.critter.combat.whoHitMe = hitMe;
             if (hitMe == gDude) {
                 reactionSetValue(critter, -3);

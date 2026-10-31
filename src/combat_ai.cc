@@ -917,8 +917,18 @@ Disposition aiGetDisposition(Object* obj)
     return ai->disposition;
 }
 
-// 0x428354
-int aiSetDisposition(Object* obj, Disposition disposition)
+// CE: The packet `aiSetDisposition` switches the critter to, -1 - none.
+//
+// The original takes `packet_num - (disposition - current)` blindly: it
+// relies on a party member's packets going custom, coward, defensive,
+// aggressive, berserk with decreasing numbers. Where ai.txt is not like that
+// the critter got another critter's packet, and the custom settings then
+// changed that packet for everyone using it: Dogmeat's packets are sorted by
+// name (berserk gave him "Tough Khan"), temporary followers (Karl, Jonny,
+// Lloyd) have generic packets, Sonora's companions have only a custom one.
+// So the critter has to be on a packet of a disposition, and the one it goes
+// to has to be of the requested disposition.
+static int aiGetDispositionPacketNum(Object* obj, Disposition disposition)
 {
     if (obj == nullptr) {
         return -1;
@@ -929,9 +939,36 @@ int aiSetDisposition(Object* obj, Disposition disposition)
     }
 
     AiPacket* ai = aiGetPacket(obj);
-    obj->data.critter.combat.aiPacket = ai->packet_num - (disposition - ai->disposition);
+    if (!dispositionIsValid(ai->disposition)) {
+        return -1;
+    }
+
+    int packetNum = ai->packet_num - (disposition - ai->disposition);
+    for (int index = 0; index < gAiPacketsLength; index++) {
+        if (gAiPackets[index].packet_num == packetNum) {
+            return gAiPackets[index].disposition == disposition ? packetNum : -1;
+        }
+    }
+
+    return -1;
+}
+
+// 0x428354
+int aiSetDisposition(Object* obj, Disposition disposition)
+{
+    int packetNum = aiGetDispositionPacketNum(obj, disposition);
+    if (packetNum == -1) {
+        return -1;
+    }
+
+    obj->data.critter.combat.aiPacket = packetNum;
 
     return 0;
+}
+
+bool aiCanSetDisposition(Object* obj, Disposition disposition)
+{
+    return aiGetDispositionPacketNum(obj, disposition) != -1;
 }
 
 // 0x428398
@@ -1852,14 +1889,6 @@ static bool aiHaveAmmo(Object* critter, Object* weapon, Object** ammoPtr)
             }
             return true;
         }
-
-        if (weaponGetAnimationCode(weapon) != WeaponAnimation::None) {
-            if (weaponGetRange(critter, HIT_MODE_RIGHT_WEAPON_PRIMARY) < 3) {
-                inventoryUnequip(critter, HAND_RIGHT);
-            }
-        } else {
-            inventoryUnequip(critter, HAND_RIGHT);
-        }
     }
 
     return false;
@@ -2556,7 +2585,7 @@ static HitMode _ai_pick_hit_mode(Object* attacker, Object* weapon, Object* defen
     if (useSecondaryMode) {
         if (attackType != ATTACK_TYPE_THROW
             || _ai_search_inven_weap(attacker, false, defender) != nullptr
-            || statRoll(attacker, STAT_INTELLIGENCE, 0, nullptr) <= 1) {
+            || rollIsFailure(statRoll(attacker, STAT_INTELLIGENCE, 0, nullptr))) {
             return HIT_MODE_RIGHT_WEAPON_SECONDARY;
         }
     }
@@ -3006,7 +3035,7 @@ static int _ai_try_attack(Object* attacker, Object* defender)
 
                 if (roundsLoaded > 0) {
                     int volume = _gsound_compute_relative_volume(attacker);
-                    const char* sfx = sfxBuildWeaponName(WEAPON_SOUND_EFFECT_READY, weapon, hitMode, nullptr);
+                    const char* sfx = sfxBuildWeaponName(WeaponSoundEffect::Ready, weapon, hitMode, nullptr);
                     _gsound_play_sfx_file_volume(sfx, volume);
                     _ai_magic_hands(attacker, weapon, 5002);
 
@@ -3034,7 +3063,7 @@ static int _ai_try_attack(Object* attacker, Object* defender)
 
                         if (remainingAmmoQuantity != -1) {
                             int volume = _gsound_compute_relative_volume(attacker);
-                            const char* sfx = sfxBuildWeaponName(WEAPON_SOUND_EFFECT_READY, weapon, hitMode, nullptr);
+                            const char* sfx = sfxBuildWeaponName(WeaponSoundEffect::Ready, weapon, hitMode, nullptr);
                             _gsound_play_sfx_file_volume(sfx, volume);
                             _ai_magic_hands(attacker, weapon, 5002);
 
@@ -3053,7 +3082,7 @@ static int _ai_try_attack(Object* attacker, Object* defender)
                     }
                 } else {
                     int volume = _gsound_compute_relative_volume(attacker);
-                    const char* sfx = sfxBuildWeaponName(WEAPON_SOUND_EFFECT_OUT_OF_AMMO, weapon, hitMode, nullptr);
+                    const char* sfx = sfxBuildWeaponName(WeaponSoundEffect::OutOfAmmo, weapon, hitMode, nullptr);
                     _gsound_play_sfx_file_volume(sfx, volume);
                     _ai_magic_hands(attacker, weapon, 5001);
 
@@ -3083,10 +3112,14 @@ static int _ai_try_attack(Object* attacker, Object* defender)
             if (toHitNoRange < minToHit) {
                 // hit chance is too low even at point blank range (not taking range into account)
                 debugPrint("%s: FLEEING: Can't possibly Hit Target!", critterGetName(attacker));
-                // SFALL: Not fleeing for the rest of combat (see
-                // `CRITTER_MANEUVER_RETARGET`).
-                attacker->data.critter.combat.maneuver |= CRITTER_MANEUVER_RETARGET;
                 _ai_run_away(attacker, defender);
+                // SFALL: Not fleeing for the rest of combat (see
+                // `CRITTER_MANEUVER_RETARGET`). Not when the target is beyond
+                // its max distance: then it disengages, and `_combat_sequence`
+                // takes out only critters whose maneuver is just that.
+                if ((attacker->data.critter.combat.maneuver & CRITTER_MANEUVER_DISENGAGING) == CRITTER_MANEUVER_NONE) {
+                    attacker->data.critter.combat.maneuver |= CRITTER_MANEUVER_RETARGET;
+                }
                 return 0;
             }
 
@@ -3122,10 +3155,14 @@ static int _ai_try_attack(Object* attacker, Object* defender)
                 int toHitNoRange = _determine_to_hit_no_range(attacker, defender, HIT_LOCATION_UNCALLED, hitMode, rotations);
                 if (toHitNoRange < minToHit) {
                     debugPrint("%s: FLEEING: Can't possibly Hit Target!", critterGetName(attacker));
-                    // SFALL: Not fleeing for the rest of combat (see
-                    // `CRITTER_MANEUVER_RETARGET`).
-                    attacker->data.critter.combat.maneuver |= CRITTER_MANEUVER_RETARGET;
                     _ai_run_away(attacker, defender);
+                    // SFALL: Not fleeing for the rest of combat (see
+                    // `CRITTER_MANEUVER_RETARGET`). Not when the target is beyond
+                    // its max distance: then it disengages, and `_combat_sequence`
+                    // takes out only critters whose maneuver is just that.
+                    if ((attacker->data.critter.combat.maneuver & CRITTER_MANEUVER_DISENGAGING) == CRITTER_MANEUVER_NONE) {
+                        attacker->data.critter.combat.maneuver |= CRITTER_MANEUVER_RETARGET;
+                    }
                     return 0;
                 }
 
@@ -3223,7 +3260,7 @@ void aiAttemptWeaponReload(Object* critter, int animate)
 
         if (loadedRounds != 0 && objectIsPartyMember(critter)) {
             int volume = _gsound_compute_relative_volume(critter);
-            const char* sfx = sfxBuildWeaponName(WEAPON_SOUND_EFFECT_READY, weapon, HIT_MODE_RIGHT_WEAPON_PRIMARY, nullptr);
+            const char* sfx = sfxBuildWeaponName(WeaponSoundEffect::Ready, weapon, HIT_MODE_RIGHT_WEAPON_PRIMARY, nullptr);
             _gsound_play_sfx_file_volume(sfx, volume);
 
             if (animate) {

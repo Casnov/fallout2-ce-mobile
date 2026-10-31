@@ -99,9 +99,9 @@ void muiMovieScreenRun()
         sharedFpsLimiter.mark();
 
         int movieInput = inputGetInput();
-        int mouseEvent = mouseGetEvent();
-        bool mouseDown = (mouseEvent & MOUSE_EVENT_ANY_BUTTON_DOWN) != 0;
-        bool mouseHeld = mouseDown || (mouseEvent & MOUSE_EVENT_ANY_BUTTON_REPEAT) != 0;
+        MouseButtonEvent mouseEvent = mouseGetEvent();
+        bool mouseDown = (mouseEvent & MouseButtonEvent::AnyButtonDown) != MouseButtonEvent::None;
+        bool mouseHeld = mouseDown || (mouseEvent & MouseButtonEvent::AnyButtonRepeat) != MouseButtonEvent::None;
         if ((movieInput != -1 && movieInput != -2)
             || screen.skipped
             || _game_user_wants_to_quit != GAME_QUIT_REQUEST_NONE

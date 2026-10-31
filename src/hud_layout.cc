@@ -9,6 +9,10 @@
 #include <jni.h>
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 #include "settings.h"
 #include "svga.h"
 
@@ -76,6 +80,8 @@ float hudGetScreenDensity()
         return ddpi / 160.0f;
     }
     return 2.0f;
+#elif defined(__EMSCRIPTEN__)
+    return webScreenDensity();
 #else
     return 1.0f;
 #endif
@@ -157,6 +163,8 @@ static void hudGetSafeInsets(int insets[4])
 
     env->DeleteLocalRef(activityClass);
     env->DeleteLocalRef(activity);
+#elif defined(__EMSCRIPTEN__)
+    webSafeInsets(insets);
 #endif
 }
 

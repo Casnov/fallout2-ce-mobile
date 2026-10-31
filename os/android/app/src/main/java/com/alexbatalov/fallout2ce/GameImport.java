@@ -16,8 +16,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -26,8 +30,12 @@ import java.util.Set;
 // The game's files from the player's own copy of Fallout 2, a folder or an
 // archive of it (.zip, .7z, .rar, .tar: NativeArchive) put on the phone,
 // copied where the game reads them (the app's files folder). The game is the
-// shallowest folder with master.dat and critter.dat, at any depth. Mods (RPU...)
-// and saves in it come along.
+// shallowest folder with master.dat and critter.dat (files or folders), at
+// any depth. Mods (RPU...) and saves in it come along. A mod in its subfolder
+// whose config names Fallout 2's files outside it (Fallout Et Tu, Fallout
+// 1.5: Resurrection) is a game too, the player chooses (`findLinked`). The
+// config is the one ddraw.ini names (`GameFiles.configName`), as for CE on
+// a computer. docs/android-touch-notes.md "Game layouts".
 final class GameImport {
     // An earlier version's mark of a game copied in part (copies go through
     // GameFiles' staging folder now): such a game isn't started.
@@ -39,9 +47,10 @@ final class GameImport {
     // With a replacement not finished (GameFiles' journal) it isn't: the
     // caller finishes it first (GameFiles.finish).
     static boolean isInstalled(File target) {
+        // Either may be a folder (CE opens both).
         return target != null
-            && new File(target, "master.dat").isFile()
-            && new File(target, "critter.dat").isFile()
+            && new File(target, "master.dat").exists()
+            && new File(target, "critter.dat").exists()
             && !new File(target, INCOMPLETE_MARK).exists()
             && !GameFiles.isCommitPending(target);
     }
@@ -235,6 +244,18 @@ final class GameImport {
         // Without Fallout 2's own files (master.dat, critter.dat): its mods
         // and configs only, for "Replace game" (the original files stay).
         boolean modsOnly;
+        // Its config's name (`GameFiles.configName`).
+        String config = GameFiles.CONFIG;
+        // Files from outside the folder its config names (a mod installed
+        // in a subfolder, as Fallout Et Tu: "..\master.dat"), and their
+        // paths in the game.
+        final Map<Entry, String> outside = new HashMap<>();
+
+        // [entry]'s path in the game's folder.
+        String pathOf(Entry entry) {
+            String path = outside.get(entry);
+            return path != null ? path : entry.path.substring(root.length());
+        }
     }
 
     // More than one game at the same depth: which one is meant isn't known.
@@ -247,23 +268,36 @@ final class GameImport {
         }
     }
 
+    // Fallout 2 with a mod in its subfolder that uses its files (as Fallout
+    // Et Tu): which of them is meant isn't known. [roots]: Fallout 2's
+    // folder first, then the mods'.
+    static final class ChooseGameException extends IOException {
+        final List<String> roots;
+
+        ChooseGameException(List<String> roots) {
+            super("choose a game: " + roots);
+            this.roots = roots;
+        }
+    }
+
+    static Found find(Source source, boolean modsOnly) throws IOException {
+        return find(source, modsOnly, null);
+    }
+
     // Null without the game. Its files encrypted or compressed in a way that
     // can't be read: NativeArchive.Failure. [modsOnly]: a game without
-    // Fallout 2's own files is found too (for "Replace game").
-    static Found find(Source source, boolean modsOnly) throws IOException {
+    // Fallout 2's own files is found too (for "Replace game"). [chosen]: the
+    // root of ChooseGameException the player chose, else null.
+    static Found find(Source source, boolean modsOnly, String chosen) throws IOException {
         List<Entry> entries = source.list();
 
-        Set<String> paths = new HashSet<>();
-        for (Entry entry : entries) {
-            paths.add(entry.path.toLowerCase(Locale.ROOT));
-        }
+        Layout layout = new Layout(entries);
 
-        // The game's folder: the shallowest with master.dat and critter.dat.
+        // The game's folder: the shallowest with master.dat and critter.dat,
+        // files or folders.
         List<String> roots = new ArrayList<>();
-        for (Entry entry : entries) {
-            String name = baseName(entry.path);
-            String folder = entry.path.substring(0, entry.path.length() - name.length());
-            if (name.equalsIgnoreCase("master.dat") && paths.contains((folder + "critter.dat").toLowerCase(Locale.ROOT))) {
+        for (String folder : layout.folders) {
+            if (layout.has(folder + "master.dat") && layout.has(folder + "critter.dat")) {
                 roots.add(folder);
             }
         }
@@ -291,11 +325,28 @@ final class GameImport {
             throw new SeveralGamesException(roots);
         }
 
+        // Mods in subfolders of the game that use its files.
+        Map<String, Map<Entry, String>> linked = withoutOriginals ? new HashMap<>() : findLinked(source, layout, roots.get(0));
+
         Found found = new Found();
         found.root = roots.get(0);
+        if (chosen != null && linked.containsKey(chosen)) {
+            found.root = chosen;
+            found.outside.putAll(linked.get(chosen));
+        } else if (chosen == null && !linked.isEmpty()) {
+            List<String> choice = new ArrayList<>();
+            choice.add(found.root);
+            choice.addAll(linked.keySet());
+            Collections.sort(choice.subList(1, choice.size()));
+            throw new ChooseGameException(choice);
+        }
         found.modsOnly = withoutOriginals;
+        for (Entry entry : found.outside.keySet()) {
+            found.files.add(entry);
+            found.size += entry.size;
+        }
         for (Entry entry : entries) {
-            if (!entry.path.startsWith(found.root)) {
+            if (!entry.path.startsWith(found.root) || isInLinked(entry.path, found.root, linked.keySet()) || found.outside.containsKey(entry)) {
                 continue;
             }
             String path = entry.path.substring(found.root.length());
@@ -319,8 +370,157 @@ final class GameImport {
             }
         }
 
+        found.config = configName(source, layout, found.root);
         found.language = readLanguage(source, found);
         return found;
+    }
+
+    // The source's files by their lower case paths, and its folders ("" and
+    // ending with "/"), for the game's files that may be folders.
+    private static final class Layout {
+        final List<Entry> entries;
+        final Map<String, Entry> files = new HashMap<>();
+        final Set<String> folders = new LinkedHashSet<>();
+        private final Set<String> lowerFolders = new HashSet<>();
+
+        Layout(List<Entry> entries) {
+            this.entries = entries;
+            folders.add("");
+            for (Entry entry : entries) {
+                files.put(entry.path.toLowerCase(Locale.ROOT), entry);
+                int slash = entry.path.indexOf('/');
+                while (slash != -1) {
+                    String folder = entry.path.substring(0, slash + 1);
+                    folders.add(folder);
+                    lowerFolders.add(folder.toLowerCase(Locale.ROOT));
+                    slash = entry.path.indexOf('/', slash + 1);
+                }
+            }
+        }
+
+        // [path] is a file or a folder of the source.
+        boolean has(String path) {
+            String lower = path.toLowerCase(Locale.ROOT);
+            return files.containsKey(lower) || lowerFolders.contains(lower + "/");
+        }
+
+        Entry file(String path) {
+            return files.get(path.toLowerCase(Locale.ROOT));
+        }
+
+        // The files at [path]: the file, or all in the folder, with their
+        // paths from it ("" for the file itself).
+        Map<Entry, String> filesAt(String path) {
+            Map<Entry, String> found = new LinkedHashMap<>();
+            Entry file = file(path);
+            if (file != null) {
+                found.put(file, "");
+                return found;
+            }
+            String prefix = path.toLowerCase(Locale.ROOT) + "/";
+            for (Entry entry : entries) {
+                if (entry.path.toLowerCase(Locale.ROOT).startsWith(prefix)) {
+                    found.put(entry, entry.path.substring(prefix.length()));
+                }
+            }
+            return found;
+        }
+    }
+
+    // `GameFiles.configName` of [folder]'s ddraw.ini in the source.
+    private static String configName(Source source, Layout layout, String folder) throws IOException {
+        Entry ddraw = layout.file(folder + GameFiles.SFALL_CONFIG);
+        return GameFiles.configName(ddraw != null ? readText(source, ddraw) : null);
+    }
+
+    // Folders under [root] with a config (`configName`) that names master.dat
+    // and critter.dat outside them, both in the source: the files to take
+    // from outside, by folder, with their paths in the game. The music
+    // folders the config names outside come along too (Fallout 1.5:
+    // Resurrection keeps its own in Fallout 2's sound\music), at the paths
+    // `fixConfig` gives them; the mod's own files win.
+    private static Map<String, Map<Entry, String>> findLinked(Source source, Layout layout, String root) throws IOException {
+        Map<String, Map<Entry, String>> linked = new HashMap<>();
+        for (String folder : layout.folders) {
+            if (folder.equals(root) || !folder.startsWith(root)) {
+                continue;
+            }
+            Entry configEntry = layout.file(folder + configName(source, layout, folder));
+            if (configEntry == null) {
+                continue;
+            }
+
+            Map<String, String> config = readConfig(source, configEntry);
+            Map<Entry, String> outside = new LinkedHashMap<>();
+            boolean dats = true;
+            for (String[] file : new String[][] { { "master_dat", "master.dat" }, { "critter_dat", "critter.dat" } }) {
+                String path = config.get(file[0]) != null ? resolve(folder, config.get(file[0])) : null;
+                if (path == null || path.toLowerCase(Locale.ROOT).startsWith(folder.toLowerCase(Locale.ROOT)) || !layout.has(path)) {
+                    dats = false;
+                    break;
+                }
+                for (Map.Entry<Entry, String> found : layout.filesAt(path).entrySet()) {
+                    outside.put(found.getKey(), found.getValue().isEmpty() ? file[1] : file[1] + "/" + found.getValue());
+                }
+            }
+            if (!dats) {
+                continue;
+            }
+
+            Set<String> own = new HashSet<>();
+            for (Entry entry : layout.entries) {
+                if (entry.path.startsWith(folder)) {
+                    own.add(entry.path.substring(folder.length()).toLowerCase(Locale.ROOT));
+                }
+            }
+            for (String[] music : new String[][] { { "music_path1", "sound/music/" }, { "music_path2", "data/sound/music/" } }) {
+                String path = config.get(music[0]) != null ? resolve(folder, config.get(music[0])) : null;
+                if (path == null || path.isEmpty() || path.toLowerCase(Locale.ROOT).startsWith(folder.toLowerCase(Locale.ROOT))) {
+                    continue;
+                }
+                for (Map.Entry<Entry, String> found : layout.filesAt(path).entrySet()) {
+                    String target = music[1] + found.getValue();
+                    if (!found.getValue().isEmpty() && !outside.containsKey(found.getKey()) && !own.contains(target.toLowerCase(Locale.ROOT))) {
+                        outside.put(found.getKey(), target);
+                    }
+                }
+            }
+            linked.put(folder, outside);
+        }
+        return linked;
+    }
+
+    // [path] is in a mod's folder of [linked] under [root] (Fallout 2's own
+    // files don't take a mod that uses them).
+    private static boolean isInLinked(String path, String root, Set<String> linked) {
+        for (String folder : linked) {
+            if (!folder.equals(root) && root.length() < folder.length() && path.startsWith(folder)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // [value], a config's relative path, from [folder] of the source; null
+    // for a full path or one out of the source.
+    private static String resolve(String folder, String value) {
+        String path = value.trim().replace('\\', '/');
+        if (path.isEmpty() || path.contains(":") || path.startsWith("/")) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>(Arrays.asList(folder.split("/")));
+        parts.removeIf(String::isEmpty);
+        for (String part : path.split("/")) {
+            if (part.equals("..")) {
+                if (parts.isEmpty()) {
+                    return null;
+                }
+                parts.remove(parts.size() - 1);
+            } else if (!part.isEmpty() && !part.equals(".")) {
+                parts.add(part);
+            }
+        }
+        return String.join("/", parts);
     }
 
     // The least deep of [folders], each once.
@@ -352,12 +552,13 @@ final class GameImport {
 
     // Files of the computer's game nobody needs on the phone: Windows
     // programs and libraries, shortcuts, folder icons, macOS leftovers and
-    // programs (CE's .app); and the engine's ce.dat (the app brings its own,
-    // see MainActivity).
+    // programs (CE's .app); the engine's ce.dat (the app brings its own,
+    // see MainActivity) and the app's logs (GameFiles.isAppLog).
     private static boolean isSkipped(String path) {
         String lower = path.toLowerCase(Locale.ROOT);
         String name = baseName(lower);
         return lower.equals("ce.dat")
+            || GameFiles.isAppLog(lower)
             || lower.startsWith("ce.dat/")
             || lower.startsWith("__macosx/")
             || ("/" + lower).contains(".app/")
@@ -377,18 +578,31 @@ final class GameImport {
 
     // `[system] language` of the copied fallout2.cfg ("english" without it).
     private static String readLanguage(Source source, Found found) throws IOException {
-        List<Entry> config = new ArrayList<>();
         for (Entry entry : found.files) {
-            if (entry.path.substring(found.root.length()).equalsIgnoreCase("fallout2.cfg")) {
-                config.add(entry);
+            if (found.pathOf(entry).equalsIgnoreCase(found.config)) {
+                String language = readConfig(source, entry).get("language");
+                return language != null ? language : "english";
             }
         }
-        if (config.isEmpty()) {
-            return "english";
-        }
+        return "english";
+    }
 
+    // [entry]'s keys (lower case) and values, a config's.
+    private static Map<String, String> readConfig(Source source, Entry entry) throws IOException {
+        Map<String, String> values = new HashMap<>();
+        for (String line : readText(source, entry).split("\r?\n")) {
+            int equals = line.indexOf('=');
+            if (equals != -1) {
+                values.put(line.substring(0, equals).trim().toLowerCase(Locale.ROOT), line.substring(equals + 1).trim());
+            }
+        }
+        return values;
+    }
+
+    // [entry]'s text, a config's (up to a megabyte).
+    private static String readText(Source source, Entry entry) throws IOException {
         ByteArrayOutputStream text = new ByteArrayOutputStream();
-        source.read(config, new EntrySink() {
+        source.read(Collections.singletonList(entry), new EntrySink() {
             @Override
             public void begin(Entry entry) {
             }
@@ -405,15 +619,7 @@ final class GameImport {
             public void end(Entry entry) {
             }
         });
-
-        String language = "english";
-        for (String line : new String(text.toByteArray(), StandardCharsets.ISO_8859_1).split("\r?\n")) {
-            String trimmed = line.trim();
-            if (trimmed.toLowerCase(Locale.ROOT).startsWith("language=")) {
-                language = trimmed.substring("language=".length()).trim();
-            }
-        }
-        return language;
+        return new String(text.toByteArray(), StandardCharsets.ISO_8859_1);
     }
 
     interface Progress {
@@ -432,24 +638,54 @@ final class GameImport {
     // (GameFiles.plan). [withSaves]: the source's saves come along (the
     // first install); else the installed ones are left as they are.
     static GameFiles.Plan plan(Found found, File target, boolean withSaves) {
+        Map<String, String> installed = GameFiles.installedGameFiles(target);
         List<String> paths = new ArrayList<>();
         List<Long> sizes = new ArrayList<>();
-        for (Entry entry : wanted(found, withSaves)) {
-            paths.add(entry.path.substring(found.root.length()));
-            sizes.add(entry.size);
+        for (Map.Entry<Entry, String> file : gamePaths(found, withSaves, installed).entrySet()) {
+            paths.add(file.getValue());
+            sizes.add(file.getKey().size);
         }
-        return GameFiles.plan(paths, sizes, target, GameFiles.installedGameFiles(target), found.modsOnly);
+        return GameFiles.plan(paths, sizes, target, installed, found.modsOnly, found.config);
     }
 
-    private static List<Entry> wanted(Found found, boolean withSaves) {
-        List<Entry> wanted = new ArrayList<>();
+    // The files of [found] to copy and their paths in the game, each folder
+    // in one case: the installed game's ([installed], `installedGameFiles`),
+    // else the first in the source. CE finds a file in any case, but of the
+    // folders named the same in another case it sees one (compat_resolve_path):
+    // "DATA/" next to "data/" would hide files.
+    private static Map<Entry, String> gamePaths(Found found, boolean withSaves, Map<String, String> installed) {
+        Map<String, String> folders = new HashMap<>();
+        for (String path : installed.values()) {
+            inFolderCase(path, folders);
+        }
+        Map<Entry, String> paths = new LinkedHashMap<>();
         for (Entry entry : found.files) {
-            String path = entry.path.substring(found.root.length()).toLowerCase(Locale.ROOT);
-            if (withSaves || !path.startsWith("data/savegame/")) {
-                wanted.add(entry);
+            String path = found.pathOf(entry);
+            if (withSaves || !path.toLowerCase(Locale.ROOT).startsWith("data/savegame/")) {
+                paths.put(entry, inFolderCase(path, folders));
             }
         }
-        return wanted;
+        return paths;
+    }
+
+    // [path] with its folders as [folders] (lower case -> as they are) has
+    // them; the ones it lacks are added as [path] has them.
+    private static String inFolderCase(String path, Map<String, String> folders) {
+        int slash = path.lastIndexOf('/');
+        if (slash == -1) {
+            return path;
+        }
+        String folder = "";
+        for (String part : path.substring(0, slash).split("/")) {
+            String name = folder + part;
+            String known = folders.get(name.toLowerCase(Locale.ROOT));
+            if (known == null) {
+                folders.put(name.toLowerCase(Locale.ROOT), name);
+                known = name;
+            }
+            folder = known + "/";
+        }
+        return folder + path.substring(slash + 1);
     }
 
     // Puts [found] into the game's folder [target] as [plan] says: copied
@@ -463,11 +699,8 @@ final class GameImport {
         GameFiles.finish(target);
 
         Map<String, String> installed = GameFiles.installedGameFiles(target);
-        List<Entry> wanted = wanted(found, withSaves);
-        Map<Entry, String> pathOf = new HashMap<>();
-        for (Entry entry : wanted) {
-            pathOf.put(entry, entry.path.substring(found.root.length()));
-        }
+        Map<Entry, String> pathOf = gamePaths(found, withSaves, installed);
+        List<Entry> wanted = new ArrayList<>(pathOf.keySet());
 
         GameFiles.StagingSink sink = new GameFiles.StagingSink(target, installed, pathOf, plan.bytesToRead, (done, total, path) -> {
             if (progress.isCancelled()) {
@@ -500,8 +733,11 @@ final class GameImport {
         return file;
     }
 
-    // A computer's config may name the game's files with full Windows paths
-    // ("C:\Games\Fallout 2\master.dat"): the copied ones are next to it.
+    // A computer's config may name the game's files and music with full
+    // Windows paths ("C:\Games\Fallout 2\master.dat") or outside the game's
+    // folder ("..\master.dat"): the copied ones are in it. The music is
+    // looked for in both folders the games keep it in (as the web version's
+    // fixGameConfig).
     static void fixConfig(File config) throws IOException {
         if (!config.isFile()) {
             return;
@@ -512,6 +748,8 @@ final class GameImport {
         defaults.put("critter_dat", "critter.dat");
         defaults.put("master_patches", "data");
         defaults.put("critter_patches", "data");
+        defaults.put("music_path1", "sound/music/");
+        defaults.put("music_path2", "data/sound/music/");
 
         String text = new String(readFile(config), StandardCharsets.ISO_8859_1);
         String newline = text.contains("\r\n") ? "\r\n" : "\n";
@@ -523,8 +761,8 @@ final class GameImport {
                 continue;
             }
             String key = lines[index].substring(0, equals).trim().toLowerCase(Locale.ROOT);
-            String value = lines[index].substring(equals + 1).trim();
-            if (defaults.containsKey(key) && (value.contains(":") || value.startsWith("\\") || value.startsWith("/"))) {
+            String value = lines[index].substring(equals + 1).trim().replace('\\', '/');
+            if (defaults.containsKey(key) && (value.contains(":") || value.startsWith("/") || Arrays.asList(value.split("/")).contains(".."))) {
                 lines[index] = key + "=" + defaults.get(key);
                 changed = true;
             }

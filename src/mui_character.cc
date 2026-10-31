@@ -4,8 +4,13 @@
 #include "mui_screens.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
+
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
 
 #include "character_editor.h"
 #include "color.h"
@@ -15,6 +20,7 @@
 #include "fps_limiter.h"
 #include "game.h"
 #include "game_sound.h"
+#include "hero_appearance.h"
 #include "input.h"
 #include "kb.h"
 #include "object.h"
@@ -45,10 +51,16 @@ namespace {
     constexpr int kTextTag = 196;
     constexpr int kTextUntag = 197;
     constexpr int kTextTraits = 198;
+    constexpr int kTextAppearance = 445;
+    constexpr int kTextRace = 446;
+    constexpr int kTextStyle = 447;
+    constexpr int kTextGender = 448;
 
     // Texts in `game\editor.msg`.
     constexpr int kEditorName = 106;
     constexpr int kEditorMale = 107;
+    // The genders' full words ("Male", "Female").
+    constexpr int kEditorMaleWord = 645;
     constexpr int kEditorLevel = 113;
     constexpr int kEditorExperience = 114;
     constexpr int kEditorCharacterPoints = 120;
@@ -103,6 +115,8 @@ namespace {
         Skills,
         // Perks, karma, kills in game; traits in creation.
         Perks,
+        // Creation with sfall's Hero Appearance sets: gender, race, style.
+        Appearance,
     };
 
     enum class Folder {
@@ -124,6 +138,8 @@ namespace {
         Trait,
         FolderEntry,
         Folder,
+        // Gender (index 0), race (1), style (2).
+        Appearance,
     };
 
     // Perk choice panel steps (see `CharacterEditorPerkStep`).
@@ -172,6 +188,9 @@ namespace {
 
     private:
         bool creating = false;
+        // Creation's appearance tab (Hero Appearance's sets), the gender
+        // there, not in the header.
+        bool appearance = false;
         // Tablet windows: the roomy layout (`muiIsTallContent`).
         bool tall = false;
         // Its header's sizes (they fit the width).
@@ -209,7 +228,8 @@ namespace {
         void buildSkills(MuiContext& ui, const MuiRect& rect);
         void buildFolder(MuiContext& ui, const MuiRect& rect);
         void buildTraits(MuiContext& ui, const MuiRect& rect);
-        void buildCard(MuiContext& ui, const MuiRect& rect, const CharacterEditorCard& card, const std::string& id, std::string* key);
+        void buildAppearance(MuiContext& ui, const MuiRect& rect);
+        void buildCard(MuiContext& ui, const MuiRect& rect, const CharacterEditorCard& card, const std::string& id, std::string* key, bool hero = false);
         void buildPerkPanel(MuiContext& ui);
         void buildNameEditor(MuiContext& ui);
 
@@ -252,6 +272,7 @@ namespace {
         result = 0;
         pending = Pending::None;
         creating = characterEditorIsCreating();
+        appearance = creating && heroAppearanceHasChoice();
         tab = Tab::Stats;
         folder = Folder::Perks;
         perkStep = PerkStep::Closed;
@@ -323,6 +344,18 @@ namespace {
                 return characterEditorGetTraitsCard();
             }
             return characterEditorGetFolderCard(static_cast<CharacterEditorFolder>(folder));
+        case Item::Appearance: {
+            CharacterEditorCard card;
+            int gender = critterGetStat(gDude, STAT_GENDER);
+            if (itemIndex == 0) {
+                card.title = characterEditorGetText(kEditorMaleWord + gender);
+            } else if (itemIndex == 1) {
+                heroAppearanceGetRaceText(gender, heroAppearanceRace(), &card.title, &card.description);
+            } else {
+                heroAppearanceGetStyleText(gender, heroAppearanceRace(), heroAppearanceStyle(), &card.title, &card.description);
+            }
+            return card;
+        }
         case Item::None:
             break;
         }
@@ -378,7 +411,7 @@ namespace {
         buildMain(ui, main);
 
         CharacterEditorCard card = currentCard();
-        buildCard(ui, cardRect, card, "character.card", &cardKey);
+        buildCard(ui, cardRect, card, "character.card", &cardKey, item == Item::Appearance);
 
         buildTabs(ui, tabs);
 
@@ -553,7 +586,7 @@ namespace {
             std::u32string age = gameText(statGetName(STAT_AGE)) + U" " + number(critterGetStat(gDude, STAT_AGE));
             int gender = critterGetStat(gDude, STAT_GENDER);
             return chipWidth(nameText, true) + height * 2.0f + ui.dp(8.0f) + chipWidth(age, false)
-                + chipWidth(editorText(kEditorMale + gender), false)
+                + (appearance ? 0.0f : chipWidth(editorText(kEditorMale + gender), false))
                 + chipWidth(editorText(kEditorCharacterPoints) + U" " + number(characterEditorGetCharacterPoints()), false)
                 + buttonWidth;
         }
@@ -618,12 +651,14 @@ namespace {
             }
             x += stepper + gap;
 
-            // Gender toggles.
-            int gender = critterGetStat(gDude, STAT_GENDER);
-            x += chip(ui, "character.gender", x, rect, editorText(kEditorMale + gender), theme.text, MuiIcon::Edit, false, &tapped) + gap;
-            if (tapped) {
-                _gsound_red_butt_press(-1, 0);
-                characterEditorSetGender(gender == 0 ? 1 : 0);
+            // Gender toggles (on the appearance tab when there is one).
+            if (!appearance) {
+                int gender = critterGetStat(gDude, STAT_GENDER);
+                x += chip(ui, "character.gender", x, rect, editorText(kEditorMale + gender), theme.text, MuiIcon::Edit, false, &tapped) + gap;
+                if (tapped) {
+                    _gsound_red_butt_press(-1, 0);
+                    characterEditorSetGender(gender == 0 ? 1 : 0);
+                }
             }
 
             int points = characterEditorGetCharacterPoints();
@@ -738,22 +773,47 @@ namespace {
         // Owed perk: dot on the perks tab.
         bool perkOwed = !creating && characterEditorGetPerkOwed() != 0;
 
-        const TabInfo tabs[] = {
+        std::vector<TabInfo> tabs = {
             { Tab::Stats, "character.tab.stats", ceText(kTextStats, "Stats") },
             { Tab::Skills, "character.tab.skills", skillsLabel },
             { Tab::Perks, "character.tab.perks", perksLabel },
         };
+        if (appearance) {
+            tabs.push_back({ Tab::Appearance, "character.tab.appearance", ceText(kTextAppearance, "Appearance") });
+        }
 
-        float tabWidth = (inner.w - gap * 2.0f) / 3.0f;
-        for (int index = 0; index < 3; index++) {
+        // The cells by the widest each label gets: creation's counters at
+        // their widest digits.
+        float textSize = ui.dp(tall ? 16.0f : 14.0f);
+        auto widest = [textSize](const std::u32string& text, const std::vector<std::u32string>& counters) {
+            std::u32string result;
+            for (const std::u32string& counter : counters) {
+                std::u32string candidate = text + U" " + counter;
+                if (muiTextWidth(candidate, textSize) > muiTextWidth(result, textSize)) {
+                    result = candidate;
+                }
+            }
+            return result;
+        };
+        std::vector<std::u32string> widestLabels;
+        for (const TabInfo& info : tabs) {
+            widestLabels.push_back(info.label);
+        }
+        if (creating) {
+            widestLabels[1] = widest(editorText(kEditorSkills), { U"1", U"2", U"3" });
+            widestLabels[2] = widest(ceText(kTextTraits, "Traits"), { U"0/2", U"1/2", U"2/2" });
+        }
+        MuiTabRow tabRow = muiLayoutTabRow({ inner.x, inner.y, inner.w, tabHeight }, widestLabels, gap, ui.dp(10.0f), textSize, ui.dp(10.0f));
+
+        for (size_t index = 0; index < tabs.size(); index++) {
             const TabInfo& info = tabs[index];
-            MuiRect tabRect = { inner.x + index * (tabWidth + gap), inner.y, tabWidth, tabHeight };
+            const MuiRect& tabRect = tabRow.cells[index];
             bool active = info.tab == tab;
             bool pressed;
             bool tapped = ui.touchable(info.id, tabRect, &pressed);
             muiFillRoundRect(tabRect, ui.dp(6.0f), pressed ? theme.buttonPressed : (active ? theme.buttonPrimary : theme.button));
             muiStrokeRoundRect(tabRect, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
-            float size = muiFitTextSize(info.label, tabRect.w - ui.dp(10.0f), ui.dp(tall ? 16.0f : 14.0f), ui.dp(10.0f));
+            float size = muiFitTextSize(info.label, tabRect.w - ui.dp(10.0f), tabRow.textSize, ui.dp(10.0f));
             muiDrawTextAligned(info.label, tabRect, size, active && !pressed ? theme.buttonPrimaryText : theme.buttonText, MuiAlign::Center, MuiAlign::Center);
             if (info.tab == Tab::Perks && perkOwed) {
                 float dotInset = ui.dp(tall ? 12.0f : 9.0f);
@@ -777,6 +837,9 @@ namespace {
                     break;
                 case Tab::Perks:
                     select(Item::Folder, 0);
+                    break;
+                case Tab::Appearance:
+                    select(Item::Appearance, 1);
                     break;
                 }
             }
@@ -806,6 +869,9 @@ namespace {
                 muiStrokeRoundRect(frame, ui.dp(theme.radius), ui.dp(theme.borderWidth), theme.panelBorder);
                 buildFolder(ui, frame.inset(ui.dp(6.0f)));
             }
+            break;
+        case Tab::Appearance:
+            buildAppearance(ui, area);
             break;
         }
     }
@@ -1218,16 +1284,21 @@ namespace {
             { Folder::Kills, "character.folder.kills", kEditorKills },
         };
 
-        float tabWidth = (rect.w - gap * 2.0f) / 3.0f;
+        std::vector<std::u32string> labels;
+        for (const auto& info : tabs) {
+            labels.push_back(editorText(info.label));
+        }
+        MuiTabRow tabRow = muiLayoutTabRow({ rect.x, rect.y, rect.w, tabHeight }, labels, gap, ui.dp(8.0f), ui.dp(tall ? 15.0f : 13.0f), ui.dp(10.0f));
+
         for (int index = 0; index < 3; index++) {
-            MuiRect tabRect = { rect.x + index * (tabWidth + gap), rect.y, tabWidth, tabHeight };
+            const MuiRect& tabRect = tabRow.cells[index];
             bool active = tabs[index].folder == folder;
             bool pressed;
             bool tapped = ui.touchable(tabs[index].id, tabRect, &pressed);
             muiFillRoundRect(tabRect, ui.dp(6.0f), pressed ? theme.buttonPressed : (active ? kSelected : theme.button));
             muiStrokeRoundRect(tabRect, ui.dp(6.0f), ui.dp(1.0f), active || pressed ? theme.accent : theme.buttonBorder);
-            std::u32string label = editorText(tabs[index].label);
-            float size = muiFitTextSize(label, tabRect.w - ui.dp(8.0f), ui.dp(tall ? 15.0f : 13.0f), ui.dp(10.0f));
+            const std::u32string& label = labels[index];
+            float size = muiFitTextSize(label, tabRect.w - ui.dp(8.0f), tabRow.textSize, ui.dp(10.0f));
             muiDrawTextAligned(label, tabRect, size, active ? theme.accent : theme.buttonText, MuiAlign::Center, MuiAlign::Center);
             if (tapped && !active) {
                 _gsound_red_butt_press(-1, 0);
@@ -1370,9 +1441,120 @@ namespace {
         muiPopClip();
     }
 
-    // Card: the game's picture drawn in the interface's color, title,
-    // subtitle, description (scrolls when long).
-    void CharacterScreen::buildCard(MuiContext& ui, const MuiRect& rect, const CharacterEditorCard& card, const std::string& id, std::string* key)
+    // Creation's appearance (sfall's Hero Appearance): gender, race and the
+    // race's styles in columns, rows as the traits'. A row chosen shows its
+    // card, the hero turning in it.
+    void CharacterScreen::buildAppearance(MuiContext& ui, const MuiRect& rect)
+    {
+        const MuiTheme& theme = muiTheme();
+        float rowHeight = ui.dp(tall ? 52.0f : 42.0f);
+        float headingHeight = ui.dp(tall ? 28.0f : 22.0f);
+        float size = ui.dp(tall ? 16.0f : 15.0f);
+        float headingSize = ui.dp(tall ? 13.0f : 12.0f);
+        float padding = ui.dp(6.0f);
+        float gap = ui.dp(tall ? 12.0f : 8.0f);
+
+        int gender = critterGetStat(gDude, STAT_GENDER);
+        int race = heroAppearanceRace();
+        int style = heroAppearanceStyle();
+
+        // A heading (kind -1) or a gender (0), race (1), style (2) row.
+        struct Line {
+            std::u32string text;
+            int kind;
+            int value;
+        };
+
+        std::vector<Line> lists[3];
+        lists[0].push_back({ ceText(kTextGender, "Gender"), -1, 0 });
+        for (int value = 0; value < 2; value++) {
+            lists[0].push_back({ editorText(kEditorMaleWord + value), 0, value });
+        }
+
+        lists[1].push_back({ ceText(kTextRace, "Race"), -1, 0 });
+        int raceCount = heroAppearanceRaceCount(gender);
+        for (int value = 0; value < raceCount; value++) {
+            std::string title;
+            std::string description;
+            heroAppearanceGetRaceText(gender, value, &title, &description);
+            lists[1].push_back({ muiHeroAppearanceRowName(title, value), 1, value });
+        }
+
+        lists[2].push_back({ ceText(kTextStyle, "Style"), -1, 0 });
+        int styleCount = heroAppearanceStyleCount(gender, race);
+        for (int value = 0; value < styleCount; value++) {
+            std::string title;
+            std::string description;
+            heroAppearanceGetStyleText(gender, race, value, &title, &description);
+            lists[2].push_back({ muiHeroAppearanceRowName(title, value), 2, value });
+        }
+
+        float columnWidth = (rect.w - gap * 2.0f) / 3.0f;
+        const char* kinds[] = { "gender", "race", "style" };
+
+        for (int column = 0; column < 3; column++) {
+            const MuiRect area = { rect.x + column * (columnWidth + gap), rect.y, columnWidth, rect.h };
+            const std::vector<Line>& lines = lists[column];
+
+            float contentHeight = 0.0f;
+            for (const Line& line : lines) {
+                contentHeight += line.kind == -1 ? headingHeight : rowHeight;
+            }
+            std::string scrollId = "character.appearance." + std::to_string(column);
+            float offset = ui.scroll(scrollId, area, contentHeight);
+            bool scrolling = ui.isScrolling(scrollId);
+
+            muiPushClip(area);
+            float y = area.y - offset;
+            for (const Line& line : lines) {
+                MuiRect rowRect = { area.x, y, area.w, line.kind == -1 ? headingHeight : rowHeight };
+                y += rowRect.h;
+                if (rowRect.bottom() < area.y || rowRect.y > area.bottom()) {
+                    continue;
+                }
+
+                if (line.kind == -1) {
+                    muiDrawTextAligned(line.text, { rowRect.x + padding, rowRect.y, rowRect.w - padding * 2.0f, rowRect.h }, headingSize, theme.textDim, MuiAlign::Start, MuiAlign::End);
+                    continue;
+                }
+
+                bool chosen = line.value == (line.kind == 0 ? gender : (line.kind == 1 ? race : style));
+                std::string id = std::string("character.appearance.") + kinds[line.kind] + "." + std::to_string(line.value);
+                bool pressed;
+                if (row(ui, id, rowRect, item == Item::Appearance && itemIndex == line.kind && chosen, &pressed) && !scrolling) {
+                    if (!chosen) {
+                        _gsound_red_butt_press(-1, 0);
+                        if (line.kind == 0) {
+                            characterEditorSetGender(line.value);
+                        } else if (line.kind == 1) {
+                            heroAppearanceChoose(line.value, 0);
+                        } else {
+                            heroAppearanceChoose(race, line.value);
+                        }
+                    }
+                    select(Item::Appearance, line.kind);
+                }
+
+                float dot = ui.dp(5.0f);
+                float dotX = rowRect.x + padding + dot;
+                if (chosen) {
+                    muiFillCircle(dotX, rowRect.centerY(), dot, theme.accent);
+                } else {
+                    muiStrokeCircle(dotX, rowRect.centerY(), dot, ui.dp(1.2f), theme.textDim);
+                }
+
+                float labelX = dotX + dot + ui.dp(10.0f);
+                float labelWidth = rowRect.right() - labelX - padding;
+                muiDrawTextAligned(line.text, { labelX, rowRect.y, labelWidth, rowRect.h }, muiFitTextSize(line.text, labelWidth, size, ui.dp(10.0f)), chosen ? theme.accent : theme.text, MuiAlign::Start, MuiAlign::Center);
+            }
+            muiPopClip();
+        }
+    }
+
+    // Card: the game's picture drawn in the interface's color (the hero
+    // turning for his appearance), title, subtitle, description (scrolls
+    // when long).
+    void CharacterScreen::buildCard(MuiContext& ui, const MuiRect& rect, const CharacterEditorCard& card, const std::string& id, std::string* key, bool hero)
     {
         const MuiTheme& theme = muiTheme();
         ui.panel(rect);
@@ -1389,7 +1571,11 @@ namespace {
         int width;
         int height;
         SDL_Texture* picture = card.frmId.fid() != -1 ? muiLineArtTexture(card.frmId, &width, &height) : nullptr;
-        if (picture != nullptr) {
+        if (hero) {
+            float pictureHeight = content.h * 0.42f;
+            muiDrawDudeTurning({ content.x, y, content.w, pictureHeight }, now);
+            y += pictureHeight + ui.dp(8.0f);
+        } else if (picture != nullptr) {
             float pictureHeight = std::min(content.w * height / width, content.h * 0.42f);
             MuiRect pictureRect = muiFitRect({ content.x, y, content.w, pictureHeight }, static_cast<float>(width), static_cast<float>(height));
             muiDrawTexture(picture, pictureRect, theme.accent);
@@ -1670,7 +1856,11 @@ namespace {
         const MuiTheme& theme = muiTheme();
         ui.dim();
 
-        for (char32_t codepoint : ui.takeTextInput()) {
+        std::u32string typed = ui.takeTextInput();
+#ifdef __EMSCRIPTEN__
+        if (webTakeTextInput(typed)) name.clear();
+#endif
+        for (char32_t codepoint : typed) {
             // One line of the game's charset.
             if (codepoint < 0x20 || muiEncodeGameText(std::u32string(1, codepoint)).empty()) {
                 continue;
@@ -1700,6 +1890,13 @@ namespace {
         muiStrokeRoundRect(field, ui.dp(6.0f), ui.dp(1.2f), theme.buttonBorder);
 
         float size = ui.dp(18.0f);
+#ifdef __EMSCRIPTEN__
+        webTextInputField(name, field.x, field.y, field.w, field.h, size, kNameMaxLength);
+        if (webTextInputDone()) {
+            closeName(true);
+            return;
+        }
+#endif
         float textWidth = muiTextWidth(name, size);
         MuiRect textRect = field.inset(ui.dp(10.0f), 0.0f);
         muiDrawTextAligned(name, textRect, size, theme.accent, MuiAlign::Start, MuiAlign::Center);

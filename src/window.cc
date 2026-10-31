@@ -56,7 +56,7 @@ typedef struct ManagedButton {
     int x;
     int y;
     int flags;
-    int field_18;
+    ButtonFlags buttonFlags;
     char name[32];
     Program* program;
     unsigned char* pressed;
@@ -292,14 +292,14 @@ int scriptWindowSetHighlightColor(float r, float g, float b)
 }
 
 // 0x4B62E4
-bool _checkRegion(int windowIndex, int mouseX, int mouseY, int mouseEvent)
+bool _checkRegion(int windowIndex, int mouseX, int mouseY, MouseButtonEvent mouseEvent)
 {
     // TODO: Incomplete.
     return false;
 }
 
 // 0x4B6858
-bool scriptWindowCheckRegion(int windowIndex, int mouseX, int mouseY, int mouseEvent)
+bool scriptWindowCheckRegion(int windowIndex, int mouseX, int mouseY, MouseButtonEvent mouseEvent)
 {
     bool rc = _checkRegion(windowIndex, mouseX, mouseY, mouseEvent);
 
@@ -357,7 +357,7 @@ bool scriptWindowRefreshRegions()
                 region->rightProcs[3] = 0;
             }
 
-            int mouseEvent = mouseGetEvent();
+            MouseButtonEvent mouseEvent = mouseGetEvent();
             return scriptWindowCheckRegion(windowIndex, mouseX, mouseY, mouseEvent);
         }
     }
@@ -376,7 +376,7 @@ bool _checkAllRegions()
     int mouseY;
     mouseGetPosition(&mouseX, &mouseY);
 
-    int mouseEvent = mouseGetEvent();
+    MouseButtonEvent mouseEvent = mouseGetEvent();
     int win = windowGetAtPoint(mouseX, mouseY);
 
     for (int windowIndex = 0; windowIndex < MANAGED_WINDOW_COUNT; windowIndex++) {
@@ -733,7 +733,7 @@ bool scriptWindowHideNamed(const char* windowName)
     return false;
 }
 
-bool scriptWindowSetFlag(int windowId, int bitFlag, bool enabled)
+bool scriptWindowSetFlag(int windowId, WindowFlags bitFlag, bool enabled)
 {
     if (!windowIsValidWindowId(windowId) || windowId == 0) {
         return false;
@@ -883,7 +883,7 @@ int scriptWindowScale(const char* windowName, int x, int y, int width, int heigh
 }
 
 // 0x4B7F3C
-int scriptWindowCreate(const char* windowName, int x, int y, int width, int height, ColorWithFlags color, int flags)
+int scriptWindowCreate(const char* windowName, int x, int y, int width, int height, ColorWithFlags color, WindowFlags flags)
 {
 #if FALLOUT_TOUCH_ONLY
     // CE: Scripts' own windows aren't supported in the touch-only build
@@ -1486,10 +1486,9 @@ void _removeProgramReferences_3(Program* program)
 }
 
 // 0x4B9190 initWindow
-void windowInit(int resolution, int flags)
+void windowInit(int resolution, WindowManagerInitFlags flags)
 {
     char err[COMPAT_MAX_PATH];
-    int rc;
     int i, j;
 
     intLibRegisterProgramDeleteCallback(_removeProgramReferences_3);
@@ -1509,7 +1508,7 @@ void windowInit(int resolution, int flags)
         gManagedWindows[i].window = -1;
     }
 
-    rc = windowManagerInit(_gfx_init[resolution], directDrawFree, flags);
+    WindowManagerErr rc = windowManagerInit(_gfx_init[resolution], directDrawFree, flags);
     if (rc != WINDOW_MANAGER_OK) {
         switch (rc) {
         case WINDOW_MANAGER_ERR_INITIALIZING_VIDEO_MODE:
@@ -1731,7 +1730,7 @@ bool scriptWindowSetButtonFlag(const char* buttonName, int value)
 }
 
 // 0x4B99C8
-bool scriptWindowAddButton(const char* buttonName, int x, int y, int width, int height, int flags)
+bool scriptWindowAddButton(const char* buttonName, int x, int y, int width, int height, ButtonFlags flags)
 {
     if (gCurrentManagedWindowIndex == -1) {
         return false;
@@ -1832,12 +1831,12 @@ bool scriptWindowAddButton(const char* buttonName, int x, int y, int width, int 
     managedButton->hover = nullptr;
     managedButton->pressed = pressed;
     managedButton->normal = normal;
-    managedButton->field_18 = flags;
+    managedButton->buttonFlags = flags;
     managedButton->field_4C = nullptr;
     buttonSetMouseCallbacks(managedButton->btn, _doButtonOn, _doButtonOff, _doButtonPress, _doButtonRelease);
     scriptWindowSetButtonFlag(buttonName, 1);
 
-    if ((flags & BUTTON_FLAG_TRANSPARENT) != 0) {
+    if ((flags & BUTTON_FLAG_TRANSPARENT) != BUTTON_FLAG_NONE) {
         buttonSetMask(managedButton->btn, normal);
     }
 
@@ -1888,7 +1887,7 @@ bool scriptWindowAddButtonGfx(const char* buttonName, char* pressedFileName, cha
                 }
             }
 
-            if ((managedButton->field_18 & 0x20) != 0) {
+            if ((managedButton->buttonFlags & BUTTON_FLAG_TRANSPARENT) != BUTTON_FLAG_NONE) {
                 buttonSetMask(managedButton->btn, managedButton->normal);
             }
 
@@ -2127,7 +2126,7 @@ bool scriptWindowAddButtonTextWithOffsets(const char* buttonName, const char* te
 
             internal_free_safe(buffer, __FILE__, __LINE__); // "..\\int\\WINDOW.C", 2078
 
-            if ((managedButton->field_18 & 0x20) != 0) {
+            if ((managedButton->buttonFlags & BUTTON_FLAG_TRANSPARENT) != BUTTON_FLAG_NONE) {
                 buttonSetMask(managedButton->btn, managedButton->normal);
             }
 
@@ -2818,7 +2817,7 @@ bool scriptWindowShowNamed(const char* windowName)
     return false;
 }
 
-bool scriptWindowSetNamedFlag(const char* windowName, int bitFlag, bool enabled)
+bool scriptWindowSetNamedFlag(const char* windowName, WindowFlags bitFlag, bool enabled)
 {
     for (int index = 0; index < MANAGED_WINDOW_COUNT; index++) {
         ManagedWindow* managedWindow = &(gManagedWindows[index]);

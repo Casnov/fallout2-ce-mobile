@@ -1,13 +1,30 @@
 #include "perf_monitor.h"
 
 #include <stdio.h>
+#include <time.h>
 
+#include <chrono>
 #include <string>
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "game.h"
 #include "settings.h"
 
 namespace fallout {
+
+#ifdef __EMSCRIPTEN__
+// Reuse the existing per-second frame measurements in the local web overlay.
+// This is active only with perf_log, and never transmits device measurements.
+// clang-format off
+EM_JS(void, webPublishFrameTiming, (double fps, double longest, double logic, double upload, double ui, double present), {
+    Module['webFrameTiming'] = {fps:fps, longestMs:longest, logicMs:logic,
+        uploadMs:upload, uiMs:ui, presentMs:present};
+});
+// clang-format on
+#endif
 
 namespace {
 
@@ -29,6 +46,23 @@ namespace {
     Totals gTotals;
     long long gAllCounts[static_cast<int>(PerfCount::Count)] = {};
     FILE* gLog = nullptr;
+
+    // A frame this long also gets its own line (`perfMonitorFrame`): when,
+    // as actions.log's times, and its parts.
+    constexpr double kSlowFrameMs = 40.0;
+
+    bool openLog()
+    {
+        if (gLog == nullptr) {
+            gLog = fopen("perf.log", "a");
+            if (gLog == nullptr) {
+                return false;
+            }
+            fprintf(gLog, "# screen fps longest_ms | per frame ms: logic upload+map ui present sleep | screen_up world_up world_draw screen_draw ms | world uploads, world kpx, screen kpx\n");
+            fprintf(gLog, "# slow frame HH:MM:SS.mmm ms | logic upload+map ui present sleep\n");
+        }
+        return true;
+    }
 
     double toMs(Uint64 from, Uint64 to)
     {
@@ -119,6 +153,22 @@ void perfMonitorFrame(const PerfFrame& frame)
         if (interval > gTotals.longest) {
             gTotals.longest = interval;
         }
+        if (interval >= kSlowFrameMs && openLog()) {
+            auto now = std::chrono::system_clock::now();
+            time_t wallTime = std::chrono::system_clock::to_time_t(now);
+            int ms = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000);
+            char stamp[16];
+            strftime(stamp, sizeof(stamp), "%H:%M:%S", localtime(&wallTime));
+            fprintf(gLog, "slow frame %s.%03d %6.1f | %5.2f %5.2f %5.2f %5.2f %5.2f\n",
+                stamp,
+                ms,
+                interval,
+                toMs(gLastEnd, frame.start) - gSleptSinceFrame,
+                toMs(frame.start, frame.uiStart),
+                toMs(frame.uiStart, frame.uiEnd),
+                toMs(frame.uiEnd, frame.end),
+                gSleptSinceFrame);
+        }
     } else {
         gPeriodStart = frame.end;
     }
@@ -131,15 +181,15 @@ void perfMonitorFrame(const PerfFrame& frame)
         return;
     }
 
-    if (gLog == nullptr) {
-        gLog = fopen("perf.log", "a");
-        if (gLog == nullptr) {
-            return;
-        }
-        fprintf(gLog, "# screen fps longest_ms | per frame ms: logic upload+map ui present sleep | screen_up world_up world_draw screen_draw ms | world uploads, world kpx, screen kpx\n");
+    if (!openLog()) {
+        return;
     }
 
     double n = gTotals.frames;
+#ifdef __EMSCRIPTEN__
+    webPublishFrameTiming(n * 1000.0 / elapsed, gTotals.longest,
+        gTotals.logic / n, gTotals.upload / n, gTotals.ui / n, gTotals.present / n);
+#endif
     fprintf(gLog, "%-18s %5.1f %6.1f | %5.2f %5.2f %5.2f %5.2f %5.2f | %5.2f %5.2f %5.2f %5.2f | %4.1f %6.1f %6.1f\n",
         perfMonitorGameModeNames(GameMode::getCurrentGameMode()).c_str(),
         n * 1000.0 / elapsed,

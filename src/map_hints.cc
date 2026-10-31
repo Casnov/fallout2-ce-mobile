@@ -116,33 +116,6 @@ namespace {
         return true;
     }
 
-    // Outline of [tile]: a corner of a hex is where it meets two neighbours,
-    // the middle of the three centers, so it matches the game's grid at any
-    // zoom.
-    std::vector<SDL_FPoint> tileOutline(int tile, float scale)
-    {
-        SDL_FPoint center;
-        if (!tileCenter(tile, scale, &center)) {
-            return {};
-        }
-
-        SDL_FPoint neighbours[ROTATION_COUNT];
-        for (int rotation = 0; rotation < ROTATION_COUNT; rotation++) {
-            int neighbour = tileGetTileInDirection(tile, static_cast<Rotation>(rotation), 1);
-            if (neighbour == -1 || !tileCenter(neighbour, scale, &(neighbours[rotation]))) {
-                return {};
-            }
-        }
-
-        std::vector<SDL_FPoint> points;
-        for (int rotation = 0; rotation < ROTATION_COUNT; rotation++) {
-            const SDL_FPoint& a = neighbours[rotation];
-            const SDL_FPoint& b = neighbours[(rotation + 1) % ROTATION_COUNT];
-            points.push_back({ (center.x + a.x + b.x) / 3.0f, (center.y + a.y + b.y) / 3.0f });
-        }
-        return points;
-    }
-
     // MARK: Tactical view
 
     MuiColor paletteColor(int index, Uint8 alpha = 255)
@@ -208,14 +181,12 @@ namespace {
         return (static_cast<long long>(corner.x) << 32) ^ static_cast<unsigned int>(corner.y);
     }
 
-    // Under the selected tile and the hit chance, lying on the ground
-    // (ground_lines.h): a faint grid where the dude can walk, the area's
-    // border, everyone's tile in their outline's color (the dude's and the
-    // selected enemy's thicker).
-    void drawTacticalView(MuiContext& ui, float scale)
+    // Lying on the ground (ground_lines.h, between its begin and end): a
+    // faint grid where the dude can walk, the area's border, everyone's tile
+    // in their outline's color (the dude's and the selected enemy's
+    // thicker).
+    void addTacticalView(MuiContext& ui)
     {
-        groundLinesBegin(scale);
-
         const TacticalViewReach& reach = tacticalViewGetReach();
         if (!reach.reachable.empty()) {
             std::unordered_set<int> area(reach.reachable.begin(), reach.reachable.end());
@@ -296,8 +267,24 @@ namespace {
             }
             groundLinesAddPath(outline, true, ui.dp(thick ? 2.6f : 1.6f), paletteColor(color));
         }
+    }
 
-        groundLinesEnd();
+    // The tile dude walks to or would move to in combat, lying on the
+    // ground as the tactical view's tiles: filled faintly, its edge in
+    // [color], thinner zoomed out (down to 60%: tiles get small, the edge
+    // stays seen).
+    void addTileMarker(MuiContext& ui, int tile, MuiColor color)
+    {
+        std::array<SDL_Point, ROTATION_COUNT> corners;
+        if (!tileCorners3(tile, &corners)) {
+            return;
+        }
+        std::vector<SDL_FPoint> outline;
+        for (const SDL_Point& corner : corners) {
+            outline.push_back(cornerPoint(corner));
+        }
+        groundLinesAddFill(outline, color.withAlpha(45));
+        groundLinesAddPath(outline, true, ui.dp(1.6f) * std::clamp(worldViewGetZoom(), 0.6f, 1.0f), color);
     }
 
     float outlineRight(const std::vector<SDL_FPoint>& points)
@@ -402,34 +389,36 @@ namespace {
         const MuiTheme& theme = muiTheme();
         float scale = ui.screenRect().w / screenGetWidth();
 
-        if (tacticalViewIsShown()) {
-            drawTacticalView(ui, scale);
+        bool reachable = false;
+        if (gMoveTile != -1) {
+            int actionPoints = gDude->data.critter.combat.ap;
+            if (gMoveCost.tile != gMoveTile || gMoveCost.from != gDude->tile || gMoveCost.actionPoints != actionPoints) {
+                gMoveCost = { gMoveTile, gDude->tile, actionPoints, playerGetMoveCost(gMoveTile) };
+            }
+            reachable = gMoveCost.cost != -1 && gMoveCost.cost <= actionPoints;
         }
 
-        if (gDestination != -1) {
-            std::vector<SDL_FPoint> outline = tileOutline(gDestination, scale);
-            if (!outline.empty()) {
-                muiDrawPolyline(outline, ui.dp(1.5f), theme.accent.withAlpha(170), true);
+        // On the ground, in one draw: the tactical view, the tiles dude
+        // walks to and would move to.
+        if (tacticalViewIsShown() || gDestination != -1 || gMoveTile != -1) {
+            groundLinesBegin(scale);
+            if (tacticalViewIsShown()) {
+                addTacticalView(ui);
             }
+            if (gDestination != -1) {
+                addTileMarker(ui, gDestination, theme.accent);
+            }
+            if (gMoveTile != -1) {
+                addTileMarker(ui, gMoveTile, reachable ? theme.accent : kDanger);
+            }
+            groundLinesEnd();
         }
 
         if (gMoveTile != -1) {
-            std::vector<SDL_FPoint> outline = tileOutline(gMoveTile, scale);
-            if (!outline.empty()) {
-                int actionPoints = gDude->data.critter.combat.ap;
-                if (gMoveCost.tile != gMoveTile || gMoveCost.from != gDude->tile || gMoveCost.actionPoints != actionPoints) {
-                    gMoveCost = { gMoveTile, gDude->tile, actionPoints, playerGetMoveCost(gMoveTile) };
-                }
-
-                bool reachable = gMoveCost.cost != -1 && gMoveCost.cost <= actionPoints;
-                MuiColor color = reachable ? theme.accent : kDanger;
-                muiFillConvex(outline, color.withAlpha(45));
-                muiDrawPolyline(outline, ui.dp(1.5f), color, true);
-
-                // Cost inside the tile, with a shadow to read it over the
-                // ground.
-                SDL_FPoint center;
-                tileCenter(gMoveTile, scale, &center);
+            // Cost inside the tile, over what stands there, with a shadow to
+            // read it over the ground.
+            SDL_FPoint center;
+            if (tileCenter(gMoveTile, scale, &center)) {
                 if (gMoveCost.cost == -1) {
                     muiDrawIcon(MuiIcon::Cancel, center.x, center.y, ui.dp(12.0f), kDanger);
                 } else {
@@ -468,6 +457,9 @@ namespace {
 
 void mapHintsInit()
 {
+    // The tile markers lie on the ground in any mode (`addTileMarker`).
+    objectSetCoverRecorded(true);
+
     if (!gMapHintsPushed) {
         // Under the HUD (screens draw in the order they were pushed).
         muiPush(&gMapHintsScreen);

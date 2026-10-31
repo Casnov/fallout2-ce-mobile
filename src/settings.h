@@ -159,7 +159,15 @@ struct UISettings {
     bool edg_support = true;
 
     // Disables the player-centered map scroll limit.
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
+    // CE: On the phone and in the browser the limit is off by default and
+    // the player's setting, not the game's f2_res.ini's
+    // (game_config_migration.cc): the view is the device's and zooms out
+    // past the limit, a computer's screen.
+    bool ignore_scroll_limit = true;
+#else
     bool ignore_scroll_limit = false;
+#endif
 
     // Disables map edges, including vanilla scroll blockers and CE hi-res stencil.
     bool ignore_map_edges = false;
@@ -259,6 +267,8 @@ struct SoundSettings {
 };
 
 struct DebugSettings {
+    // Signed OTA test releases, debug APKs only (UpdateManager.java).
+    std::string update_repo;
     std::string mode = "environment";
     bool show_fps = false;
     // CE: Once a second appends frame timings to perf.log (see
@@ -322,6 +332,18 @@ struct EnhancementSettings {
     // creation) a third as long. Fades meaning time passes (skills, books,
     // encounters) and the splash's stay.
     bool fast_menu_fades = true;
+    // The HUD's highlight button (touch_hud.cc) outlines containers and
+    // corpses too, whatever the highlighting mod's
+    // Containers / Corpses of mods\sfall-mods.ini say: on the PC that mod
+    // works while a key is held, the button is the phone's way to find
+    // things. Colors and the rest still are the mod's.
+    bool highlight_containers = true;
+    bool highlight_corpses = true;
+    // ... and the things the game keeps out of highlighting (the "no
+    // highlight" flag of their protos: RPU's and other mods' hidden stashes,
+    // Fallout: Nevada's road sign) when they can be picked up
+    // (`_proto_action_can_pickup`). Ones a script hides stay dark.
+    bool highlight_hidden_items = true;
 };
 
 // CE: Zoomable map view, see world_view.h.
@@ -337,6 +359,8 @@ struct WorldViewSettings {
 
 // CE: Touch-first controls on the map, see touch_controls.h.
 struct TouchSettings {
+    // Optional daily GitHub release check. Manual checks work when off.
+    bool update_check = true;
 #ifdef __ANDROID__
     bool controls = true;
     // Touch HUD instead of the original interface bar, see touch_hud.h.

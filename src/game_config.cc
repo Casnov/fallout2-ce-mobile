@@ -18,7 +18,7 @@
 #include "scan_unimplemented.h"
 
 #if defined(__EMSCRIPTEN__)
-#include <emscripten.h>
+#include "loadsave.h"
 #endif
 
 namespace fallout {
@@ -158,7 +158,7 @@ bool gameConfigInit(bool isMapper, int argc, char** argv)
 
     if (!isMapper && gameConfigMigrateFromF2Res(gGameConfigFilePath, &gGameConfig)) {
         debugPrint("Migrated settings from f2_res.ini.\n");
-        configWriteEx(&gGameConfig, gGameConfigFilePath, CONFIG_RETAIN_ALL);
+        configWriteEx(&gGameConfig, gGameConfigFilePath, ConfigFlags::RetainAll);
     }
 
     // Add key-values from command line, which overrides both defaults and
@@ -172,14 +172,6 @@ bool gameConfigInit(bool isMapper, int argc, char** argv)
 
     return true;
 }
-
-#if defined(__EMSCRIPTEN__)
-// clang-format off
-EM_ASYNC_JS(void, do_save_idbfs_gameconfig, (), {
-    await new Promise((resolve, reject) => FS.syncfs(err => err ? reject(err) : resolve()))
-});
-// clang-format on
-#endif
 
 // Saves game config into the active config file.
 //
@@ -209,12 +201,15 @@ bool gameConfigSave()
         }
     }
 
-    if (!configWriteEx(savedConfig.get(), gGameConfigFilePath, CONFIG_RETAIN_ALL)) {
+    if (!configWriteEx(savedConfig.get(), gGameConfigFilePath, ConfigFlags::RetainAll)) {
+#ifdef __EMSCRIPTEN__
+        lsgWebCommitUserChanges(false);
+#endif
         return false;
     }
 
 #if defined(__EMSCRIPTEN__)
-    do_save_idbfs_gameconfig();
+    return lsgWebCommitUserChanges(true);
 #endif
 
     return true;

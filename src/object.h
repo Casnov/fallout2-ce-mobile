@@ -101,9 +101,10 @@ void objectSetTargetOutline(Object* obj);
 // with an outline shows it (target highlight aside). Drawing only - objects aren't changed (their flags
 // are saved). Redraws the map when it changes.
 void objectSetSeeThrough(bool seeThrough);
-// While see-through: what covers each pixel of the game's buffer (laid out
-// as it is), so the tactical view's tiles drawn over the map show as lying
-// on the ground. nullptr - not see-through.
+// While see-through or recorded (`objectSetCoverRecorded`): what covers each
+// pixel of the game's buffer (laid out as it is), so the tactical view's
+// tiles and the tile markers drawn over the map show as lying on the
+// ground. nullptr - neither.
 enum class ObjectSeeThroughCover : unsigned char {
     // The floor, flat objects.
     None,
@@ -115,6 +116,10 @@ enum class ObjectSeeThroughCover : unsigned char {
     Top,
 };
 const unsigned char* objectSeeThroughCover(int* width, int* height, int* pitch);
+// CE: What covers the ground kept whenever the map is drawn, not only while
+// see-through (the mobile UI's tile markers lie on the ground in any mode):
+// standing objects cover it, the dude over all. Drawing isn't changed.
+void objectSetCoverRecorded(bool recorded);
 // While see-through, drawing the map's standing objects and roofs: [src]'s
 // pixels (non-zero) drawn at [destX], [destY] of the buffer cover the
 // ground there with [cover]. [eggMask] - the dude's see-through-walls egg

@@ -67,6 +67,8 @@ bool touch_handle_cancel(SDL_FingerID fingerId);
 // ends that never came.
 // Returns true if any was forgotten.
 bool touch_forget_missing(const SDL_FingerID* down, int count);
+// An interrupted surface cannot produce a tap, pan end or delayed gesture.
+void touch_cancel_all();
 void touch_process_gesture();
 // CE: A finger followed by the recognizer is on the screen.
 bool touch_any_finger_down();

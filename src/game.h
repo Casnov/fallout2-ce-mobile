@@ -7,6 +7,7 @@
 #include "message.h"
 #include "skilldex.h"
 #include "touch.h"
+#include "window_manager.h"
 
 namespace fallout {
 
@@ -36,13 +37,17 @@ extern MessageList gCeMessageList;
 
 extern bool gGameLoaded;
 
-int gameInitWithOptions(const char* windowTitle, bool isMapper, int font, int flags, int argc, char** argv);
+int gameInitWithOptions(const char* windowTitle, bool isMapper, int font, WindowManagerInitFlags flags, int argc, char** argv);
 void gameReset();
 void gameExit();
 int gameHandleKey(int eventCode, bool isInCombatMode);
 void gameUiDisable(int allowScrolling);
 void gameUiEnable();
 bool gameUiIsDisabled();
+// CE: The game's UI disabled by a script (game_ui_disable): a scene played
+// as its authors meant it, until the UI is enabled again.
+void gameUiDisableByScript();
+bool gameUiIsDisabledByScript();
 int gameGetGlobalVar(GameGlobalVar var);
 int gameSetGlobalVar(GameGlobalVar var, int value);
 int globalVarsRead(const char* path, const char* section, int* variablesListLengthPtr, int** variablesListPtr);

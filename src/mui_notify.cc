@@ -35,6 +35,9 @@ namespace {
         MuiNoticeKind kind;
         // First frame it was seen (0 - not yet): time counts from there.
         unsigned int shownTime = 0;
+        // A log line seen in the HUD: a screen hiding the HUD (the world
+        // map) doesn't show it again as a plate.
+        bool seenInHud = false;
     };
 
     std::deque<Notice> gNotices;
@@ -230,7 +233,12 @@ void muiNotifyRender(MuiContext& ui)
                 if (notice.shownTime == 0) {
                     notice.shownTime = ui.now;
                 }
+                notice.seenInHud = true;
                 hud.push_back(&notice);
+                continue;
+            }
+
+            if (notice.seenInHud) {
                 continue;
             }
         }

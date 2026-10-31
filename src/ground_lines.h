@@ -22,6 +22,8 @@ namespace fallout {
 void groundLinesBegin(float scale);
 // One stroke along [points]: joined corners, soft edges.
 void groundLinesAddPath(const std::vector<SDL_FPoint>& points, bool closed, float width, MuiColor color);
+// The inside of the convex polygon [points], dimmed or hidden the same way.
+void groundLinesAddFill(const std::vector<SDL_FPoint>& points, MuiColor color);
 void groundLinesEnd();
 
 } // namespace fallout

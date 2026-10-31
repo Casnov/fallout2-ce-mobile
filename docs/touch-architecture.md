@@ -109,7 +109,8 @@ mouse too. Step 4 removes the cause:
     recognition (the finger is still down); pans, pinches and ends of what
     began are always handled, keeping gestures whole; two finger pinch moved
     from mouse.cc into touch controls (same rule as one finger: over the map
-    while it may scroll);
+    while it may scroll or the game waits for its own animation, not in a
+    script's scene: `touchControlsViewMayMove`);
   - no mouse path with touch-native input: no cursor warp to the finger
     (touch.cc), no emulated clicks, holds, drags or wheel (`_mouse_info`
     reads only a real mouse); the emulation (`mouseEmulateTouch`) runs only

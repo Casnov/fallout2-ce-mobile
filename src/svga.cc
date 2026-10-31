@@ -8,6 +8,10 @@
 
 #include <SDL.h>
 
+#ifdef __EMSCRIPTEN__
+#include "platform/web/window.h"
+#endif
+
 #include "color.h"
 #include "config.h"
 #include "dev_autotest.h"
@@ -154,6 +158,25 @@ int _GNW95_init_mode_ex(int width, int height, int bpp)
     }
 #endif
 
+#ifdef __EMSCRIPTEN__
+    // The browser owns the viewport. Use the same logical height as Android;
+    // the SDL window itself is sized in CSS pixels below.
+    int viewportWidth = webViewportWidth();
+    int viewportHeight = webViewportHeight();
+    if (viewportWidth > 0 && viewportHeight > 0) {
+        height = 480;
+        width = std::max(640, 480 * std::max(viewportWidth, viewportHeight) / std::min(viewportWidth, viewportHeight));
+        scale = 1;
+        settings.screen.resolution_x = width;
+        settings.screen.resolution_y = height;
+        settings.screen.windowed = WindowMode::Windowed;
+        // Keep canvas and logical aspect equal throughout this game session.
+        // SDL's touch normalization and output-pixel MUI then share the same
+        // surface even when browser chrome or orientation changes its bounds.
+        webConfigureViewport(width, height);
+    }
+#endif
+
     // Only allow scaling if resulting game resolution is >= 640x480
     if ((width / scale) < 640 || (height / scale) < 480) {
         scale = 1;
@@ -209,6 +232,11 @@ int _GNW95_init_window(int width, int height, WindowMode mode, int scale)
         SDL_SetHint(SDL_HINT_RENDER_BATCHING, "1");
 
         Uint32 windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI;
+#ifdef __EMSCRIPTEN__
+        // CSS controls the canvas. Let SDL update its backing store and input
+        // mapping when fullscreen/browser chrome changes the CSS dimensions.
+        windowFlags |= SDL_WINDOW_RESIZABLE;
+#endif
 
         if (mode == WindowMode::Fullscreen) {
             windowFlags |= SDL_WINDOW_FULLSCREEN;
@@ -216,7 +244,13 @@ int _GNW95_init_window(int width, int height, WindowMode mode, int scale)
             windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
         }
 
-        gSdlWindow = SDL_CreateWindow(gProgramWindowTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width * scale, height * scale, windowFlags);
+        int windowWidth = width * scale;
+        int windowHeight = height * scale;
+#ifdef __EMSCRIPTEN__
+        windowWidth = webViewportWidth();
+        windowHeight = webViewportHeight();
+#endif
+        gSdlWindow = SDL_CreateWindow(gProgramWindowTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, windowFlags);
         if (gSdlWindow == nullptr) {
             return -1;
         }
@@ -592,12 +626,24 @@ static void destroyRenderer()
 
 void handleWindowSizeChanged()
 {
+#ifdef __EMSCRIPTEN__
+    // SDL has already resized the canvas/backing store. Keep the renderer and
+    // its WebGL context alive: Emscripten deletes the canvas's SDL input
+    // listeners when a WebGL context is destroyed. Logical textures do not
+    // change size here; only the output viewport and UI layout need updating.
+    if (gSdlRenderer != nullptr) {
+        SDL_RenderSetLogicalSize(gSdlRenderer, screenGetWidth(), screenGetHeight());
+        muiInvalidateLayout();
+        windowRefreshAll(&_scr_size);
+    }
+#else
     movieHandleRendererReset();
     destroyRenderer();
     if (createRenderer(screenGetWidth(), screenGetHeight())) {
         // Repaint the newly created texture surface, just as on a window expose.
         windowRefreshAll(&_scr_size);
     }
+#endif
     if (gSdlSurface != nullptr) {
         screenConvertRect(0, 0, gSdlSurface->w, gSdlSurface->h);
     }
@@ -702,6 +748,9 @@ void renderPresent()
     devAutotestPump();
     devAutotestCapture(gSdlRenderer);
     SDL_RenderPresent(gSdlRenderer);
+#ifdef __EMSCRIPTEN__
+    webUpdateRendererInfo();
+#endif
     perfMonitorMark(&perf.end);
     perfMonitorFrame(perf);
 }

@@ -37,6 +37,7 @@
 #include "game_movie.h"
 #include "game_sound.h"
 #include "geometry.h"
+#include "hero_appearance.h"
 #include "input.h"
 #include "interface.h"
 #include "item.h"
@@ -81,6 +82,7 @@
 #include "world_view.h"
 #include "worldmap.h"
 #if defined(__EMSCRIPTEN__)
+#include "platform/web/storage.h"
 #include <emscripten.h>
 #endif
 
@@ -536,6 +538,9 @@ static bool gLoadSaveReady = false;
 // use it there), else next to the game ("ce-" names).
 static std::string portDataPath(const char* name)
 {
+#ifdef __EMSCRIPTEN__
+    return webPortDataPath(name);
+#endif
 #ifdef __ANDROID__
     const char* internal = SDL_AndroidGetInternalStoragePath();
     if (internal != nullptr) {
@@ -562,7 +567,13 @@ void _InitLoadSave()
     quickSaveSlots = std::min(quickSaveSlots, saveLoadTotalSlots - quickSaveFirstSlot);
     autoQuickSaveSlots = quickSaveSlots > 0;
     char saveRoot[COMPAT_MAX_PATH];
+#ifdef __EMSCRIPTEN__
+    // saveStorage inspects the final component without following links.
+    // The writer's DATA/SAVEGAME alias is for engine paths, not catalog roots.
+    snprintf(saveRoot, sizeof(saveRoot), "%s/savegame", kWebUserRoot);
+#else
     snprintf(saveRoot, sizeof(saveRoot), "%s\\SAVEGAME", _patches);
+#endif
     compat_windows_path_to_native(saveRoot);
     compat_resolve_path(saveRoot);
     gameSaveRecords().configure(portDataPath("saves.txt"));
@@ -2057,12 +2068,26 @@ static int lsgWindowFree(int windowType)
     return 0;
 }
 
-#if defined(__EMSCRIPTEN__)
-// clang-format off
-EM_ASYNC_JS(void, do_save_idbfs_loadsave, (), {
-    await new Promise((resolve, reject) => FS.syncfs(err => err ? reject(err) : resolve()))
-});
-// clang-format on
+#ifdef __EMSCRIPTEN__
+bool lsgWebCommitUserChanges(bool prepared, int previousSession)
+{
+    bool complete = prepared && gameSaveRecords().writesSucceeded();
+    if (complete && webCommitUserFiles()) {
+        return true;
+    }
+    // Failed checkpoints already restore the durable state. Native writer or
+    // records failures need the same rollback before any later settings sync.
+    if (!complete) {
+        webRollbackUserFiles();
+        webUserWriteFailed();
+    }
+    compatDirectoryEntryCacheClear();
+    gameSaveRecords().reload();
+    if (gLoadSaveReady) gSaveCatalog.refresh();
+    if (previousSession >= 0) gSaveCatalog.loaded(previousSession);
+    lsgInvalidateSlotCache();
+    return false;
+}
 #endif
 
 // 0x47D88C
@@ -2074,10 +2099,20 @@ static int lsgPerformSaveGame()
     snprintf(title, sizeof(title), "saving to slot %d", _slot_cursor + 1);
     actionLogState(title);
 
+#ifdef __EMSCRIPTEN__
+    int previousSession = gSaveCatalog.sessionTarget();
+#endif
     bool saved = gSaveCatalog.write(_slot_cursor, []() {
         compatDirectoryEntryCacheClear();
         return lsgWriteGameFiles() == 0;
     });
+#ifdef __EMSCRIPTEN__
+    if (saved) saveCompatibilityRecord(_slot_cursor);
+    // The checkpoint is part of writing the save: the music stays paused as
+    // during the files' writing, since the game loop can't refill its stream.
+    backgroundSoundPause();
+    saved = lsgWebCommitUserChanges(saved, previousSession);
+#endif
     lsgInvalidateSlotCache();
 
     // Some failures of the writer return before resuming it.
@@ -2090,7 +2125,9 @@ static int lsgPerformSaveGame()
     }
 
     // What the game is made of now, kept for this save.
+#ifndef __EMSCRIPTEN__
     saveCompatibilityRecord(_slot_cursor);
+#endif
 
     // Game Saved.
     gLoadSaveMessageListItem.num = 140;
@@ -2219,10 +2256,6 @@ static int lsgWriteGameFiles()
     snprintf(_gmpath, sizeof(_gmpath), "%s\\%s%.2d\\", "SAVEGAME", "SLOT", _slot_cursor + 1);
     MapDirErase(_gmpath, "BAK");
 
-#if defined(__EMSCRIPTEN__)
-    do_save_idbfs_loadsave();
-#endif
-
     backgroundSoundResume();
 
     return 0;
@@ -2332,6 +2365,8 @@ static int lsgLoadGameInSlot(int slot)
     // look (`[debug] action_log`).
     actionLogState("loaded, as saved");
     _proto_dude_update_gender();
+    // SFALL: Hero Appearance's race and style (sfallgv.sav), the hero's art.
+    heroAppearanceOnGameLoaded();
 
     // Game Loaded.
     gLoadSaveMessageListItem.num = 141;
@@ -2790,14 +2825,26 @@ int lsgMobileLoadGame(int slot)
 
 bool lsgMobileDeleteSlot(int slot)
 {
+#ifdef __EMSCRIPTEN__
+    int previousSession = gSaveCatalog.sessionTarget();
+#endif
     bool removed = gSaveCatalog.remove(slot);
+#ifdef __EMSCRIPTEN__
+    removed = lsgWebCommitUserChanges(removed, previousSession);
+#endif
     lsgInvalidateSlotCache();
     return removed;
 }
 
 int lsgMakeQuickSavePermanent(int slot)
 {
+#ifdef __EMSCRIPTEN__
+    int previousSession = gSaveCatalog.sessionTarget();
+#endif
     int target = gSaveCatalog.makePermanent(slot);
+#ifdef __EMSCRIPTEN__
+    if (!lsgWebCommitUserChanges(target != -1, previousSession)) target = -1;
+#endif
     lsgInvalidateSlotCache();
     return target;
 }
@@ -2817,7 +2864,22 @@ int lsgQuickSavesOverCount(int count)
     return gSaveCatalog.quickOverflow(quickSaveFirstSlot, count);
 }
 
-bool lsgSetQuickSaveCount(int count)
+#ifdef __EMSCRIPTEN__
+void lsgWebRestoreQuickRange(int previousCount, int previousSession)
+{
+    quickSaveSlots = previousCount;
+    autoQuickSaveSlots = previousCount > 0;
+    settings.ui.auto_quick_save = previousCount / slotsPerPage;
+    char saveRoot[COMPAT_MAX_PATH];
+    snprintf(saveRoot, sizeof(saveRoot), "%s/savegame", kWebUserRoot);
+    gSaveCatalog.configure(saveRoot, saveLoadTotalSlots, quickSaveFirstSlot, previousCount, &gameSaveRecords());
+    gSaveCatalog.refresh();
+    if (previousSession >= 0) gSaveCatalog.loaded(previousSession);
+    lsgInvalidateSlotCache();
+}
+#endif
+
+bool lsgSetQuickSaveCount(int count, [[maybe_unused]] bool persist)
 {
     int pages = std::clamp(count / slotsPerPage, 0, 10);
     if (!gLoadSaveReady || pages * slotsPerPage == quickSaveSlots) {
@@ -2825,10 +2887,17 @@ bool lsgSetQuickSaveCount(int count)
     }
 
     lsgMobileRefreshSlots();
+#ifdef __EMSCRIPTEN__
+    int oldSlots = quickSaveSlots;
+    int oldSession = gSaveCatalog.sessionTarget();
+#endif
     int slots = std::min(pages * slotsPerPage, saveLoadTotalSlots - quickSaveFirstSlot);
     bool moved = gSaveCatalog.setQuickRange(quickSaveFirstSlot, slots);
     lsgInvalidateSlotCache();
     if (!moved) {
+#ifdef __EMSCRIPTEN__
+        lsgWebCommitUserChanges(false, oldSession);
+#endif
         debugPrint("\nLOADSAVE: ** Quick saves not rearranged, their number stays! **\n");
         return false;
     }
@@ -2836,6 +2905,13 @@ bool lsgSetQuickSaveCount(int count)
     quickSaveSlots = slots;
     autoQuickSaveSlots = quickSaveSlots > 0;
     settings.ui.auto_quick_save = pages;
+#ifdef __EMSCRIPTEN__
+    // Slot moves and the new quick-slot count must land in the same checkpoint.
+    if (persist && !settingsSave()) {
+        lsgWebRestoreQuickRange(oldSlots, oldSession);
+        return false;
+    }
+#endif
     return true;
 }
 

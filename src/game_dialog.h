@@ -77,6 +77,8 @@ struct PartyControlView {
     // 0 custom, 1 coward, 2 defensive, 3 aggressive, 4 berserk (the game's
     // disposition buttons).
     int disposition;
+    // party.txt lists it, and the critter has a packet of it in ai.txt; the
+    // settings are only with the custom one.
     bool dispositionSupported[kPartyControlDispositionCount];
     // Index of each setting's current value, -1 - not applicable.
     int settings[kPartyControlSettingCount];

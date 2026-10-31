@@ -277,6 +277,36 @@ namespace {
         return std::u32string();
     }
 
+    // MARK: Fallback: the game's label art
+
+    // A FALLBACK only, not the way modes are named: kActionNames names every
+    // label the engine has (`interfaceGetItemActionFrmId`, the same for any
+    // mod's weapons). Should the engine get a label kActionNames doesn't
+    // know, its chip shows the game's own label art (the text the PC shows
+    // on the item button) instead of no name. Remove with its two callers
+    // and `Chip::fallbackArt` once not wanted.
+
+    // The art's width at the chip's label height, 0 without the art.
+    float fallbackArtWidth(const InterfaceFrmId& frmId, float height)
+    {
+        int width;
+        int artHeight;
+        if (muiArtTexture(frmId, 0, &width, &artHeight) == nullptr || artHeight <= 0) {
+            return 0.0f;
+        }
+        return width * height / artHeight;
+    }
+
+    void drawFallbackArt(const InterfaceFrmId& frmId, float x, float centerY, float height)
+    {
+        int width;
+        int artHeight;
+        SDL_Texture* texture = muiArtTexture(frmId, 0, &width, &artHeight);
+        if (texture != nullptr && artHeight > 0) {
+            muiDrawTexture(texture, { x, centerY - height / 2.0f, width * height / artHeight, height });
+        }
+    }
+
     void sendCommand(const GameCommand& command)
     {
         if (command.type == GameCommandType::None) {
@@ -830,6 +860,9 @@ namespace {
             // Index among the weapon's actions (`gModeChips`), -1.
             int modeIndex;
             float width;
+            // Fallback (`fallbackArtWidth`): the game's label art when the
+            // mode has no name, else empty.
+            InterfaceFrmId fallbackArt = InterfaceFrmId();
         };
 
         bool combat = isInCombat();
@@ -856,6 +889,10 @@ namespace {
                 bool aiming;
                 InterfaceFrmId frmId = interfaceGetItemActionFrmId(actions[index], &aiming);
                 chips.push_back({ ChipKind::Mode, actions[index], aiming ? MuiIcon::Aim : MuiIcon::Count, aiming ? std::u32string() : actionName(frmId), cost, actions[index] == current, false, index, 0.0f });
+                // Fallback: a label kActionNames doesn't know.
+                if (!aiming && chips.back().label.empty()) {
+                    chips.back().fallbackArt = frmId;
+                }
             }
             if (usable) {
                 chips.push_back({ ChipKind::Use, INTERFACE_ITEM_ACTION_USE, MuiIcon::Use, std::u32string(), interfaceGetItemActionCost(INTERFACE_ITEM_ACTION_USE), false, false, -1, 0.0f });
@@ -898,9 +935,12 @@ namespace {
             if (!chip.label.empty()) {
                 labelSize = muiFitTextSize(chip.label, labelWidth, textSize, minTextSize);
                 width += (chip.icon != MuiIcon::Count ? iconGap : 0.0f) + muiTextWidth(chip.label, labelSize);
+            } else if (chip.fallbackArt != InterfaceFrmId()) {
+                width += fallbackArtWidth(chip.fallbackArt, textSize);
             }
             if (chip.cost >= 0) {
-                width += (!chip.label.empty() ? costGap : (chip.icon != MuiIcon::Count ? iconGap : 0.0f));
+                bool named = !chip.label.empty() || chip.fallbackArt != InterfaceFrmId();
+                width += (named ? costGap : (chip.icon != MuiIcon::Count ? iconGap : 0.0f));
                 width += costIndent + muiTextWidth(numberText(chip.cost), costSize);
             }
             chip.width = width;
@@ -1013,9 +1053,13 @@ namespace {
                 float width = muiTextWidth(chip.label, labelSizes[index]);
                 muiDrawTextAligned(chip.label, { x, chipRect.y, width, chipRect.h }, labelSizes[index], color, MuiAlign::Start, MuiAlign::Center);
                 x += width;
+            } else if (chip.fallbackArt != InterfaceFrmId()) {
+                drawFallbackArt(chip.fallbackArt, x, chipRect.centerY(), textSize);
+                x += fallbackArtWidth(chip.fallbackArt, textSize);
             }
             if (chip.cost >= 0) {
-                x += !chip.label.empty() ? costGap : (chip.icon != MuiIcon::Count ? iconGap : 0.0f);
+                bool named = !chip.label.empty() || chip.fallbackArt != InterfaceFrmId();
+                x += named ? costGap : (chip.icon != MuiIcon::Count ? iconGap : 0.0f);
                 muiDrawIcon(MuiIcon::ActionPoints, x + boltSize / 2.0f - ui.dp(1.0f), chipRect.centerY() - ui.dp(4.0f), boltSize, color);
 
                 // The number over the bolt's lower right, cut out of it by
@@ -1157,16 +1201,16 @@ namespace {
     // Highlight button: outlines what can be picked up or searched, by the
     // options of sfall's highlighting mod (`[Highlighting]` of
     // mods\sfall-mods.ini, gl_highlighting.ssl, which works while its key is
-    // held) with the same rules and colors, toggled instead of held. Own
-    // options in the same section: IncludeNoHighlight=1 - also objects the
-    // game keeps out of highlighting (the mod only lets containers through),
-    // ExcludePids=a,b,... - protos never outlined.
+    // held) with the same rules and colors, toggled instead of held. The
+    // port's settings decide containers, corpses and the things the game
+    // keeps out of highlighting (`EnhancementSettings`). Own option in the
+    // same section: ExcludePids=a,b,... - protos never outlined.
     struct HighlightConfig {
         bool containers = false;
         bool corpses = false;
         bool critters = false;
         bool checkLineOfSight = false;
-        bool includeNoHighlight = false;
+        bool hiddenItems = false;
         int itemColor = 16;
         int containerColor = 32;
         int containerEmptyColor = 4;
@@ -1194,11 +1238,13 @@ namespace {
     HighlightConfig readHighlightConfig()
     {
         HighlightConfig config;
-        config.containers = highlightOption("Containers", 0) != 0;
-        config.corpses = highlightOption("Corpses", 0) != 0;
+        // The port's settings, not the mod's Containers / Corpses (see
+        // `EnhancementSettings`).
+        config.containers = settings.enhancements.highlight_containers;
+        config.corpses = settings.enhancements.highlight_corpses;
+        config.hiddenItems = settings.enhancements.highlight_hidden_items;
         config.critters = highlightOption("Critters", 0) != 0;
         config.checkLineOfSight = highlightOption("CheckLOS", 0) != 0;
-        config.includeNoHighlight = highlightOption("IncludeNoHighlight", 0) != 0;
         config.motionScanner = highlightOption("MotionScanner", 0);
 
         // Fallbacks as in the mod.
@@ -1259,7 +1305,10 @@ namespace {
             if (container && !config.containers) {
                 return 0;
             }
-            if ((object->flags & OBJECT_NO_HIGHLIGHT) != 0 && !container && !config.includeNoHighlight) {
+            // The game's "no highlight" things: containers as the mod has
+            // them (furniture, graves), the rest that can be picked up by
+            // the port's setting.
+            if ((object->flags & OBJECT_NO_HIGHLIGHT) != 0 && !container && !(config.hiddenItems && _proto_action_can_pickup(ProtoId(object)))) {
                 return 0;
             }
             if (config.checkLineOfSight && !dudeCanSee(object)) {

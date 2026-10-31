@@ -125,6 +125,9 @@ public class GameFilesTest {
         assertFalse(GameFiles.isGameFile("actions.log"));
         assertFalse(GameFiles.isGameFile("touch.log.old"));
         assertFalse(GameFiles.isGameFile("scr00001.bmp"));
+        assertFalse(GameFiles.isGameFile("debug.log"));
+        // A game's own log (Resurrection's change log) is its file.
+        assertTrue(GameFiles.isGameFile("fores_change.log"));
         assertFalse(GameFiles.isGameFile(".import-staging/master.dat"));
         assertTrue(GameFiles.isOriginalFile("MASTER.DAT"));
         assertTrue(GameFiles.isOriginalFile("sound/music/07desert.acm"));
@@ -141,6 +144,35 @@ public class GameFilesTest {
                 + "[sound]\r\nmusic_path1=sound\\music\\\r\nmaster_volume=10000\r\n"
                 + "\r\n[enhancements]\r\nmain_menu_continue=1\r\n",
             merged);
+    }
+
+    @Test
+    public void theGamesOwnScreenSettingsStay() {
+        // Fallout 1.5: Resurrection: fores.cfg has no [screen], its f2_res.ini
+        // names fores.dat; CE takes it from there while [screen] is missing.
+        String newConfig = "[system]\nmaster_dat=master.dat\n\n[ui]\nauto_quick_save=0\n";
+        String oldConfig = "[system]\nf2_res_dat=f2_res.dat\n\n[screen]\nresolution_x=1066\nresolution_y=480\n\n"
+            + "[ui]\nauto_quick_save=1\niface_bar_side_art=2\nsplash_screen_size=1\ndisplay_bonus_damage=1\nignore_scroll_limit=1\n";
+        // The scroll limit around the hero is the player's on the phone.
+        assertEquals("[system]\nmaster_dat=master.dat\n\n[ui]\nauto_quick_save=1\ndisplay_bonus_damage=1\nignore_scroll_limit=1\n",
+            GameFiles.mergeSettings(newConfig, oldConfig));
+    }
+
+    @Test
+    public void computerPathsInTheConfigFixed() throws IOException {
+        game = temporary.newFolder("game");
+        write("fallout2.cfg", "[sound]\r\nmusic_path1=C:\\Games\\Fallout 2\\data\\sound\\music\\\r\nmusic_path2=..\\data\\sound\\music\\\r\nmusic_volume=22000\r\n\r\n"
+            + "[system]\r\nmaster_dat=D:\\master.dat\r\ncritter_dat=..\\critter.dat\r\nmaster_patches=data\r\n");
+        GameImport.fixConfig(new File(game, "fallout2.cfg"));
+        assertEquals("[sound]\r\nmusic_path1=sound/music/\r\nmusic_path2=data/sound/music/\r\nmusic_volume=22000\r\n\r\n"
+            + "[system]\r\nmaster_dat=master.dat\r\ncritter_dat=critter.dat\r\nmaster_patches=data\r\n",
+            read("fallout2.cfg"));
+
+        // The game's own relative paths stay as they are.
+        String own = "[sound]\nmusic_path1=sound\\music\\\nmusic_path2=data/sound/music/\n";
+        write("fallout2.cfg", own);
+        GameImport.fixConfig(new File(game, "fallout2.cfg"));
+        assertEquals(own, read("fallout2.cfg"));
     }
 
     @Test
@@ -319,5 +351,268 @@ public class GameFilesTest {
         // Again: nothing left to do.
         GameFiles.finish(game);
         assertEquals("NEW", read("mods/new_mod.dat"));
+    }
+
+    // Fallout 2 with Fallout Et Tu in its subfolder, as on a computer: the
+    // mod's config names Fallout 2's files with "..\".
+    private static MemorySource fallout2WithEtTu() {
+        return new MemorySource()
+            .put("Fallout 2/master.dat", "MASTER")
+            .put("Fallout 2/critter.dat", "CRITTER")
+            .put("Fallout 2/fallout2.cfg", "[system]\nlanguage=russian\nmaster_dat=master.dat\n")
+            .put("Fallout 2/data/SAVEGAME/SLOT01/SAVE.DAT", "FALLOUT 2 SAVE")
+            .put("Fallout 2/Fallout1in2/Fallout2.cfg", "[system]\r\nlanguage=english\r\nmaster_dat=..\\master.dat\r\ncritter_dat=..\\critter.dat\r\n")
+            .put("Fallout 2/Fallout1in2/ddraw.ini", "[Misc]\nStartingMap=V13ent.map\n")
+            .put("Fallout 2/Fallout1in2/data/maps/v13ent.map", "MAP")
+            .put("Fallout 2/Fallout1in2/Fallout2.exe", "EXE");
+    }
+
+    @Test
+    public void modInASubfolderIsAChoice() throws IOException {
+        try {
+            GameImport.find(fallout2WithEtTu(), false);
+            fail("no choice");
+        } catch (GameImport.ChooseGameException e) {
+            assertEquals(Arrays.asList("Fallout 2/", "Fallout 2/Fallout1in2/"), e.roots);
+        }
+    }
+
+    @Test
+    public void modInASubfolderTakesFallout2sFiles() throws IOException {
+        game = temporary.newFolder("game");
+        MemorySource source = fallout2WithEtTu();
+        GameImport.Found found = GameImport.find(source, false, "Fallout 2/Fallout1in2/");
+        assertEquals("english", found.language);
+        GameFiles.Plan plan = GameImport.plan(found, game, true);
+        GameImport.install(source, found, plan, true, game, NO_PROGRESS);
+
+        assertEquals("MASTER", read("master.dat"));
+        assertEquals("CRITTER", read("critter.dat"));
+        assertEquals("MAP", read("data/maps/v13ent.map"));
+        assertTrue(exists("ddraw.ini"));
+        assertFalse(exists("Fallout2.exe"));
+        // Fallout 2's own saves stay out.
+        assertFalse(exists("data/SAVEGAME/SLOT01/SAVE.DAT"));
+        String config = read("Fallout2.cfg");
+        assertTrue(config, config.contains("master_dat=master.dat"));
+        assertTrue(config, config.contains("critter_dat=critter.dat"));
+    }
+
+    @Test
+    public void fallout2LeavesTheModInItsSubfolder() throws IOException {
+        game = temporary.newFolder("game");
+        MemorySource source = fallout2WithEtTu();
+        GameImport.Found found = GameImport.find(source, false, "Fallout 2/");
+        GameFiles.Plan plan = GameImport.plan(found, game, true);
+        GameImport.install(source, found, plan, true, game, NO_PROGRESS);
+
+        assertEquals("MASTER", read("master.dat"));
+        assertEquals("FALLOUT 2 SAVE", read("data/SAVEGAME/SLOT01/SAVE.DAT"));
+        assertFalse(exists("Fallout1in2"));
+    }
+
+    @Test
+    public void configNamingMissingFilesIsNoMod() throws IOException {
+        MemorySource source = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("backup/fallout2.cfg", "[system]\nmaster_dat=..\\master.dat\ncritter_dat=..\\nothing.dat\n");
+        GameImport.Found found = GameImport.find(source, false);
+        assertEquals("", found.root);
+    }
+
+    // Fallout 1.5: Resurrection as its installer leaves it: a subfolder of
+    // Fallout 2 whose ddraw.ini names its own config, the mod's music put in
+    // Fallout 2's sound\music.
+    private static MemorySource fallout2WithResurrection() {
+        return new MemorySource()
+            .put("Fallout 2/master.dat", "MASTER")
+            .put("Fallout 2/critter.dat", "CRITTER")
+            .put("Fallout 2/fallout2.cfg", "[system]\nlanguage=english\n")
+            .put("Fallout 2/sound/music/25albuq.acm", "MOD MUSIC")
+            .put("Fallout 2/data/sound/music/02mstrlr.acm", "FALLOUT 2 MUSIC")
+            .put("Fallout 2/Resurrection/ddraw.ini", "[Main]\r\nStartingMap=nh_cave.map\r\n[Misc]\r\nConfigFile=fores.cfg\r\n")
+            .put("Fallout 2/Resurrection/fores.cfg", "[sound]\r\nmusic_path1=..\\data\\sound\\music\\\r\nmusic_path2=..\\sound\\music\\\r\n"
+                + "[system]\r\ncritter_dat=..\\critter.dat\r\nlanguage=english\r\nmaster_dat=..\\master.dat\r\n")
+            .put("Fallout 2/Resurrection/fores.dat", "MOD")
+            .put("Fallout 2/Resurrection/data/maps/nh_cave.map", "MAP");
+    }
+
+    @Test
+    public void configNameFromDdrawIni() {
+        assertEquals("fallout2.cfg", GameFiles.configName((String) null));
+        assertEquals("fallout2.cfg", GameFiles.configName("[Main]\nUseCommandLine=0\n"));
+        assertEquals("fores.cfg", GameFiles.configName("[Misc]\r\nConfigFile = fores.cfg ; the mod's\r\n"));
+        assertEquals("fallout2.cfg", GameFiles.configName("[Misc]\nConfigFile=\n"));
+        // Out of the game's folder, or another section: the default.
+        assertEquals("fallout2.cfg", GameFiles.configName("[Misc]\nConfigFile=..\\fallout2.cfg\n"));
+        assertEquals("fallout2.cfg", GameFiles.configName("[Main]\nConfigFile=fores.cfg\n"));
+    }
+
+    @Test
+    public void modWithItsOwnConfigAndMusicOutside() throws IOException {
+        try {
+            GameImport.find(fallout2WithResurrection(), false);
+            fail("no choice");
+        } catch (GameImport.ChooseGameException e) {
+            assertEquals(Arrays.asList("Fallout 2/", "Fallout 2/Resurrection/"), e.roots);
+        }
+
+        game = temporary.newFolder("game");
+        MemorySource source = fallout2WithResurrection();
+        GameImport.Found found = GameImport.find(source, false, "Fallout 2/Resurrection/");
+        assertEquals("fores.cfg", found.config);
+        GameFiles.Plan plan = GameImport.plan(found, game, true);
+        GameImport.install(source, found, plan, true, game, NO_PROGRESS);
+
+        assertEquals("MASTER", read("master.dat"));
+        assertEquals("CRITTER", read("critter.dat"));
+        assertEquals("MOD", read("fores.dat"));
+        // The config's two music folders at the paths fixConfig gives them.
+        assertEquals("FALLOUT 2 MUSIC", read("sound/music/02mstrlr.acm"));
+        assertEquals("MOD MUSIC", read("data/sound/music/25albuq.acm"));
+        String config = read("fores.cfg");
+        assertTrue(config, config.contains("master_dat=master.dat"));
+        assertTrue(config, config.contains("music_path1=sound/music/"));
+        assertTrue(config, config.contains("music_path2=data/sound/music/"));
+        assertFalse(exists("fallout2.cfg"));
+        assertEquals(new File(game, "fores.cfg"), GameFiles.configFile(game));
+        assertTrue(GameImport.isInstalled(game));
+    }
+
+    @Test
+    public void modsOwnFilesWinOverItsMusicOutside() throws IOException {
+        game = temporary.newFolder("game");
+        MemorySource source = fallout2WithResurrection()
+            .put("Fallout 2/Resurrection/data/sound/music/25albuq.acm", "MOD'S OWN");
+        GameImport.Found found = GameImport.find(source, false, "Fallout 2/Resurrection/");
+        GameFiles.Plan plan = GameImport.plan(found, game, true);
+        GameImport.install(source, found, plan, true, game, NO_PROGRESS);
+        assertEquals("MOD'S OWN", read("data/sound/music/25albuq.acm"));
+    }
+
+    @Test
+    public void replacingKeepsTheSettingsOfTheGamesOwnConfig() throws IOException {
+        game = temporary.newFolder("game");
+        GameImport.Found found = GameImport.find(fallout2WithResurrection(), false, "Fallout 2/Resurrection/");
+        GameImport.install(fallout2WithResurrection(), found, GameImport.plan(found, game, true), true, game, NO_PROGRESS);
+        write("fores.cfg", read("fores.cfg") + "\n[preferences]\ngame_difficulty=2\n");
+
+        // The same game again, as "Replace game": the player's setting stays.
+        MemorySource again = fallout2WithResurrection();
+        GameImport.Found replacing = GameImport.find(again, true, "Fallout 2/Resurrection/");
+        GameFiles.Plan plan = GameImport.plan(replacing, game, false);
+        assertFalse(plan.removed.contains("fores.cfg"));
+        GameImport.install(again, replacing, plan, false, game, NO_PROGRESS);
+        assertTrue(read("fores.cfg"), read("fores.cfg").contains("game_difficulty=2"));
+    }
+
+    @Test
+    public void masterDatAsAFolder() throws IOException {
+        // Fallout: Nevada 1.00: master.dat is a folder.
+        game = temporary.newFolder("game");
+        MemorySource source = new MemorySource()
+            .put("Fallout_Nevada/master.dat/art/intrface/mainmenu.frm", "ART")
+            .put("Fallout_Nevada/master.dat/maps/vault.map", "MAP")
+            .put("Fallout_Nevada/critter.dat", "CRITTER")
+            .put("Fallout_Nevada/fallout2.cfg", "[system]\nlanguage=russian\nmaster_dat=master.dat\n");
+        GameImport.Found found = GameImport.find(source, false);
+        assertEquals("Fallout_Nevada/", found.root);
+        assertEquals("russian", found.language);
+        GameImport.install(source, found, GameImport.plan(found, game, true), true, game, NO_PROGRESS);
+        assertEquals("ART", read("master.dat/art/intrface/mainmenu.frm"));
+        assertTrue(GameImport.isInstalled(game));
+        assertTrue(GameFiles.isOriginalFile("master.dat/maps/vault.map"));
+    }
+
+    @Test
+    public void masterDatFileAndFolderReplaceEachOther() throws IOException {
+        // Fallout 2 (master.dat a file) replaced by Fallout: Nevada 1.00
+        // (a folder), then the other way.
+        installGame();
+        MemorySource nevada = new MemorySource()
+            .put("Fallout_Nevada/master.dat/art/intrface/mainmenu.frm", "ART")
+            .put("Fallout_Nevada/critter.dat", "CRITTER")
+            .put("Fallout_Nevada/fallout2.cfg", "[system]\nmaster_dat=master.dat\n");
+        GameImport.Found found = GameImport.find(nevada, true);
+        GameImport.install(nevada, found, GameImport.plan(found, game, false), false, game, NO_PROGRESS);
+        assertEquals("ART", read("master.dat/art/intrface/mainmenu.frm"));
+        assertFalse(GameFiles.isCommitPending(game));
+
+        MemorySource fallout2 = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER");
+        found = GameImport.find(fallout2, true);
+        GameImport.install(fallout2, found, GameImport.plan(found, game, false), false, game, NO_PROGRESS);
+        assertEquals("MASTER", read("master.dat"));
+        assertEquals("SAVE", read("data/SAVEGAME/SLOT01/SAVE.DAT"));
+    }
+
+    @Test
+    public void foldersTakeTheInstalledCase() throws IOException {
+        // CE sees one of "DATA/" and "data/": the files go into the one there.
+        installGame();
+        write("data/maps/old.map", "OLD MAP");
+        MemorySource source = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("DATA/MAPS/new.map", "NEW MAP")
+            .put("Data/Proto/items/00000001.pro", "PRO")
+            .put("DATA/proto/ITEMS/00000002.pro", "PRO 2");
+        // The paths, not the folders: this computer's disk may ignore case.
+        GameImport.Found found = GameImport.find(source, false);
+        GameFiles.Plan plan = GameImport.plan(found, game, false);
+        assertTrue(plan.paths.toString(), plan.paths.contains("data/maps/new.map"));
+        assertTrue(plan.paths.toString(), plan.paths.contains("data/Proto/items/00000001.pro"));
+        assertTrue(plan.paths.toString(), plan.paths.contains("data/Proto/items/00000002.pro"));
+        GameImport.install(source, found, plan, false, game, NO_PROGRESS);
+        assertEquals("PRO 2", read("data/Proto/items/00000002.pro"));
+    }
+
+    @Test
+    public void anotherGamesConfigGoesItsSettingsCarried() throws IOException {
+        // Resurrection (fores.cfg) replaced by Fallout 2 (fallout2.cfg).
+        game = temporary.newFolder("game");
+        GameImport.Found found = GameImport.find(fallout2WithResurrection(), false, "Fallout 2/Resurrection/");
+        GameImport.install(fallout2WithResurrection(), found, GameImport.plan(found, game, true), true, game, NO_PROGRESS);
+        write("fores.cfg", read("fores.cfg") + "\n[preferences]\ngame_difficulty=2\n");
+        write("fores_change.log", "CHANGES");
+
+        MemorySource fallout2 = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("fallout2.cfg", "[system]\nlanguage=english\n\n[preferences]\ngame_difficulty=1\n");
+        found = GameImport.find(fallout2, true);
+        GameImport.install(fallout2, found, GameImport.plan(found, game, false), false, game, NO_PROGRESS);
+        assertFalse(exists("fores.cfg"));
+        assertFalse(exists("fores_change.log"));
+        assertTrue(read("fallout2.cfg"), read("fallout2.cfg").contains("game_difficulty=2"));
+    }
+
+    @Test
+    public void namesInAnyLanguageAreCopied() throws IOException {
+        // Fallout: Nevada's docs; the journal's paths are UTF-8.
+        installGame();
+        MemorySource source = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("!docs/Библия Невады.pdf", "PDF");
+        install(source, false, false);
+        assertEquals("PDF", read("!docs/Библия Невады.pdf"));
+    }
+
+    @Test
+    public void aComputersLogsOfTheAppStayThere() throws IOException {
+        installGame();
+        MemorySource source = new MemorySource()
+            .put("master.dat", "MASTER")
+            .put("critter.dat", "CRITTER")
+            .put("actions.log", "A COMPUTER'S JOURNAL")
+            .put("debug.log", "CE'S LOG")
+            .put("fores_change.log", "THE GAME'S OWN");
+        install(source, false, false);
+        assertEquals("LOG", read("actions.log"));
+        assertFalse(exists("debug.log"));
+        assertEquals("THE GAME'S OWN", read("fores_change.log"));
     }
 }

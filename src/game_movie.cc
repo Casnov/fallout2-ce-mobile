@@ -24,6 +24,7 @@
 #include "svga.h"
 #include "text_font.h"
 #include "touch.h"
+#include "window.h"
 #include "window_manager.h"
 
 namespace fallout {
@@ -31,7 +32,7 @@ namespace fallout {
 static char* gameMovieBuildSubtitlesFilePath(char* movieFilePath);
 static bool gameMovieFindFilePath(char* movieFilePath, size_t movieFilePathSize, const char* movieFileName);
 static bool gameMovieFindFilePathInDir(char* movieFilePath, size_t movieFilePathSize, const char* dir, const char* movieFileName);
-static int gameMoviePlayMobile(int movie, int flags);
+static int gameMoviePlayMobile(GameMovie movie, GameMovieFlags flags);
 static void gameMovieInitFileNames();
 static bool gameMovieIsValidFileName(const char* fileName);
 static void gameMovieLoadConfigFileNames();
@@ -150,9 +151,9 @@ int gameMoviesSave(File* stream)
 
 // gmovie_play
 // 0x44E690 gmovie_play
-int gameMoviePlay(int movie, int flags)
+int gameMoviePlay(GameMovie movie, GameMovieFlags flags)
 {
-    if (movie < 0 || movie >= GAME_MOVIE_MAX_COUNT || movieFileNames[movie].empty()) {
+    if (!gameMovieExtendedIsValid(movie) || movieFileNames[movie].empty()) {
         debugPrint("\ngmovie_play() - Error: Invalid movie %d\n", movie);
         return -1;
     }
@@ -177,7 +178,7 @@ int gameMoviePlay(int movie, int flags)
         return -1;
     }
 
-    if ((flags & GAME_MOVIE_FADE_IN) != 0) {
+    if ((flags & GameMovieFlags::FadeIn) != GameMovieFlags::None) {
         paletteFadeTo(gPaletteBlack);
         gGameMovieFaded = true;
     }
@@ -193,9 +194,9 @@ int gameMoviePlay(int movie, int flags)
         return -1;
     }
 
-    if ((flags & GAME_MOVIE_STOP_MUSIC) != 0) {
+    if ((flags & GameMovieFlags::StopMusic) != GameMovieFlags::None) {
         backgroundSoundDelete();
-    } else if ((flags & GAME_MOVIE_PAUSE_MUSIC) != 0) {
+    } else if ((flags & GameMovieFlags::PauseMusic) != GameMovieFlags::None) {
         backgroundSoundPause();
     }
 
@@ -220,7 +221,7 @@ int gameMoviePlay(int movie, int flags)
     int oldFont;
     if (subtitlesEnabled) {
         const char* subtitlesPaletteFilePath;
-        if (movie < MOVIE_COUNT && gMoviePaletteFilePaths[movie] != nullptr) {
+        if (gameMovieIsValid(movie) && gMoviePaletteFilePaths[movie] != nullptr) {
             subtitlesPaletteFilePath = gMoviePaletteFilePaths[movie];
         } else {
             subtitlesPaletteFilePath = "art\\cuts\\subtitle.pal";
@@ -241,7 +242,7 @@ int gameMoviePlay(int movie, int flags)
         mouseShowCursor();
     }
 
-    while (mouseGetEvent() != 0) {
+    while (mouseGetEvent() != MouseButtonEvent::None) {
         _mouse_info();
     }
 
@@ -253,8 +254,8 @@ int gameMoviePlay(int movie, int flags)
     _zero_vid_mem();
     _movieRun(win, movieFilePath);
 
-    int pressed = 0;
-    int buttons;
+    MouseButtonEvent pressed = MouseButtonEvent::None;
+    MouseButtonEvent buttons;
     do {
         // CE: Don't spin without pause - on Android busy loop starves touch
         // input delivery and triggers "app not responding".
@@ -278,7 +279,7 @@ int gameMoviePlay(int movie, int flags)
         sharedFpsLimiter.throttle();
         // Exit on mouse only after a click cycle: observe left/right down at
         // least once, then wait until both are released.
-    } while (((pressed & 1) == 0 && (pressed & 2) == 0) || (buttons & 1) != 0 || (buttons & 2) != 0);
+    } while (((pressed & MouseButtonEvent::LeftButtonDown) == MouseButtonEvent::None && (pressed & MouseButtonEvent::RightButtonDown) == MouseButtonEvent::None) || (buttons & MouseButtonEvent::LeftButtonDown) != MouseButtonEvent::None || (buttons & MouseButtonEvent::RightButtonDown) != MouseButtonEvent::None);
 
     _movieStop();
     _moviefx_stop();
@@ -312,11 +313,11 @@ int gameMoviePlay(int movie, int flags)
     // 640x480). This leads to everything outside this rect to remain black.
     windowRefreshAll(&_scr_size);
 
-    if ((flags & GAME_MOVIE_PAUSE_MUSIC) != 0) {
+    if ((flags & GameMovieFlags::PauseMusic) != GameMovieFlags::None) {
         backgroundSoundResume();
     }
 
-    if ((flags & GAME_MOVIE_FADE_OUT) != 0) {
+    if ((flags & GameMovieFlags::FadeOut) != GameMovieFlags::None) {
         if (!subtitlesEnabled) {
             colorPaletteLoad("color.pal");
         }
@@ -335,7 +336,7 @@ static int gGameMovieMobile = -1;
 // The movie starts playing into the player's texture: its file, subtitles
 // when on and there are some (the player draws them, no subtitles palette),
 // movie effects. Music is the callers' business.
-static bool gameMovieBeginMobile(int movie)
+static bool gameMovieBeginMobile(GameMovie movie)
 {
     if (gGameMovieMobile != -1 || movie < 0 || movie >= GAME_MOVIE_MAX_COUNT || movieFileNames[movie].empty()) {
         return false;
@@ -379,7 +380,7 @@ static void gameMovieEndMobile()
     _moviefx_stop();
     _movieUpdate();
 
-    gameMovieMarkSeen(gGameMovieMobile);
+    gameMovieMarkSeen(static_cast<GameMovie>(gGameMovieMobile));
     gGameMovieMobile = -1;
 
     colorCycleEnable();
@@ -387,7 +388,7 @@ static void gameMovieEndMobile()
 
 bool gameMovieStartMobile(int movie)
 {
-    if (!gameMovieBeginMobile(movie)) {
+    if (!gameMovieBeginMobile(static_cast<GameMovie>(movie))) {
         return false;
     }
 
@@ -411,18 +412,28 @@ void gameMovieFinishMobile()
 // CE: `gameMoviePlay` under the mobile UI: the movie screen of the mobile UI
 // plays it (a tap or a key skips it, like the game's), the game's fades and
 // music flags as they were.
-static int gameMoviePlayMobile(int movie, int flags)
+static int gameMoviePlayMobile(GameMovie movie, GameMovieFlags flags)
 {
+    // As `gameMoviePlay`: a movie that isn't there fails before the fades
+    // and the music's pause (a mod without the game's movies, as Fallout:
+    // Resurrection without the Arroyo dreams the timers ask for every game
+    // event check: two whole fades over the world map each time).
+    char movieFilePath[COMPAT_MAX_PATH];
+    if (!gameMovieFindFilePath(movieFilePath, sizeof(movieFilePath), movieFileNames[movie].c_str())) {
+        debugPrint("\ngmovie_play() - Error: Unable to open %s\n", movieFileNames[movie].c_str());
+        return -1;
+    }
+
     gGameMovieIsPlaying = true;
 
-    if ((flags & GAME_MOVIE_FADE_IN) != 0) {
+    if ((flags & GameMovieFlags::FadeIn) != GameMovieFlags::None) {
         paletteFadeTo(gPaletteBlack);
         gGameMovieFaded = true;
     }
 
-    if ((flags & GAME_MOVIE_STOP_MUSIC) != 0) {
+    if ((flags & GameMovieFlags::StopMusic) != GameMovieFlags::None) {
         backgroundSoundDelete();
-    } else if ((flags & GAME_MOVIE_PAUSE_MUSIC) != 0) {
+    } else if ((flags & GameMovieFlags::PauseMusic) != GameMovieFlags::None) {
         backgroundSoundPause();
     }
 
@@ -436,11 +447,11 @@ static int gameMoviePlayMobile(int movie, int flags)
     // The game's windows under the movie screen are drawn again.
     windowRefreshAll(&_scr_size);
 
-    if ((flags & GAME_MOVIE_PAUSE_MUSIC) != 0) {
+    if ((flags & GameMovieFlags::PauseMusic) != GameMovieFlags::None) {
         backgroundSoundResume();
     }
 
-    if ((flags & GAME_MOVIE_FADE_OUT) != 0) {
+    if ((flags & GameMovieFlags::FadeOut) != GameMovieFlags::None) {
         paletteFadeTo(_cmap);
         gGameMovieFaded = false;
     }
@@ -449,18 +460,18 @@ static int gameMoviePlayMobile(int movie, int flags)
     return 0;
 }
 
-const char* gameMovieGetDefaultFileName(int movie)
+const char* gameMovieGetDefaultFileName(GameMovie movie)
 {
-    if (movie < 0 || movie >= MOVIE_COUNT) {
+    if (!gameMovieIsValid(movie)) {
         return nullptr;
     }
 
     return movieDefaultFileNames[movie];
 }
 
-bool gameMovieSetPath(int movie, const char* fileName)
+bool gameMovieSetPath(GameMovie movie, const char* fileName)
 {
-    if (movie < 0 || movie >= GAME_MOVIE_MAX_COUNT || !gameMovieIsValidFileName(fileName)) {
+    if (!gameMovieExtendedIsValid(movie) || !gameMovieIsValidFileName(fileName)) {
         return false;
     }
 
@@ -468,9 +479,9 @@ bool gameMovieSetPath(int movie, const char* fileName)
     return true;
 }
 
-void gameMovieMarkSeen(int movie)
+void gameMovieMarkSeen(GameMovie movie)
 {
-    if (movie >= 0 && movie < MOVIE_COUNT) {
+    if (gameMovieIsValid(movie)) {
         gGameMoviesSeen[movie] = 1;
     }
 }
@@ -485,9 +496,9 @@ void gameMovieFadeOut()
 }
 
 // 0x44EB04 gmovie_has_been_played
-bool gameMovieIsSeen(int movie)
+bool gameMovieIsSeen(GameMovie movie)
 {
-    if (movie < 0 || movie >= MOVIE_COUNT) {
+    if (!gameMovieIsValid(movie)) {
         return false;
     }
 
@@ -553,7 +564,7 @@ static void gameMovieInitFileNames()
         fileName.clear();
     }
 
-    for (int index = 0; index < MOVIE_COUNT; index++) {
+    for (int index = MOVIE_FIRST; index < MOVIE_COUNT; index++) {
         movieFileNames[index] = movieDefaultFileNames[index];
     }
 }
@@ -568,7 +579,7 @@ static bool gameMovieIsValidFileName(const char* fileName)
 static void gameMovieLoadConfigFileNames()
 {
     char key[16];
-    for (int index = 0; index < GAME_MOVIE_MAX_COUNT; index++) {
+    for (GameMovie index = MOVIE_FIRST; index < GAME_MOVIE_MAX_COUNT; index++) {
         snprintf(key, sizeof(key), "movie%d", index + 1);
 
         char* fileName;

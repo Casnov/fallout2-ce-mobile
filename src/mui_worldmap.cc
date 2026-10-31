@@ -99,7 +99,7 @@ namespace {
     public:
         std::u32string areaName(int area) const;
         // Where the party is: the town's name, empty in the wasteland.
-        std::u32string partyPlace() const { return areaName(state.currentArea); }
+        std::u32string partyPlace() const;
 
     private:
         void ask(MuiWorldmapActionType type, float x = 0.0f, float y = 0.0f, int area = -1);
@@ -128,6 +128,18 @@ namespace {
             }
         }
         return std::u32string();
+    }
+
+    // Where the party is: the title a mod gave the town (sfall shows it
+    // over the party), else its name.
+    std::u32string WorldmapScreen::partyPlace() const
+    {
+        for (const WorldmapMobileCity& city : state.cities) {
+            if (city.area == state.currentArea && !city.title.empty()) {
+                return gameText(city.title);
+            }
+        }
+        return areaName(state.currentArea);
     }
 
     void WorldmapScreen::setupView(const MuiRect& screen, MuiContext& ui)
@@ -261,8 +273,11 @@ namespace {
                 }
             }
 
-            if (!city.name.empty()) {
-                std::u32string name = gameText(city.name);
+            // Town names hidden by a mod: the place the party is at keeps
+            // its title, as sfall shows it over the party.
+            std::u32string name = !city.label.empty() ? gameText(city.label) : city.area == state.currentArea ? partyPlace()
+                                                                                                              : std::u32string();
+            if (!name.empty()) {
                 float size = ui.dp(12.0f);
                 float width = muiTextWidth(name, size) + ui.dp(10.0f);
                 MuiRect label = { x - width / 2.0f, y + radius + ui.dp(3.0f), width, ui.dp(18.0f) };
@@ -510,7 +525,7 @@ namespace {
         std::u32string label;
         if (state.currentArea >= 0) {
             std::u32string format = muiDecodeGameText(muiText(kTextEnter, "Enter %s"));
-            std::u32string name = areaName(state.currentArea);
+            std::u32string name = partyPlace();
             size_t at = format.find(U"%s");
             label = at != std::u32string::npos ? format.substr(0, at) + name + format.substr(at + 2) : format + U" " + name;
         } else {

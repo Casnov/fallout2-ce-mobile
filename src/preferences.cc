@@ -37,7 +37,7 @@ namespace fallout {
 #define PRIMARY_OPTION_VALUE_COUNT 4
 #define SECONDARY_OPTION_VALUE_COUNT 2
 
-typedef enum Preference {
+enum Preference : int {
     PREF_GAME_DIFFICULTY,
     PREF_COMBAT_DIFFICULTY,
     PREF_VIOLENCE_LEVEL,
@@ -67,7 +67,14 @@ typedef enum Preference {
     FIRST_RANGE_PREF = PREF_COMBAT_SPEED,
     LAST_RANGE_PREF = PREF_MOUSE_SENSITIVIY,
     RANGE_PREF_COUNT = LAST_RANGE_PREF - FIRST_RANGE_PREF + 1,
-} Preference;
+};
+
+inline Preference operator++(Preference& e, int)
+{
+    Preference result = e;
+    e = static_cast<Preference>(static_cast<int>(e) + 1);
+    return result;
+}
 
 typedef enum PreferencesWindowFrm {
     PREFERENCES_WINDOW_FRM_BACKGROUND,
@@ -144,13 +151,13 @@ static void _SaveSettings();
 static void _RestoreSettings();
 static void preferencesSetDefaults(bool updateUi);
 static void _JustUpdate_();
-static void _UpdateThing(int index);
+static void _UpdateThing(Preference index);
 static void preferencesRefreshBrightnessSlider();
 int _SavePrefs(bool save);
 static int preferencesWindowInit();
 static int preferencesWindowFree();
-static int _GetPrefrencesValue(int preference, const PreferenceDescription& description);
-static void _SetPrefrencesValue(int preference, const PreferenceDescription& description, int value);
+static int _GetPrefrencesValue(Preference preference, const PreferenceDescription& description);
+static void _SetPrefrencesValue(Preference preference, const PreferenceDescription& description, int value);
 static void _DoThing(int eventCode);
 static int preferencesGetRangeOptionLabelX(int optionIndex, int valuesCount, const char* text);
 static void preferencesMessageListReset();
@@ -557,7 +564,7 @@ static void preferencesSetDefaults(bool updateUi)
     gPreferencesSpeechVolume1 = 22281;
 
     if (updateUi) {
-        for (int index = 0; index < PREF_COUNT; index++) {
+        for (Preference index = FIRST_PRIMARY_PREF; index < PREF_COUNT; index++) {
             _UpdateThing(index);
         }
         _win_set_button_rest_state(_plyrspdbid, gPreferencesPlayerSpeedup1, 0);
@@ -648,7 +655,7 @@ static int preferencesGetRangeOptionLabelX(int optionIndex, int valuesCount, con
 }
 
 // 0x491A68 UpdateThing
-static void _UpdateThing(int index)
+static void _UpdateThing(Preference index)
 {
     fontSetCurrent(101);
 
@@ -784,6 +791,8 @@ static void _UpdateThing(int index)
                 case PREF_SPEECH_VOLUME:
                     speechSetVolume(gPreferencesSpeechVolume1);
                     break;
+                default:
+                    break;
                 }
             }
             break;
@@ -806,6 +815,8 @@ static void _UpdateThing(int index)
 
                 mouseSetSensitivity(gPreferencesMouseSensitivity1);
             }
+            break;
+        default:
             break;
         }
 
@@ -862,7 +873,7 @@ int _SavePrefs(bool save)
     settings.preferences.mouse_sensitivity = gPreferencesMouseSensitivity1;
 
     if (save) {
-        settingsSave();
+        if (!settingsSave()) return -1;
     }
 
     return 0;
@@ -960,14 +971,20 @@ void preferencesPreview(const PreferenceValues& values)
     colorSetBrightness(values.brightness);
 }
 
-void preferencesApply(const PreferenceValues& values)
+bool preferencesApply(const PreferenceValues& values)
 {
+    PreferenceValues previous = preferencesGetValues();
     preferencesSetValues(values);
 
     // As the window closing after a change (`preferencesWindowFree`).
-    _SavePrefs(1);
+    bool saved = _SavePrefs(1) == 0;
+    if (!saved) {
+        preferencesSetValues(previous);
+        _SavePrefs(false);
+    }
     _JustUpdate_();
     _combat_highlight_change();
+    return saved;
 }
 
 void preferencesPlaySoundEffectSample()
@@ -977,7 +994,7 @@ void preferencesPlaySoundEffectSample()
 
 void preferencesPlaySpeechSample()
 {
-    speechLoad("narrator\\options", GSOUND_LIMIT_AFTER, GSOUND_MEMORY, GSOUND_NO_LOOP);
+    speechLoad("narrator\\options", GameSoundReadLimitMode::LimitAfter, GameSoundStorageType::Memory, GameSoundLoopingMode::NoLoop);
 }
 
 // 0x493224
@@ -1129,7 +1146,6 @@ void brightnessDecrease()
 // 0x4908A0 PrefStart
 static int preferencesWindowInit()
 {
-    int i;
     char* messageItemText;
     int x;
     int y;
@@ -1153,7 +1169,7 @@ static int preferencesWindowInit()
 
     _SaveSettings();
 
-    for (i = 0; i < PREFERENCES_WINDOW_FRM_COUNT; i++) {
+    for (int i = 0; i < PREFERENCES_WINDOW_FRM_COUNT; i++) {
         if (!_preferencesFrmImages[i].lock(kPreferencesWindowFrmIds[i])) {
             while (--i >= 0) {
                 _preferencesFrmImages[i].unlock();
@@ -1167,7 +1183,7 @@ static int preferencesWindowInit()
 
     int preferencesWindowX = (screenGetWidth() - PREFERENCES_WINDOW_WIDTH) / 2;
     int preferencesWindowY = (screenGetHeight() - PREFERENCES_WINDOW_HEIGHT) / 2;
-    int preferencesWindowFlags = mainMenuSubscreenWindowFlags(WINDOW_MODAL | WINDOW_DONT_MOVE_TOP, WINDOW_MODAL | WINDOW_MOVE_ON_TOP);
+    WindowFlags preferencesWindowFlags = mainMenuSubscreenWindowFlags(WINDOW_MODAL | WINDOW_DONT_MOVE_TOP, WINDOW_MODAL | WINDOW_MOVE_ON_TOP);
 
     gPreferencesWindow = windowCreate(preferencesWindowX,
         preferencesWindowY,
@@ -1176,7 +1192,7 @@ static int preferencesWindowInit()
         static_cast<ColorWithFlags>(256),
         preferencesWindowFlags);
     if (gPreferencesWindow == -1) {
-        for (i = 0; i < PREFERENCES_WINDOW_FRM_COUNT; i++) {
+        for (int i = 0; i < PREFERENCES_WINDOW_FRM_COUNT; i++) {
             _preferencesFrmImages[i].unlock();
         }
         preferencesMessageListReset();
@@ -1196,18 +1212,18 @@ static int preferencesWindowInit()
     fontSetCurrent(103);
 
     messageItemId = 101;
-    for (i = 0; i < PRIMARY_PREF_COUNT; i++) {
+    for (Preference i = FIRST_PRIMARY_PREF; i < PRIMARY_PREF_COUNT; i++) {
         messageItemText = getmsg(&gPreferencesMessageList, &gPreferencesMessageListItem, messageItemId++);
         x = 99 - fontGetStringWidth(messageItemText) / 2;
         fontDrawText(gPreferencesWindowBuffer + PREFERENCES_WINDOW_WIDTH * _row1Ytab[i] + x, messageItemText, PREFERENCES_WINDOW_WIDTH, PREFERENCES_WINDOW_WIDTH, COLOR_DARK_YELLOW);
     }
 
-    for (i = 0; i < SECONDARY_PREF_COUNT; i++) {
+    for (Preference i = FIRST_PRIMARY_PREF; i < SECONDARY_PREF_COUNT; i++) {
         messageItemText = getmsg(&gPreferencesMessageList, &gPreferencesMessageListItem, messageItemId++);
         fontDrawText(gPreferencesWindowBuffer + PREFERENCES_WINDOW_WIDTH * _row2Ytab[i] + 206, messageItemText, PREFERENCES_WINDOW_WIDTH, PREFERENCES_WINDOW_WIDTH, COLOR_DARK_YELLOW);
     }
 
-    for (i = 0; i < RANGE_PREF_COUNT; i++) {
+    for (Preference i = FIRST_PRIMARY_PREF; i < RANGE_PREF_COUNT; i++) {
         messageItemText = getmsg(&gPreferencesMessageList, &gPreferencesMessageListItem, messageItemId++);
         fontDrawText(gPreferencesWindowBuffer + PREFERENCES_WINDOW_WIDTH * _row3Ytab[i] + 384, messageItemText, PREFERENCES_WINDOW_WIDTH, PREFERENCES_WINDOW_WIDTH, COLOR_DARK_YELLOW);
     }
@@ -1229,11 +1245,11 @@ static int preferencesWindowInit()
     messageItemText = getmsg(&gPreferencesMessageList, &gPreferencesMessageListItem, 122);
     fontDrawText(gPreferencesWindowBuffer + PREFERENCES_WINDOW_WIDTH * 72 + 405, messageItemText, PREFERENCES_WINDOW_WIDTH, PREFERENCES_WINDOW_WIDTH, COLOR_DARK_YELLOW);
 
-    for (i = 0; i < PREF_COUNT; i++) {
+    for (Preference i = FIRST_PRIMARY_PREF; i < PREF_COUNT; i++) {
         _UpdateThing(i);
     }
 
-    for (i = 0; i < PREF_COUNT; i++) {
+    for (Preference i = FIRST_PRIMARY_PREF; i < PREF_COUNT; i++) {
         int mouseEnterEventCode;
         int mouseExitEventCode;
         int mouseDownEventCode;
@@ -1269,7 +1285,7 @@ static int preferencesWindowInit()
             mouseUpEventCode = 505 + i;
         }
 
-        gPreferenceDescriptions[i].btn = buttonCreate(gPreferencesWindow, x, y, width, height, mouseEnterEventCode, mouseExitEventCode, mouseDownEventCode, mouseUpEventCode, nullptr, nullptr, nullptr, 32);
+        gPreferenceDescriptions[i].btn = buttonCreate(gPreferencesWindow, x, y, width, height, mouseEnterEventCode, mouseExitEventCode, mouseDownEventCode, mouseUpEventCode, nullptr, nullptr, nullptr, BUTTON_FLAG_TRANSPARENT);
     }
 
     _plyrspdbid = buttonCreate(gPreferencesWindow,
@@ -1473,7 +1489,7 @@ int doPreferences(bool animated)
     return rc;
 }
 
-static void _SetPrefrencesValue(int preference, const PreferenceDescription& description, int value)
+static void _SetPrefrencesValue(Preference preference, const PreferenceDescription& description, int value)
 {
     switch (preference) {
     case PREF_GAME_DIFFICULTY:
@@ -1494,7 +1510,7 @@ static void _SetPrefrencesValue(int preference, const PreferenceDescription& des
     }
 }
 
-static int _GetPrefrencesValue(int preference, const PreferenceDescription& description)
+static int _GetPrefrencesValue(Preference preference, const PreferenceDescription& description)
 {
     switch (preference) {
     case PREF_GAME_DIFFICULTY:
@@ -1519,7 +1535,7 @@ static void _DoThing(int eventCode)
 
     // This preference index also contains out-of-bounds value 19,
     // which is the only preference expressed as checkbox.
-    int preferenceIndex = eventCode - 505;
+    Preference preferenceIndex = static_cast<Preference>(eventCode - 505);
 
     if (preferenceIndex >= FIRST_PRIMARY_PREF && preferenceIndex <= LAST_PRIMARY_PREF) {
         PreferenceDescription* meta = &(gPreferenceDescriptions[preferenceIndex]);
@@ -1666,7 +1682,7 @@ static void _DoThing(int eventCode)
 
             mouseGetPositionInWindow(gPreferencesWindow, &x, &y);
 
-            if (mouseGetEvent() & 0x10) {
+            if ((mouseGetEvent() & MouseButtonEvent::LeftButtonUp) != MouseButtonEvent::None) {
                 soundPlayFile("ib1lu1x1");
                 _UpdateThing(preferenceIndex);
                 windowRefresh(gPreferencesWindow);
@@ -1726,7 +1742,7 @@ static void _DoThing(int eventCode)
                 speechSetVolume(gPreferencesSpeechVolume1);
                 redrawLabels = true;
                 if (speechVolumeExample == 0) {
-                    speechLoad("narrator\\options", GSOUND_LIMIT_AFTER, GSOUND_MEMORY, GSOUND_NO_LOOP);
+                    speechLoad("narrator\\options", GameSoundReadLimitMode::LimitAfter, GameSoundStorageType::Memory, GameSoundLoopingMode::NoLoop);
                     speechVolumeExample = 40;
                 } else {
                     speechVolumeExample--;
@@ -1738,6 +1754,8 @@ static void _DoThing(int eventCode)
                 break;
             case PREF_MOUSE_SENSITIVIY:
                 gPreferencesMouseSensitivity1 = newValue;
+                break;
+            default:
                 break;
             }
 
